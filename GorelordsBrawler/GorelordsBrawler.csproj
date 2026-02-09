@@ -11,6 +11,7 @@
     <ApplicationIcon>Icon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
+    <None Remove="ContentPathGenerator.tt" />
     <None Remove="Icon.ico" />
     <None Remove="Icon.bmp" />
   </ItemGroup>
@@ -25,6 +26,28 @@
   <ItemGroup>
     <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.*" />
     <PackageReference Include="MonoGame.Content.Builder.Task" Version="3.8.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Nez\Nez.Portable\Nez.MG38.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Content\Fonts\" />
+  </ItemGroup>
+  <ItemGroup>
+    <MonoGameContentReference Include="ContentPathGenerator.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>ContentPathGenerator.cs</LastGenOutput>
+    </MonoGameContentReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Service Include="{508349b6-6b84-4df5-91f0-309beebad82d}" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Update="ContentPathGenerator.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>ContentPathGenerator.tt</DependentUpon>
+    </Compile>
   </ItemGroup>
   <Target Name="RestoreDotnetTools" BeforeTargets="CollectPackageReferences">
     <Message Text="Restoring dotnet tools (this might take a while depending on your internet speed and should only happen upon building your project for the first time, or after upgrading MonoGame, or clearing your nuget cache)" Importance="High" />

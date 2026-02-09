@@ -1,3 +1,10 @@
 <Solution>
+  <Folder Name="/SolutionItems/">
+    <File Path=".claude/settings.local.json" />
+    <File Path=".gitignore" />
+    <File Path="CLAUDE.md" />
+    <File Path="README.md" />
+  </Folder>
   <Project Path="GorelordsBrawler/GorelordsBrawler.csproj" />
+  <Project Path="Nez/Nez.Portable/Nez.MG38.csproj" />
 </Solution>

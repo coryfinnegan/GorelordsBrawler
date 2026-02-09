@@ -1,52 +1,37 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using Nez;
 
 namespace GorelordsBrawler
 {
-    public class GorelordsBrawlerGame : Game
+    public class GorelordsBrawlerGame : Core
     {
-        private GraphicsDeviceManager _graphics;
-        private SpriteBatch _spriteBatch;
+        public static GorelordsBrawlerGame GameReference { get; private set; }
+        private Scene.SceneResolutionPolicy _sceneResolutionPolicy;
+        private GameTime _gameTime;
+
 
         public GorelordsBrawlerGame()
         {
-            _graphics = new GraphicsDeviceManager(this);
-            Content.RootDirectory = "Content";
+            _sceneResolutionPolicy = Scene.SceneResolutionPolicy.BestFit;
             IsMouseVisible = true;
+            GameReference = this;
+
         }
 
         protected override void Initialize()
         {
-            // TODO: Add your initialization logic here
-
+            Window.AllowUserResizing = true;
+            _gameTime = new GameTime();
             base.Initialize();
-        }
+            base.Update(_gameTime);
+            base.Draw(_gameTime);
 
-        protected override void LoadContent()
-        {
-            _spriteBatch = new SpriteBatch(GraphicsDevice);
 
-            // TODO: use this.Content to load your game content here
-        }
-
-        protected override void Update(GameTime gameTime)
-        {
-            if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
-                Exit();
-
-            // TODO: Add your update logic here
-
-            base.Update(gameTime);
-        }
-
-        protected override void Draw(GameTime gameTime)
-        {
-            GraphicsDevice.Clear(Color.CornflowerBlue);
-
-            // TODO: Add your drawing code here
-
-            base.Draw(gameTime);
+            Scene.SetDefaultDesignResolution(800, 600, Scene.SceneResolutionPolicy.BestFit);
+            Screen.SetSize(800, 600);
+            Scene = new Scenes.MainMenuScene();
         }
     }
 }
