@@ -15,8 +15,6 @@ namespace Nez
 		{
 			public const string GoreFont_0 = @"Content\Fonts\GoreFont_0.png";
 			public const string GoreFont = @"Content\Fonts\GoreFont.fnt";
-			public const string Sludgeborn_0 = @"Content\Fonts\Sludgeborn_0.png";
-			public const string Sludgeborn = @"Content\Fonts\Sludgeborn.fnt";
 		}
 
 

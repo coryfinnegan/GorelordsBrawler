@@ -88,7 +88,7 @@ namespace Nez
         
 		foreach(var file in Directory.GetFiles( dir ).OrderBy(s => s))
 		{
-			if (file.Contains("DS_Store") || file.EndsWith("mgfxo"))
+			if (file.Contains("DS_Store") || file.EndsWith("mgfxo") || file.EndsWith(".mgcb"))
 				continue;
 			
 			// clear out all of the path up to the sourceFolder so we get just the relative path to the Content folder

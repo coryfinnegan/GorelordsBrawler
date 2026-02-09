@@ -2,6 +2,7 @@
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Nez;
+using System;
 
 namespace GorelordsBrawler
 {
@@ -32,6 +33,12 @@ namespace GorelordsBrawler
             Scene.SetDefaultDesignResolution(800, 600, Scene.SceneResolutionPolicy.BestFit);
             Screen.SetSize(800, 600);
             Scene = new Scenes.MainMenuScene();
+        }
+
+        public static void LoadScene(string scene)
+        {
+            var type = Type.GetType($"GorelordsBrawler.Scenes.{scene}") ?? throw new Exception($"Unable to locate scene with name {scene}");
+            Scene = (Scene)Activator.CreateInstance(type);
         }
     }
 }

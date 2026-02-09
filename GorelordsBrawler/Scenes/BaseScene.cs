@@ -9,7 +9,6 @@ namespace GorelordsBrawler.Scenes
     {
         public const int ScreenSpaceRenderLayer = 999;
         public UICanvas Canvas => CreateEntity(GameConstants.EntityNames.UI).AddComponent(new UICanvas());
-        //public BitmapFont GoreFont => Content.LoadBitmapFont(Nez.Content.Fonts.GhostbusterNew);
 
         public BaseScene()
         {
