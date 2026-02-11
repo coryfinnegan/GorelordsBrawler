@@ -1,0 +1,49 @@
+using Microsoft.Xna.Framework.Input;
+using Nez;
+using GorelordsBrawler.Constants;
+
+namespace GorelordsBrawler.Input
+{
+	public static class InputProfileFactory
+	{
+		public static InputProfile CreateKeyboardWASD()
+		{
+			return new InputProfile
+			{
+				MoveX = new VirtualIntegerAxis()
+					.AddKeyboardKeys(VirtualInput.OverlapBehavior.TakeNewer, Keys.A, Keys.D),
+				Jump = new VirtualButton(GameConstants.Input.JumpBufferTime)
+					.AddKeyboardKey(Keys.W),
+				Attack = new VirtualButton()
+					.AddKeyboardKey(Keys.F),
+			};
+		}
+
+		public static InputProfile CreateKeyboardArrows()
+		{
+			return new InputProfile
+			{
+				MoveX = new VirtualIntegerAxis()
+					.AddKeyboardKeys(VirtualInput.OverlapBehavior.TakeNewer, Keys.Left, Keys.Right),
+				Jump = new VirtualButton(GameConstants.Input.JumpBufferTime)
+					.AddKeyboardKey(Keys.Up),
+				Attack = new VirtualButton()
+					.AddKeyboardKey(Keys.RightControl),
+			};
+		}
+
+		public static InputProfile CreateGamepad(int gamepadIndex)
+		{
+			return new InputProfile
+			{
+				MoveX = new VirtualIntegerAxis()
+					.AddGamePadLeftStickX(gamepadIndex)
+					.AddGamePadDPadLeftRight(gamepadIndex),
+				Jump = new VirtualButton(GameConstants.Input.JumpBufferTime)
+					.AddGamePadButton(gamepadIndex, Buttons.A),
+				Attack = new VirtualButton()
+					.AddGamePadButton(gamepadIndex, Buttons.X),
+			};
+		}
+	}
+}

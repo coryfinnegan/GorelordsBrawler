@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Nez;
 using System;
+using GorelordsBrawler.Systems;
 
 namespace GorelordsBrawler
 {
@@ -30,8 +31,13 @@ namespace GorelordsBrawler
             base.Draw(_gameTime);
 
 
-            Scene.SetDefaultDesignResolution(800, 600, Scene.SceneResolutionPolicy.BestFit);
-            Screen.SetSize(800, 600);
+            ExitOnEscapeKeypress = false;
+            Nez.Input.MaxSupportedGamePads = Constants.GameConstants.Input.MaxGamePads;
+            Scene.SetDefaultDesignResolution(Constants.GameConstants.Screen.DesignWidth, Constants.GameConstants.Screen.DesignHeight, Scene.SceneResolutionPolicy.BestFit);
+
+            SettingsManager.Initialize();
+            SettingsManager.Apply();
+
             Scene = new Scenes.MainMenuScene();
         }
 

@@ -28,6 +28,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Nez\Nez.Portable\Nez.MG38.csproj" />
+    <ProjectReference Include="..\Nez\Nez.Persistence\Nez.MG38.Persistence.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Content\**\*" Exclude="Content\bin\**;Content\obj\**">

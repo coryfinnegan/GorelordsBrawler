@@ -11,6 +11,11 @@ namespace Nez
     /// </remarks>
     class Content
     {
+		public static class Characters
+		{
+			public const string Trollborg = @"Content\Characters\Trollborg.json";
+		}
+
 		public static class Fonts
 		{
 			public const string GoreFont_0 = @"Content\Fonts\GoreFont_0.png";
