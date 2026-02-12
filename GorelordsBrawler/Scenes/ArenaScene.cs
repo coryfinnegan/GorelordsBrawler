@@ -4,6 +4,7 @@ using GorelordsBrawler.Components;
 using GorelordsBrawler.Constants;
 using GorelordsBrawler.Input;
 using GorelordsBrawler.Systems;
+using GorelordsBrawler.Systems.Rules;
 
 namespace GorelordsBrawler.Scenes
 {
@@ -11,18 +12,21 @@ namespace GorelordsBrawler.Scenes
 	{
 		public ArenaScene()
 		{
-			AddRenderer(new RenderLayerRenderer(0, GameConstants.Rendering.DefaultRenderLayer));
+			AddRenderer(new RenderLayerRenderer(0,
+				GameConstants.Rendering.DefaultRenderLayer,
+				GameConstants.Rendering.HitboxRenderLayer,
+				GameConstants.Rendering.HealthBarRenderLayer));
 
 			AddSceneComponent(new PauseManager());
 			var playerManager = AddSceneComponent(new PlayerManager());
+			var setup = Core.GetGlobalManager<MatchSetupManager>();
 
-			var p1 = playerManager.AddPlayer(0,
-				InputProfileFactory.CreateKeyboardWASD(),
-				GameConstants.Characters.Trollborg, GameConstants.Arena.Player1Spawn);
-
-			var p2 = playerManager.AddPlayer(1,
-				InputProfileFactory.CreateKeyboardArrows(),
-				GameConstants.Characters.Trollborg, GameConstants.Arena.Player2Spawn);
+			foreach (var selection in setup.Selections)
+			{
+				var input = InputProfileFactory.CreateFromDevice(selection.Device);
+				var spawn = GameConstants.Arena.SpawnPositions[selection.SlotIndex];
+				playerManager.AddPlayer(selection.SlotIndex, input, selection.CharacterType, spawn);
+			}
 
 			CreatePlatforms();
 
@@ -30,6 +34,10 @@ namespace GorelordsBrawler.Scenes
 			var brawlerCam = cameraEntity.AddComponent(new BrawlerCamera());
 			foreach (var player in playerManager.GetActivePlayers())
 				brawlerCam.AddTarget(player);
+
+			var ruleset = new StockRuleset();
+			AddSceneComponent(new MatchManager(ruleset));
+			AddSceneComponent(new MatchHUD(ruleset));
 		}
 
 		private void CreatePlatforms()

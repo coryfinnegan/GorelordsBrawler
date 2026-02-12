@@ -2,6 +2,7 @@ using Microsoft.Xna.Framework;
 using Nez;
 using GorelordsBrawler.Components;
 using GorelordsBrawler.Components.Abilities;
+using GorelordsBrawler.Components.Stats;
 using GorelordsBrawler.Constants;
 using GorelordsBrawler.Input;
 
@@ -11,60 +12,66 @@ namespace GorelordsBrawler.Data
 	{
 		public static Entity Create(Scene scene, string characterType, InputProfile input, Vector2 spawnPosition)
 		{
-			var stats = CharacterLoader.Load(scene, characterType);
+			var data = CharacterLoader.Load(scene, characterType);
 
 			var entity = scene.CreateEntity(characterType);
 			entity.Transform.Position = spawnPosition;
 
-			// Stats first so sibling components can find it
+			// Identity + body (always present)
+			var stats = new CharacterStats
+			{
+				name = data.name,
+				description = data.description,
+				maxHp = data.maxHp,
+				bodyWidth = data.bodyWidth,
+				bodyHeight = data.bodyHeight,
+				colorR = data.colorR,
+				colorG = data.colorG,
+				colorB = data.colorB,
+			};
 			entity.AddComponent(stats);
 
-			var renderer = entity.AddComponent(
-				new PrototypeSpriteRenderer(stats.bodyWidth, stats.bodyHeight));
+			// Renderer + physics collider
+			var renderer = entity.AddComponent(new PrototypeSpriteRenderer(stats.bodyWidth, stats.bodyHeight));
 			renderer.SetColor(stats.BodyColor);
 
-			var collider = entity.AddComponent(
-				new BoxCollider(stats.bodyWidth, stats.bodyHeight));
+			var collider = entity.AddComponent(new BoxCollider(stats.bodyWidth, stats.bodyHeight));
 			collider.PhysicsLayer = PhysicsLayers.Player;
 			collider.CollidesWithLayers = PhysicsLayers.Platforms;
 
 			entity.AddComponent(new Mover());
-			entity.AddComponent(new PhysicsBody());
 
-			// Hurtbox (separate trigger collider for receiving damage)
+			// Movement (always present)
+			entity.AddComponent(data.movement);
+			entity.AddComponent(new PhysicsBody());
+			entity.AddComponent(new WalkAbility(input));
+			entity.AddComponent(new JumpAbility(input));
+
+			// Hurtbox + Health (always present)
 			var hurtboxCollider = entity.AddComponent(new BoxCollider(stats.bodyWidth, stats.bodyHeight));
 			hurtboxCollider.PhysicsLayer = PhysicsLayers.Hurtbox;
 			hurtboxCollider.CollidesWithLayers = PhysicsLayers.Hitbox;
 			hurtboxCollider.IsTrigger = true;
 
-			// Health system
-			var health = entity.AddComponent(new Health { MaxHp = stats.maxHp, CurrentHp = stats.maxHp });
+			entity.AddComponent(new Health { MaxHp = stats.maxHp, CurrentHp = stats.maxHp });
 			entity.AddComponent(new Hurtbox());
 			entity.AddComponent(new HealthBar());
 			entity.AddComponent(new RespawnHandler(spawnPosition));
 
-			AttachAbilities(entity, characterType, input);
+			// Data-driven abilities — attach based on what the JSON provides
+			if (data.melee != null)
+			{
+				entity.AddComponent(data.melee);
+				entity.AddComponent(new MeleeAttack(input));
+			}
+
+			if (data.projectile != null)
+			{
+				entity.AddComponent(data.projectile);
+				entity.AddComponent(new ProjectileAttack(input));
+			}
 
 			return entity;
-		}
-
-		private static void AttachAbilities(Entity entity, string characterType, InputProfile input)
-		{
-			switch (characterType)
-			{
-				case GameConstants.Characters.Trollborg:
-					entity.AddComponent(new WalkAbility(input));
-					entity.AddComponent(new JumpAbility(input));
-					entity.AddComponent(new MeleeAttack(input));
-					break;
-
-				default:
-					// Fallback: basic movement for unknown characters
-					entity.AddComponent(new WalkAbility(input));
-					entity.AddComponent(new JumpAbility(input));
-					entity.AddComponent(new MeleeAttack(input));
-					break;
-			}
 		}
 	}
 }

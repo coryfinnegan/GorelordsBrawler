@@ -14,6 +14,10 @@ namespace GorelordsBrawler.Constants
 			public const string PlatformLeft = "platform-left";
 			public const string PlatformRight = "platform-right";
 			public const string PauseMenu = "pause-menu";
+			public const string MatchHUD = "match-hud";
+			public const string Announcement = "announcement";
+			public const string VictoryScreen = "victory-screen";
+			public const string Projectile = "projectile";
 		}
 
 		public static class ContentPaths
@@ -25,6 +29,9 @@ namespace GorelordsBrawler.Constants
 		public static class Characters
 		{
 			public const string Trollborg = "Trollborg";
+			public const string DocMarauder = "DocMarauder";
+
+			public static readonly string[] All = { Trollborg, DocMarauder };
 		}
 
 		public static class SceneNames
@@ -32,6 +39,7 @@ namespace GorelordsBrawler.Constants
 			public const string ArenaScene = "ArenaScene";
 			public const string MainMenuScene = "MainMenuScene";
 			public const string SettingsScene = "SettingsScene";
+			public const string CharacterSelectScene = "CharacterSelectScene";
 		}
 
 		public static class Physics
@@ -84,6 +92,13 @@ namespace GorelordsBrawler.Constants
 			public const float SettingsRowPadding = 8f;
 			public const float SettingsWidgetMinWidth = 200f;
 
+			// Stock HUD
+			public const string StockIndicator = "X";
+			public const float StockHUDPadding = 10f;
+			public const float StockHUDScale = 0.6f;
+			public const float StockSpacing = 8f;
+			public const string PlayerLabelFormat = "P{0}";
+
 			// Pause menu
 			public const string PausedTitleText = "PAUSED";
 			public const string ResumeButtonText = "RESUME";
@@ -110,6 +125,32 @@ namespace GorelordsBrawler.Constants
 			public const string GamepadAttackInput = "X Button";
 		}
 
+		public static class CharacterSelect
+		{
+			public const string TitleText = "CHARACTER SELECT";
+			public const string JoinPromptWASD = "Press W to join";
+			public const string JoinPromptArrows = "Press Up to join";
+			public const string JoinPromptGamepad = "Press A to join";
+			public const string ReadyText = "READY";
+			public const string NotReadyText = "";
+			public const string AllReadyText = "All players ready!";
+			public const string NeedPlayersText = "Need at least 2 players";
+			public const string ReadyPrompt = "Attack to ready";
+			public const string UnreadyPrompt = "Attack to unready";
+			public const string LeavePrompt = "Jump to leave";
+			public const string LeftArrow = "< ";
+			public const string RightArrow = " >";
+			public const float PreviewScale = 2f;
+			public const float PanelPadding = 15f;
+			public const float NameScale = 0.5f;
+			public const float ReadyScale = 0.6f;
+			public const float StatusScale = 0.5f;
+			public const float CountdownDuration = 2f;
+			public const int MinPlayers = 2;
+			public const float SlotWidth = 160f;
+			public const float SlotHeight = 300f;
+		}
+
 		public static class Combat
 		{
 			public const float RespawnDelay = 2f;
@@ -119,6 +160,27 @@ namespace GorelordsBrawler.Constants
 			public static readonly Color HealthBarBackgroundColor = new Color(40, 40, 40);
 			public static readonly Color HealthBarHighColor = Color.Green;
 			public static readonly Color HealthBarLowColor = Color.Red;
+			public const int DefaultStockCount = 3;
+		}
+
+		public static class Match
+		{
+			public const float CountdownDuration = 1.5f;
+			public const float AnnouncementFadeInDuration = 0.2f;
+			public const float AnnouncementDisplayDuration = 1.2f;
+			public const float AnnouncementFadeOutDuration = 0.3f;
+			public const float VictoryDelay = 1.5f;
+			public const string FightText = "FIGHT!";
+			public const string KOText = "K.O.!";
+			public const string GameText = "GAME!";
+			public const string VictorText = "VICTOR";
+			public const string DefeatText = "DEFEAT";
+			public const string RematchText = "REMATCH";
+			public const float AnnouncementScale = 3f;
+			public const float ResultScale = 2f;
+			public static readonly Color AnnouncementColor = Color.Yellow;
+			public static readonly Color VictorColor = Color.Gold;
+			public static readonly Color DefeatColor = Color.Red;
 		}
 
 		public static class PauseMenu
@@ -132,9 +194,14 @@ namespace GorelordsBrawler.Constants
 
 		public static class Arena
 		{
-			// Player spawn positions
-			public static readonly Vector2 Player1Spawn = new Vector2(300, 500);
-			public static readonly Vector2 Player2Spawn = new Vector2(500, 500);
+			// Player spawn positions (indexed by slot)
+			public static readonly Vector2[] SpawnPositions = new[]
+			{
+				new Vector2(200, 500),
+				new Vector2(600, 500),
+				new Vector2(350, 500),
+				new Vector2(450, 500),
+			};
 
 			// Platform colors
 			public static readonly Color GroundColor = new Color(80, 80, 80);

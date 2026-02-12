@@ -14,6 +14,7 @@ namespace GorelordsBrawler.Systems
 		private VirtualButton _pauseInput;
 		private Entity _pauseEntity;
 		private BitmapFont _font;
+		private MatchManager _matchManager;
 
 		public override void OnEnabled()
 		{
@@ -21,6 +22,8 @@ namespace GorelordsBrawler.Systems
 			_pauseInput.AddKeyboardKey(Keys.Escape);
 			for (int i = 0; i < GameConstants.Input.MaxGamePads; i++)
 				_pauseInput.AddGamePadButton(i, Buttons.Start);
+
+			_matchManager = Scene.GetSceneComponent<MatchManager>();
 		}
 
 		public override void OnDisabled()
@@ -36,7 +39,7 @@ namespace GorelordsBrawler.Systems
 			{
 				if (IsPaused)
 					Resume();
-				else
+				else if (_matchManager == null || _matchManager.CanPause)
 					Pause();
 			}
 		}
@@ -127,7 +130,7 @@ namespace GorelordsBrawler.Systems
 			mainMenuButton.OnClicked += _ =>
 			{
 				Resume();
-				GorelordsBrawlerGame.LoadScene(GameConstants.SceneNames.MainMenuScene);
+				GorelordsBrawlerGame.TransitionToScene<Scenes.MainMenuScene>();
 			};
 			root.Add(mainMenuButton);
 			root.Row();

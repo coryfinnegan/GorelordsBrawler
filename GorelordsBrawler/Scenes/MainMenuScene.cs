@@ -31,13 +31,13 @@ namespace GorelordsBrawler.Scenes
 				OverFontColor = Color.Green
 			};
 			var playButton = new TextButton(GameConstants.UI.PlayButtonText, buttonStyle);
-			playButton.OnClicked += x => GorelordsBrawlerGame.LoadScene(GameConstants.SceneNames.ArenaScene);
+			playButton.OnClicked += x => GorelordsBrawlerGame.TransitionToScene<CharacterSelectScene>();
 
 			table.Add(playButton);
 			table.Row();
 
 			var settingsButton = new TextButton(GameConstants.UI.SettingsButtonText, buttonStyle);
-			settingsButton.OnClicked += x => GorelordsBrawlerGame.LoadScene(GameConstants.SceneNames.SettingsScene);
+			settingsButton.OnClicked += x => GorelordsBrawlerGame.TransitionToScene<SettingsScene>();
 			table.Add(settingsButton);
 		}
 	}

@@ -1,5 +1,6 @@
 using Microsoft.Xna.Framework;
 using Nez;
+using GorelordsBrawler.Components.Stats;
 using GorelordsBrawler.Constants;
 using GorelordsBrawler.Input;
 
@@ -8,7 +9,7 @@ namespace GorelordsBrawler.Components
 	public class MeleeAttack : Component, IUpdatable
 	{
 		private readonly InputProfile _input;
-		private CharacterStats _stats;
+		private MeleeStats _melee;
 		private PhysicsBody _body;
 		private float _cooldownTimer;
 		private float _hitboxTimer;
@@ -21,7 +22,7 @@ namespace GorelordsBrawler.Components
 
 		public override void OnAddedToEntity()
 		{
-			_stats = Entity.GetComponent<CharacterStats>();
+			_melee = Entity.GetComponent<MeleeStats>();
 			_body = Entity.GetComponent<PhysicsBody>();
 		}
 
@@ -45,25 +46,25 @@ namespace GorelordsBrawler.Components
 			// Attack input
 			if (_input.Attack.IsPressed && _cooldownTimer <= 0 && _hitboxEntity == null)
 			{
-				_cooldownTimer = _stats.attackCooldown;
+				_cooldownTimer = _melee.cooldown;
 				SpawnHitbox();
 			}
 		}
 
 		private void SpawnHitbox()
 		{
-			float offsetX = _stats.hitboxOffsetX * _body.FacingDirection;
+			float offsetX = _melee.hitboxOffsetX * _body.FacingDirection;
 
 			_hitboxEntity = Entity.Scene.CreateEntity(GameConstants.EntityNames.MeleeHitbox);
 			_hitboxEntity.Transform.Position = Entity.Transform.Position + new Vector2(offsetX, 0);
 
 			var hitboxRenderer = _hitboxEntity.AddComponent(
-				new PrototypeSpriteRenderer(_stats.hitboxWidth, _stats.hitboxHeight));
+				new PrototypeSpriteRenderer(_melee.hitboxWidth, _melee.hitboxHeight));
 			hitboxRenderer.SetColor(Color.Red * GameConstants.Rendering.HitboxColorAlpha);
 			hitboxRenderer.RenderLayer = GameConstants.Rendering.HitboxRenderLayer;
 
 			var hitboxCollider = _hitboxEntity.AddComponent(
-				new BoxCollider(_stats.hitboxWidth, _stats.hitboxHeight));
+				new BoxCollider(_melee.hitboxWidth, _melee.hitboxHeight));
 			hitboxCollider.PhysicsLayer = PhysicsLayers.Hitbox;
 			hitboxCollider.CollidesWithLayers = PhysicsLayers.Hurtbox;
 			hitboxCollider.IsTrigger = true;
@@ -71,13 +72,13 @@ namespace GorelordsBrawler.Components
 			_hitboxEntity.AddComponent(new AttackData
 			{
 				OwnerEntity = Entity,
-				Damage = _stats.meleeDamage,
-				KnockbackForce = _stats.meleeKnockbackForce,
-				KnockbackAngle = _stats.MeleeKnockbackAngle,
+				Damage = _melee.damage,
+				KnockbackForce = _melee.knockbackForce,
+				KnockbackAngle = _melee.KnockbackAngle,
 				FacingDirection = _body.FacingDirection
 			});
 
-			_hitboxTimer = _stats.hitboxDuration;
+			_hitboxTimer = _melee.hitboxDuration;
 		}
 
 		private void DestroyHitbox()

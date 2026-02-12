@@ -13,6 +13,7 @@ namespace Nez
     {
 		public static class Characters
 		{
+			public const string DocMarauder = @"Content\Characters\DocMarauder.json";
 			public const string Trollborg = @"Content\Characters\Trollborg.json";
 		}
 

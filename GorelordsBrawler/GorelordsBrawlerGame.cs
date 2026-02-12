@@ -1,50 +1,48 @@
-﻿using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Graphics;
-using Microsoft.Xna.Framework.Input;
+using Microsoft.Xna.Framework;
 using Nez;
-using System;
 using GorelordsBrawler.Systems;
 
 namespace GorelordsBrawler
 {
-    public class GorelordsBrawlerGame : Core
-    {
-        public static GorelordsBrawlerGame GameReference { get; private set; }
-        private Scene.SceneResolutionPolicy _sceneResolutionPolicy;
-        private GameTime _gameTime;
+	public class GorelordsBrawlerGame : Core
+	{
+		public static GorelordsBrawlerGame GameReference { get; private set; }
+		private Scene.SceneResolutionPolicy _sceneResolutionPolicy;
+		private GameTime _gameTime;
 
+		public GorelordsBrawlerGame()
+		{
+			_sceneResolutionPolicy = Scene.SceneResolutionPolicy.BestFit;
+			IsMouseVisible = true;
+			GameReference = this;
+		}
 
-        public GorelordsBrawlerGame()
-        {
-            _sceneResolutionPolicy = Scene.SceneResolutionPolicy.BestFit;
-            IsMouseVisible = true;
-            GameReference = this;
+		protected override void Initialize()
+		{
+			Window.AllowUserResizing = true;
+			_gameTime = new GameTime();
+			base.Initialize();
+			base.Update(_gameTime);
+			base.Draw(_gameTime);
 
-        }
+			ExitOnEscapeKeypress = false;
+			Nez.Input.MaxSupportedGamePads = Constants.GameConstants.Input.MaxGamePads;
+			Scene.SetDefaultDesignResolution(
+				Constants.GameConstants.Screen.DesignWidth,
+				Constants.GameConstants.Screen.DesignHeight,
+				Scene.SceneResolutionPolicy.BestFit);
 
-        protected override void Initialize()
-        {
-            Window.AllowUserResizing = true;
-            _gameTime = new GameTime();
-            base.Initialize();
-            base.Update(_gameTime);
-            base.Draw(_gameTime);
+			RegisterGlobalManager(new MatchSetupManager());
 
+			SettingsManager.Initialize();
+			SettingsManager.Apply();
 
-            ExitOnEscapeKeypress = false;
-            Nez.Input.MaxSupportedGamePads = Constants.GameConstants.Input.MaxGamePads;
-            Scene.SetDefaultDesignResolution(Constants.GameConstants.Screen.DesignWidth, Constants.GameConstants.Screen.DesignHeight, Scene.SceneResolutionPolicy.BestFit);
+			Scene = new Scenes.MainMenuScene();
+		}
 
-            SettingsManager.Initialize();
-            SettingsManager.Apply();
-
-            Scene = new Scenes.MainMenuScene();
-        }
-
-        public static void LoadScene(string scene)
-        {
-            var type = Type.GetType($"GorelordsBrawler.Scenes.{scene}") ?? throw new Exception($"Unable to locate scene with name {scene}");
-            Scene = (Scene)Activator.CreateInstance(type);
-        }
-    }
+		public static void TransitionToScene<T>() where T : Scene, new()
+		{
+			StartSceneTransition(new FadeTransition(() => new T()));
+		}
+	}
 }

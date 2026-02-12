@@ -52,6 +52,24 @@ When Nez is integrated, its default content (effects/textures) from `Nez/Default
 
 Nez uses tabs (4-space width) per its `.editorconfig`. Follow the same convention for game code.
 
+## Planning Workflow
+
+Feature development follows a plan → review → implement → archive cycle:
+
+1. **Plan** — Create a proposal markdown in `docs/` (e.g. `docs/feature-name-proposal.md`)
+2. **Review** — User reviews and requests changes to the proposal
+3. **Implement** — Once approved, implement the feature per the proposal
+4. **Archive** — After implementation is complete and verified, move the doc to `docs/implemented/`
+
+Active proposals live in `docs/`. Completed features have their docs in `docs/implemented/`.
+
+### Current Proposals
+(none)
+
+### Implemented Features
+- `docs/implemented/match-system-proposal.md` — Stock lives match system with ruleset pattern
+- `docs/implemented/character-select-proposal.md` — Character select screen, modular stats refactor, Doc Marauder, scene transitions
+
 ## Nez Documentation
 
 Framework docs are in `Nez/FAQs/` — key files: `Nez-Core.md`, `Scene-Entity-Component.md`, `Rendering.md`, `Physics.md`, `AI.md`, `UI.md`.

@@ -1,6 +1,7 @@
 using Microsoft.Xna.Framework;
 using Nez;
 using GorelordsBrawler.Constants;
+using GorelordsBrawler.Systems;
 
 namespace GorelordsBrawler.Components
 {
@@ -30,9 +31,20 @@ namespace GorelordsBrawler.Components
 
 		private void OnDeath()
 		{
+			SetCombatComponentsEnabled(false);
+
+			// Delegate to MatchManager if present; otherwise always respawn
+			var matchManager = Entity.Scene.GetSceneComponent<MatchManager>();
+			bool shouldRespawn = matchManager?.NotifyPlayerDeath(Entity) ?? true;
+
+			if (!shouldRespawn)
+			{
+				// Eliminated — no respawn
+				return;
+			}
+
 			_waitingToRespawn = true;
 			_respawnTimer = GameConstants.Combat.RespawnDelay;
-			SetCombatComponentsEnabled(false);
 		}
 
 		public void Update()
@@ -50,7 +62,7 @@ namespace GorelordsBrawler.Components
 			}
 		}
 
-		private void SetCombatComponentsEnabled(bool enabled)
+		public void SetCombatComponentsEnabled(bool enabled)
 		{
 			// Disable individual components, NOT Entity.SetEnabled(),
 			// so RespawnHandler and Health stay active.

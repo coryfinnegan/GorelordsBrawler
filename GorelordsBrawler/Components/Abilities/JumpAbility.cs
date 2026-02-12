@@ -1,4 +1,5 @@
 using Nez;
+using GorelordsBrawler.Components.Stats;
 using GorelordsBrawler.Input;
 
 namespace GorelordsBrawler.Components.Abilities
@@ -7,7 +8,7 @@ namespace GorelordsBrawler.Components.Abilities
 	{
 		private readonly InputProfile _input;
 		private PhysicsBody _body;
-		private CharacterStats _stats;
+		private MovementStats _movement;
 
 		public JumpAbility(InputProfile input)
 		{
@@ -17,14 +18,14 @@ namespace GorelordsBrawler.Components.Abilities
 		public override void OnAddedToEntity()
 		{
 			_body = Entity.GetComponent<PhysicsBody>();
-			_stats = Entity.GetComponent<CharacterStats>();
+			_movement = Entity.GetComponent<MovementStats>();
 		}
 
 		public void Update()
 		{
 			if (_body.Grounded && _input.Jump.IsPressed)
 			{
-				_body.Velocity.Y = -_stats.jumpSpeed;
+				_body.Velocity.Y = -_movement.jumpSpeed;
 				_body.Grounded = false;
 				_input.Jump.ConsumeBuffer();
 			}

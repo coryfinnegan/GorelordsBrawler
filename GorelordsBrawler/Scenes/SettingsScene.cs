@@ -214,7 +214,7 @@ namespace GorelordsBrawler.Scenes
 
 		private void OnBackClicked(Button button)
 		{
-			GorelordsBrawlerGame.LoadScene(GameConstants.SceneNames.MainMenuScene);
+			GorelordsBrawlerGame.TransitionToScene<MainMenuScene>();
 		}
 	}
 }

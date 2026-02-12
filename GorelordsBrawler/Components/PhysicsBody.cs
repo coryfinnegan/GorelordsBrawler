@@ -1,5 +1,6 @@
 using Microsoft.Xna.Framework;
 using Nez;
+using GorelordsBrawler.Components.Stats;
 using GorelordsBrawler.Constants;
 
 namespace GorelordsBrawler.Components
@@ -11,19 +12,19 @@ namespace GorelordsBrawler.Components
 		public int FacingDirection = 1;
 
 		private Mover _mover;
-		private CharacterStats _stats;
+		private MovementStats _movement;
 
 		public override void OnAddedToEntity()
 		{
 			_mover = Entity.GetComponent<Mover>();
-			_stats = Entity.GetComponent<CharacterStats>();
+			_movement = Entity.GetComponent<MovementStats>();
 			UpdateOrder = GameConstants.Physics.PhysicsBodyUpdateOrder;
 		}
 
 		public void Update()
 		{
 			// Gravity is universal
-			Velocity.Y += _stats.gravity * Time.DeltaTime;
+			Velocity.Y += _movement.gravity * Time.DeltaTime;
 
 			// Move with collision
 			var motion = Velocity * Time.DeltaTime;

@@ -1,4 +1,5 @@
 using Nez;
+using GorelordsBrawler.Components.Stats;
 using GorelordsBrawler.Input;
 
 namespace GorelordsBrawler.Components.Abilities
@@ -7,7 +8,7 @@ namespace GorelordsBrawler.Components.Abilities
 	{
 		private readonly InputProfile _input;
 		private PhysicsBody _body;
-		private CharacterStats _stats;
+		private MovementStats _movement;
 
 		public WalkAbility(InputProfile input)
 		{
@@ -17,13 +18,13 @@ namespace GorelordsBrawler.Components.Abilities
 		public override void OnAddedToEntity()
 		{
 			_body = Entity.GetComponent<PhysicsBody>();
-			_stats = Entity.GetComponent<CharacterStats>();
+			_movement = Entity.GetComponent<MovementStats>();
 		}
 
 		public void Update()
 		{
 			var moveDir = _input.MoveX.Value;
-			_body.Velocity.X = moveDir * _stats.moveSpeed;
+			_body.Velocity.X = moveDir * _movement.moveSpeed;
 			if (moveDir != 0)
 				_body.FacingDirection = moveDir;
 		}
