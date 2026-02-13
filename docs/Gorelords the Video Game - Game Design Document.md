@@ -69,13 +69,13 @@ Meanwhile, a cloaked **Resistance Leader** watches from the crowd. After the fig
 
 ### Roster Status Key
 
-- **Production Ready** — 3D model (OBJ/STL) exists and is ready for the sprite pipeline
+- **Development Ready** — 3D model (OBJ/STL) exists and is ready for the sprite pipeline
 - **In Game** — Currently implemented with prototype sprites (colored rectangles)
 - **Concept Only** — Character designed but no 3D model yet
 
 ### Playable Fighters
 
-#### Future Axe — `Production Ready`
+#### Future Axe — `Development Ready`
 *Model: `Future AXE.obj`*
 
 Main character. Former Earth human, abducted and enslaved in the mines. Now fights in the Death Grid for fun and the chance to eventually gain his freedom. Wears a helmet at all times — no animated dialogue needed. Silent anti-hero.
@@ -85,25 +85,116 @@ Main character. Former Earth human, abducted and enslaved in the mines. Now figh
 - **Special:** Can pick up and use grid weapons (traps, saw blades) that spawn during matches
 - **Traits:** Medium weight, solid all-rounder. Simple to learn, effective to play.
 
-#### The Suffer (Tormentorr) — `Production Ready`
+#### Tormentorr — `Development Ready`
 *Model: `Tormentorr.obj`*
 
-Current reigning champion and main competitor of the Death Grid. A brutal killing machine born of pain. Sadomasochistic — loves to both receive and inflict punishment.
+- **Archetype:** TBD
+- **Traits:** WIP — needs character design and moveset
 
-- **Archetype:** Heavy / berserker
-- **Melee:** Mace that can stun (with diminishing returns)
-- **Special:** Immune or resistant to knockbacks. When low on health he does more damage.
-- **Traits:** Slow but devastating. The final boss energy of the roster.
-
-#### Ichor (Astrarot) — `Production Ready`
+#### Astrarot — `Development Ready`
 *Model: `Astrarot_PrintReady.OBJ`*
 
-Two-headed ogre. Speaks only in grunts. Participates in Death Grid fights purely for the fun of it. Massive, muscular, with furry legs and horns on both heads. Carries a spiked club and a bladed weapon.
+- **Archetype:** TBD
+- **Traits:** WIP — needs character design and moveset
 
-- **Archetype:** Berserker / grappler
-- **Melee:** Axe and spikey stick combo
-- **Special:** Can run fast on hooved legs and leap well. Grabs and bites.
-- **Traits:** Heavy but surprisingly mobile. Two heads means twice the anger.
+#### Bloodozer — `Development Ready`
+*Model: `Bloodozer_REV1.obj`*
+
+A hulking brute built for destruction.
+
+- **Archetype:** Charge / heavy
+- **Melee:** Crushing melee attacks
+- **Special:** Charge attack — builds momentum and plows through opponents
+- **Traits:** WIP — needs moveset design
+
+#### Treadkill — `Development Ready`
+*Model: `Treadkill_PrintReady.OBJ`*
+
+A treaded war machine fighter.
+
+- **Archetype:** Charge / heavy
+- **Melee:** Grinding treaded attacks
+- **Special:** WIP — vehicle-themed movement abilities
+- **Traits:** WIP — needs moveset design
+
+#### Phaserbeast — `Development Ready`
+*Model: `Phaserbeast_PrintReady.OBJ`*
+
+An alien beast with built-in beam weapons.
+
+- **Archetype:** Ranged / beam
+- **Melee:** Claws and bites
+- **Ranged:** Energy beams — sustained fire that can sweep across the arena
+- **Traits:** WIP — needs moveset design
+
+#### MaceFace — `Development Ready`
+*Model: `MaceFace_PrintReady.OBJ`*
+
+A gladiator-style warrior wielding a massive mace. Armored and brutal.
+
+- **Archetype:** Weapon specialist / melee
+- **Melee:** Mace — slow wind-up, huge damage and knockback
+- **Traits:** WIP — needs moveset design
+
+#### Skab — `Development Ready`
+*Model: `Skab_PrintReady.OBJ`*
+
+A scrappy, scarred fighter covered in wounds and scabs.
+
+- **Archetype:** Scrapper
+- **Melee:** Dirty fighting — clawing, biting, improvised weapons
+- **Traits:** WIP — needs moveset design
+
+#### Pistain — `Development Ready`
+*Model: `Pistain_PrintReady.OBJ`*
+
+A stained, corrupted fighter.
+
+- **Archetype:** TBD
+- **Traits:** WIP — needs moveset design
+
+#### Mutant Cop — `Development Ready`
+*Model: `MutantCop_Printready02.OBJ`*
+
+A former law enforcement officer who has mutated. Pre-melt and post-melt forms — once a cop, now a melting horror.
+
+- **Archetype:** Fighter
+- **Melee:** Beats you with his nightstick
+- **Ranged:** Shoots you with his gun
+- **Traits:** Pre-melt and post-melt forms. Once a cop, now a melting horror.
+
+#### Murdroid — `Development Ready` `Concept Art Available`
+*No confirmed model match — design sketches show front/back with drone head, laser cannon, receipt printer, and spike projectiles*
+
+Murder bot with a heart of gold. Mostly chrome with matte black, glowing red and teal lights. Head pops off and flies like a drone. Has a receipt printer (he's also an auditor — knocks on your door, and when you answer, your head explodes).
+
+- **Archetype:** Hybrid ranged/melee
+- **Melee:** Chainsaw arm
+- **Ranged:** Laser from head, spike projectiles from back
+- **Special:** Rocket boosters — can drop down on you with spikey back but gets stuck for a second. Drone head detachment.
+- **Traits:** Unique silhouette, lots of personality. A robotic Swiss army knife of death.
+
+#### Madman — `Development Ready`
+*Model: `MadMan_PrintReady02.OBJ`*
+
+The blind cannibal surgeon of the Death Grid. Long stringy hair covering his face (front view) and a bloody apron with tools. Carries a cleaver/saw. Has a collection of random parts from dead fighters and enjoys tasting his work while operating. Mixes and matches body parts to keep fighters alive and make them better warriors.
+
+- **Archetype:** Melee / debuffer
+- **Melee:** Cleaver and surgical saw
+- **Special:** WIP — could involve stealing opponent health/limbs, poison/infection mechanics
+- **Traits:** Creepy, unsettling. Blind but deadly. The Frankenstein of the Death Grid.
+
+#### Bobee — `Development Ready`
+*Model: `Bobee_PrintReady.OBJ`*
+
+- **Archetype:** TBD
+- **Traits:** WIP — needs character design and moveset
+
+#### Lil Flex — `Development Ready`
+*Model: `lil flex.obj`*
+
+- **Archetype:** TBD
+- **Traits:** WIP — needs character design and moveset
 
 #### Doc Marauder — `In Game`
 *No 3D model yet*
@@ -125,108 +216,28 @@ Super dumb and slow but can kill you easily. The simplest character in the roste
 - **Special:** Highest armor in the game, barely flinches from hits
 - **Traits:** Super heavy, slow, high armor, melee only. The beginner character.
 
-#### Bloodozer — `Production Ready`
-*Model: `Bloodozer_REV1.obj`*
-
-A hulking brute built for destruction.
-
-- **Archetype:** Charge / heavy
-- **Melee:** Crushing melee attacks
-- **Special:** Charge attack — builds momentum and plows through opponents
-- **Traits:** WIP — needs moveset design
-
-#### Treadkill — `Production Ready`
-*Model: `Treadkill_PrintReady.OBJ`*
-
-A treaded war machine fighter.
-
-- **Archetype:** Charge / heavy
-- **Melee:** Grinding treaded attacks
-- **Special:** WIP — vehicle-themed movement abilities
-- **Traits:** WIP — needs moveset design
-
-#### Phaserbeast — `Production Ready`
-*Model: `Phaserbeast_PrintReady.OBJ`*
-
-An alien beast with built-in beam weapons.
-
-- **Archetype:** Ranged / beam
-- **Melee:** Claws and bites
-- **Ranged:** Energy beams — sustained fire that can sweep across the arena
-- **Traits:** WIP — needs moveset design
-
-#### MaceFace — `Production Ready`
-*Model: `MaceFace_PrintReady.OBJ`*
-
-A gladiator-style warrior wielding a massive mace. Armored and brutal.
-
-- **Archetype:** Weapon specialist / melee
-- **Melee:** Mace — slow wind-up, huge damage and knockback
-- **Traits:** WIP — needs moveset design
-
-#### Skab — `Production Ready`
-*Model: `Skab_PrintReady.OBJ`*
-
-A scrappy, scarred fighter covered in wounds and scabs.
-
-- **Archetype:** Scrapper
-- **Melee:** Dirty fighting — clawing, biting, improvised weapons
-- **Traits:** WIP — needs moveset design
-
-#### Pistain — `Production Ready`
-*Model: `Pistain_PrintReady.OBJ`*
-
-A stained, corrupted fighter.
-
-- **Archetype:** TBD
-- **Traits:** WIP — needs moveset design
-
-#### Mutant Cop — `Production Ready`
-*Model: `MutantCop_Printready02.OBJ`*
-
-A former law enforcement officer who has mutated. Pre-melt and post-melt forms — once a cop, now a melting horror.
-
-- **Archetype:** Fighter
-- **Melee:** Beats you with his nightstick
-- **Ranged:** Shoots you with his gun
-- **Traits:** Intentionally the worst character in the game because fuck cops. (May be renamed from Psycops)
-
-#### Murdroid — `Production Ready` `Concept Art Available`
-*No confirmed model match — design sketches show front/back with drone head, laser cannon, receipt printer, and spike projectiles*
-
-Murder bot with a heart of gold. Mostly chrome with matte black, glowing red and teal lights. Head pops off and flies like a drone. Has a receipt printer (he's also an auditor — knocks on your door, and when you answer, your head explodes).
-
-- **Archetype:** Hybrid ranged/melee
-- **Melee:** Chainsaw arm
-- **Ranged:** Laser from head, spike projectiles from back
-- **Special:** Rocket boosters — can drop down on you with spikey back but gets stuck for a second. Drone head detachment.
-- **Traits:** Unique silhouette, lots of personality. A robotic Swiss army knife of death.
-
-#### Madman — `Production Ready`
-*Model: `MadMan_PrintReady02.OBJ`*
-
-The blind cannibal surgeon of the Death Grid. Long stringy hair covering his face (front view) and a bloody apron with tools. Carries a cleaver/saw. Has a collection of random parts from dead fighters and enjoys tasting his work while operating. Mixes and matches body parts to keep fighters alive and make them better warriors.
-
-- **Archetype:** Melee / debuffer
-- **Melee:** Cleaver and surgical saw
-- **Special:** WIP — could involve stealing opponent health/limbs, poison/infection mechanics
-- **Traits:** Creepy, unsettling. Blind but deadly. The Frankenstein of the Death Grid.
-
-#### Bobee — `Production Ready`
-*Model: `Bobee_PrintReady.OBJ`*
-
-- **Archetype:** TBD
-- **Traits:** WIP — needs character design and moveset
-
-#### Lil Flex — `Production Ready`
-*Model: `lil flex.obj`*
-
-- **Archetype:** TBD
-- **Traits:** WIP — needs character design and moveset
-
 ### GDD-Original Characters (No Models Yet)
 
 These characters are from the original GDD and remain in the design. They need 3D models or physical toys to enter the sprite pipeline.
+
+#### The Suffer — `Concept Only`
+Current reigning champion and main competitor of the Death Grid. A brutal killing machine born of pain. Sadomasochistic — loves to both receive and inflict punishment.
+- **Archetype:** Heavy / berserker
+- **Melee:** Mace that can stun (with diminishing returns)
+- **Special:** Immune or resistant to knockbacks. When low on health he does more damage.
+- **Traits:** Slow but devastating. The final boss energy of the roster.
+
+#### Ichor — `Concept Only`
+Two-headed troll dude that likes to hit things. Speaks only in grunts. Participates in Death Grid fights purely for the fun of it.
+- **Archetype:** Berserker / grappler
+- **Melee:** Axe and spikey stick combo
+- **Special:** Can run fast on hooved legs and leap well. Grabs and bites.
+- **Traits:** Heavy but surprisingly mobile. Two heads means twice the anger.
+
+#### Psycops — `Concept Only`
+- **Melee:** Beats you with his nightstick
+- **Ranged:** Shoots you with his gun
+- **Traits:** Intentionally the worst character in the game because fuck cops.
 
 #### Maggotgagger — `Concept Only`
 Smells bad and is rotting, covered in slime.
@@ -257,7 +268,7 @@ Made of snot, teeth, and shards of glass.
 
 ### Non-Playable Characters
 
-#### Total Master — `Production Ready`
+#### Total Master — `Development Ready`
 *Model: `TotalMaster_Printready.OBJ`*
 
 Boss of the Death Grid and warden of the entire operation. Smooth-talking villain who wears a suit and is humanoid in features. Watches fights from his boardroom above the arena. Controls the grid traps — activates saw blades, flamethrowers, and caged beasts when his champion starts losing. Sits in an egg-shaped chair surrounded by alien skull trophies, sipping cocktails.
@@ -265,7 +276,7 @@ Boss of the Death Grid and warden of the entire operation. Smooth-talking villai
 - **Role:** Main antagonist, controls arena hazards during matches
 - **In-Game:** Could trigger random arena traps, appear in cutscenes/intros. Potential unlockable boss character.
 
-#### Right Hand Man — `Production Ready`
+#### Right Hand Man — `Development Ready`
 *Model: `RightHandMan_Printready.OBJ`*
 
 Total Master's personal guard. Large brute with a small head and an enlarged right arm. Stands silently by the doorway of the boardroom.
@@ -286,7 +297,7 @@ Personal assistant and accountant to Total Master. Goes over his schedule and up
 
 - **Role:** Comic relief, exposition. Appears in boardroom cutscenes.
 
-#### Death Guards (TV Heads) — `Production Ready`
+#### Death Guards (TV Heads) — `Development Ready`
 *Models: `Death Guard 1.obj`, `DeathGuard_2_PrintReady.OBJ`*
 
 Cyborg guards of the Death Grid. Large and muscular with no mind of their own. Their heads are TV sets that display commands via prompter lettering or broadcast the Death Grid fights. Carry electrified staffs and wear heavy armor. "Screen Prompts Commands" written on the design.

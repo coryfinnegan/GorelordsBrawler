@@ -677,3 +677,141 @@ After implementing Phase 6 (engine integration):
 3. Move left/right — sprite should flip via `FlipX`
 4. Take damage — should briefly show hit sprite then return to idle
 5. Select a character without an atlas — should still render as a colored rectangle (fallback works)
+
+---
+
+## Appendix C: Learning Resources — Tutorials, Devlogs, and Tools
+
+This section collects tutorials, YouTube channels, devlogs, and tools specifically relevant to our pipeline: taking 3D sculpt models, texturing them, rigging/posing them, and rendering them into pre-rendered 2D sprites (DKC / Killer Instinct style).
+
+### The Technique: Pre-Rendered 3D Sprites
+
+The technique we're using was pioneered by Rare in 1994 for Donkey Kong Country and Killer Instinct. They modeled characters on Silicon Graphics workstations, animated them, then rendered each frame into 2D sprites. The result looked "3D" but ran on hardware that couldn't handle real-time 3D. Today we can do the same thing in Blender for free.
+
+**Background reading:**
+- [The Making of Donkey Kong Country & Killer Instinct / Pre-rendered Graphics (NeoGAF)](https://www.neogaf.com/threads/the-making-of-donkey-kong-country-killer-instinct-pre-rendered-graphics.1607594/) — Deep dive into Rare's original process with SGI workstations
+- [Bits & Beats: 30 Retro Games with DKC-like Pre-Rendered Sprites (NeoGAF)](https://www.neogaf.com/threads/bits-beats-30-retro-games-with-donkey-kong-country-like-pre-rendered-sprites.1638369/) — Catalog of 30 games that used this technique, good for visual reference and inspiration
+- [Pre-rendered Graphics: Showing Examples, Discussing Possibilities (NeoGAF)](https://www.neogaf.com/threads/pre-rendered-graphics-showing-examples-discussing-possibilities.1613023/) — Community thread with modern examples and discussion of the technique's revival
+- [Why Prerendering is Here to Stay in Game Dev (garagefarm.net)](https://garagefarm.net/blog/why-prerendering-is-here-to-stay-in-game-dev) — Overview of pre-rendering in modern game development
+- [3D Rendered Pixel Sprites (cxong.github.io)](https://cxong.github.io/2017/03/3d-rendered-pixel-sprites) — Technical breakdown of rendering 3D models into pixel-art-style sprites
+
+---
+
+### Step 1: Texturing Your Model
+
+The OBJ files are untextured sculpts. You need to add color/material to them before rendering sprites.
+
+#### Grant Abbitt — Texture Painting for PS1 Characters (YouTube, Free)
+This is the single best starting point for a complete beginner. Grant walks through the entire process of texture painting a low-poly character in Blender — UV unwrapping, setting up materials, and hand-painting directly on the model. The PS1 aesthetic (low-res, chunky, hand-painted) is very close to what we want for toy-like characters.
+
+- [Texture Painting for PS1 Characters — Beginner Friendly (Class Central listing)](https://www.classcentral.com/course/youtube-blender-tutorial-texture-painting-for-ps1-characters-beginner-friendly-488621)
+- [PlayStation 1 Characters in Blender — Low-Poly 3D Modeling (Class Central listing)](https://www.classcentral.com/course/youtube-playstation-1-characters-in-blender-486471)
+- [Grant Abbitt's YouTube Channel & Course Library](https://www.gabbitt.co.uk/courses)
+
+#### Blender Texture Painting Complete Guide (generalistprogrammer.com)
+A comprehensive written tutorial covering everything from basic texture paint mode to PBR workflows, UV unwrapping, and exporting textures for game engines.
+
+- [Blender Texture Painting Tutorial: Complete Game Asset Texturing Guide 2025](https://generalistprogrammer.com/tutorials/blender-texture-painting-complete-game-asset-tutorial)
+
+#### GameDev.tv — Blender 2D Sprites Course (Paid)
+A full course covering shaders, cameras, and Grease Pencil to turn 3D models into game-ready 2D sprites, tilesets, and UI. Covers the complete pipeline from model to sprite sheet.
+
+- [Blender 2D Sprites: Turn 3D Models into Pixel Art for Games (GameDev.tv)](https://gamedev.tv/courses/blender-sprites)
+
+---
+
+### Step 2: Rigging & Animation (Skeletons and Posing)
+
+To create attack poses, hit reactions, and any movement beyond the static sculpt, you'll need to rig the model with an armature (skeleton).
+
+#### CGDive — "Rigging Isn't Scary" (YouTube, Free)
+The best free rigging course available. Beginner to intermediate in 3 levels, ~20 hours total. Starts with absolute basics (what is an armature, what is weight painting) and builds to full character rigs. Released completely free on YouTube.
+
+- [Rigging Isn't Scary: Learn Rigging in Blender 2025 (CGDive)](https://cgdive.com/48-hours-early-access-learn-rigging-in-blender-2024-2025/comment-page-1/)
+- [Blender Rigging: A Complete Learning Path (CGDive)](https://cgdive.com/cgdive-learn-rigging-in-blender-path/)
+
+#### GameDev Academy — Intro to Rigging Models in Blender
+A shorter written + video guide that covers the fundamentals quickly if you don't want to commit to a full course yet.
+
+- [Beginner's Guide to Rigging in Blender (GameDev Academy)](https://gamedevacademy.org/blender-rigging-tutorial/)
+
+#### Skillshare — How to Rig in Blender Step-by-Step
+Another beginner-friendly walkthrough with step-by-step instructions.
+
+- [How to Rig in Blender: A Step-by-Step Tutorial (Skillshare)](https://www.skillshare.com/en/blog/how-to-rig-in-blender-a-step-by-step-tutorial-skillshare-blog/)
+
+---
+
+### Step 3: Rendering Sprites from 3D Models
+
+This is the core of the pipeline — setting up cameras, lighting, and rendering out multi-angle sprite sheets.
+
+#### Gravity Ace Devlog — Creating 2D Sprites with Blender + Aseprite
+An indie game dev who documents their exact workflow: model in Blender, animate, render frames, then clean up and assemble sprite sheets in Aseprite. Practical, real-world, proven in a shipped game.
+
+- [Creating 2D Sprites with Blender + Aseprite (Gravity Ace devlog)](https://gravityace.com/devlog/3d-to-2d-with-blender/)
+
+#### Gemserk Blog — Building 2D Sprites from 3D Models Using Blender
+A classic tutorial that walks through the full process: model setup, camera configuration (64x64 viewport), keyframe animation for rotation, rendering with proper anti-aliasing (Catmull-Rom), and assembling into sprite sheets.
+
+- [Building 2D Sprites from 3D Models Using Blender (Gemserk)](https://blog.gemserk.com/2011/07/20/building-2d-sprites-from-3d-models-using-blender/)
+
+#### ArtStation — Creating 2D Pixel Art Style Isometric Sprites from a 3D Model
+Step-by-step written tutorial with images. Covers orthographic camera setup, rendering at low resolution for pixel-art crunch, and post-processing.
+
+- [Tutorial: Creating 2D Pixel Art Style Isometric Sprites from a 3D Model in Blender (ArtStation)](https://www.artstation.com/blogs/jsabbott/YQaAw/tutorial-creating-2d-pixel-art-style-isometric-sprites-from-a-3d-model-in-blender)
+
+#### CoderNunk — How to Make a Sprite Sheet from a 3D Model Using Blender and ImageMagick
+Covers the render-to-spritesheet pipeline end to end, including using ImageMagick to stitch rendered frames into a single sheet.
+
+- [How to Make a Sprite Sheet from a 3D Model Using Blender and ImageMagick (CoderNunk)](https://codernunk.com/tutorials/sprite-sheet-from-3d/)
+
+---
+
+### Blender Addons That Automate the Pipeline
+
+These tools can save significant time by automating multi-angle rendering, sprite sheet assembly, or both.
+
+#### BlenderSpriteGenerator (Free, GitHub)
+Renders 3D models from multiple angles into 2D/2.5D game sprites automatically. Click "Render Sprites" and it creates a sprite image for each angle in the output directory.
+
+- [BlenderSpriteGenerator (GitHub)](https://github.com/RubielGames/BlenderSpriteGenerator)
+
+#### Sprite 2D Add-on ($12, itch.io)
+Generates 2D sprite animations from 3D animated models. Render the same animation from multiple angles (you define how many). Supports side-scroller, top-down, and isometric games. Can auto-generate sprite sheets.
+
+- [Sprite 2D Blender Add-on (itch.io)](https://kameloov.itch.io/sprite-2d)
+- [Sprite 2D review (BlenderNation)](https://www.blendernation.com/2021/06/27/generate-sprites-from-3d-models-with-the-sprite-2d-add-on/)
+
+#### Blender Sprite Studio (Free, CC0)
+A pre-configured Blender 3.6 project with cameras (orthogonal, isometric, top-down), lighting, and compositor node setup for clean sprite rendering. Removes default anti-aliasing on render edges. Drop your model in, render, done.
+
+- [Blender Sprite Studio (itch.io)](https://croomfolk.itch.io/blender-2d-sprite-studio)
+
+#### Get Sheet Done (Free)
+Blender addon for rendering animations from multiple cameras and creating sprite sheets directly inside Blender.
+
+- [Get Sheet Done — Create Sprite Sheet in Blender3D](https://kilbee.github.io/GetSheetDone/docs.html)
+
+#### Game Sprite Creator (Free, GitHub)
+Camera presets for top-down, isometric, side view. Automatic rendering of multiple objects including animations. Automatic sprite sheet creation.
+
+- [Game Sprite Creator (GitHub)](https://github.com/johnferley/Game-Sprite-Creator)
+
+#### Sprite Atlas Addon (Free, GitHub)
+Automatically renders and tiles animations to a sprite sheet from a user-definable number of angles. Exports animation data to XML and JSON.
+
+- [SpriteAtlasAddon (GitHub)](https://github.com/Mattline1/SpriteAtlasAddon)
+
+---
+
+### Recommended Learning Path
+
+For a complete novice, follow this order:
+
+1. **Watch Grant Abbitt's PS1 character tutorials** — Learn to texture paint a model. This is the fastest skill to pick up and gives immediate visual results.
+2. **Download Blender Sprite Studio** (free) — Drop a textured model in and do a test render. See what a sprite looks like before committing to the full pipeline.
+3. **Read the Gemserk blog post** — Understand the camera rig and keyframe rotation approach for multi-angle rendering.
+4. **Try BlenderSpriteGenerator addon** (free) — Automate multi-angle rendering instead of doing it manually.
+5. **Watch CGDive's "Rigging Isn't Scary" Level 1** — Only 5 lessons, gives you enough to pose characters for hit reactions and attack frames.
+6. **Follow the full pipeline** from Phase 1 through Phase 7 of this proposal with one character end-to-end.
