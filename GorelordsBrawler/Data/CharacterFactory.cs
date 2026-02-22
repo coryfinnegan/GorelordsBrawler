@@ -91,7 +91,7 @@ namespace GorelordsBrawler.Data
 		{
 			try
 			{
-				var atlas = SpriteAtlasLoader.ParseSpriteAtlas(spriteData.AtlasPath);
+				var atlas = SpriteAtlasLoader.ParseSpriteAtlas(spriteData.AtlasPath, premultiplyAlpha: true);
 
 				var animator = new SpriteAnimator();
 				animator.AddAnimationsFromAtlas(atlas);
