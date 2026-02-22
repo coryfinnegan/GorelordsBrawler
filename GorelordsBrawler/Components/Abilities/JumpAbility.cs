@@ -25,7 +25,7 @@ namespace GorelordsBrawler.Components.Abilities
 		{
 			if (_body.Grounded && _input.Jump.IsPressed)
 			{
-				_body.Velocity.Y = -_movement.jumpSpeed;
+				_body.Velocity.Y = -_movement.JumpSpeed;
 				_body.Grounded = false;
 				_input.Jump.ConsumeBuffer();
 			}

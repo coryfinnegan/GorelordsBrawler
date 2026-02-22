@@ -30,8 +30,15 @@ namespace GorelordsBrawler.Constants
 		{
 			public const string Trollborg = "Trollborg";
 			public const string DocMarauder = "DocMarauder";
+			public const string FutureAxe = "FutureAxe";
 
-			public static readonly string[] All = { Trollborg, DocMarauder };
+			public static readonly string[] All = { Trollborg, DocMarauder, FutureAxe };
+		}
+
+		public static class Animations
+		{
+			public const string Idle = "idle";
+			public const string Run = "run";
 		}
 
 		public static class SceneNames
@@ -47,6 +54,7 @@ namespace GorelordsBrawler.Constants
 			public const float GroundNormalThreshold = -0.5f;
 			public const float CeilingNormalThreshold = 0.5f;
 			public const int PhysicsBodyUpdateOrder = 100;
+			public const int LocomotionAnimatorUpdateOrder = 101;
 		}
 
 		public static class Rendering

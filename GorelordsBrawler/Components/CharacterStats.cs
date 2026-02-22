@@ -7,30 +7,30 @@ namespace GorelordsBrawler.Components
 	public class CharacterStats : Component
 	{
 		[NotInspectable]
-		public string name;
+		public string Name;
 
 		[NotInspectable]
-		public string description;
+		public string Description;
 
 		[Inspectable] [Range(0, 500)]
-		public int maxHp = 100;
+		public int MaxHp = 100;
 
 		[Inspectable] [Range(8, 128)]
-		public float bodyWidth = 32f;
+		public float BodyWidth = 32f;
 
 		[Inspectable] [Range(8, 128)]
-		public float bodyHeight = 48f;
+		public float BodyHeight = 48f;
 
 		[Inspectable] [Range(0, 255)]
-		public int colorR = 128;
+		public int ColorR = 128;
 
 		[Inspectable] [Range(0, 255)]
-		public int colorG = 128;
+		public int ColorG = 128;
 
 		[Inspectable] [Range(0, 255)]
-		public int colorB = 128;
+		public int ColorB = 128;
 
 		[JsonExclude]
-		public Color BodyColor => new Color(colorR, colorG, colorB);
+		public Color BodyColor => new Color(ColorR, ColorG, ColorB);
 	}
 }

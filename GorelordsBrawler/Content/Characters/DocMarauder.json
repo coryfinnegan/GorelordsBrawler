@@ -1,26 +1,26 @@
 {
-	"name": "DocMarauder",
-	"description": "Fast, fragile ranged fighter. Keep your distance or lose your head.",
-	"maxHp": 100,
-	"bodyWidth": 28,
-	"bodyHeight": 44,
-	"colorR": 140,
-	"colorG": 40,
-	"colorB": 40,
-	"movement": {
-		"moveSpeed": 140,
-		"jumpSpeed": 280,
-		"gravity": 900
+	"Name": "DocMarauder",
+	"Description": "Fast, fragile ranged fighter. Keep your distance or lose your head.",
+	"MaxHp": 100,
+	"BodyWidth": 28,
+	"BodyHeight": 44,
+	"ColorR": 140,
+	"ColorG": 40,
+	"ColorB": 40,
+	"Movement": {
+		"MoveSpeed": 140,
+		"JumpSpeed": 280,
+		"Gravity": 900
 	},
-	"projectile": {
-		"speed": 400,
-		"width": 12,
-		"height": 6,
-		"damage": 15,
-		"knockbackForce": 200,
-		"knockbackAngleX": 1.0,
-		"knockbackAngleY": -0.2,
-		"maxLifetime": 1.5,
-		"cooldown": 0.7
+	"Projectile": {
+		"Speed": 400,
+		"Width": 12,
+		"Height": 6,
+		"Damage": 15,
+		"KnockbackForce": 200,
+		"KnockbackAngleX": 1.0,
+		"KnockbackAngleY": -0.2,
+		"MaxLifetime": 1.5,
+		"Cooldown": 0.7
 	}
 }

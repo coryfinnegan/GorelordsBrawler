@@ -1,5 +1,6 @@
 using Microsoft.Xna.Framework;
 using Nez;
+using Nez.Sprites;
 using GorelordsBrawler.Constants;
 using GorelordsBrawler.Systems;
 
@@ -70,7 +71,7 @@ namespace GorelordsBrawler.Components
 			Entity.GetComponent<PhysicsBody>()?.SetEnabled(enabled);
 			Entity.GetComponent<Hurtbox>()?.SetEnabled(enabled);
 			Entity.GetComponent<HealthBar>()?.SetEnabled(enabled);
-			Entity.GetComponent<PrototypeSpriteRenderer>()?.SetEnabled(enabled);
+			Entity.GetComponent<SpriteRenderer>()?.SetEnabled(enabled);
 
 			// Disable all abilities
 			var updatables = Entity.GetComponents<IUpdatable>();

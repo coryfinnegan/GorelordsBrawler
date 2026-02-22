@@ -5,12 +5,12 @@ namespace GorelordsBrawler.Components.Stats
 	public class MovementStats : Component
 	{
 		[Inspectable] [Range(0, 500)]
-		public float moveSpeed = 100f;
+		public float MoveSpeed = 100f;
 
 		[Inspectable] [Range(0, 600)]
-		public float jumpSpeed = 250f;
+		public float JumpSpeed = 250f;
 
 		[Inspectable] [Range(0, 2000)]
-		public float gravity = 900f;
+		public float Gravity = 900f;
 	}
 }

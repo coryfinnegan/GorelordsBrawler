@@ -1,0 +1,30 @@
+{
+	"Name": "Future Axe",
+	"Description": "Red-armored warrior from the future. Balanced fighter with brutal melee.",
+	"MaxHp": 120,
+	"BodyWidth": 32,
+	"BodyHeight": 48,
+	"ColorR": 180,
+	"ColorG": 40,
+	"ColorB": 40,
+	"Movement": {
+		"MoveSpeed": 120,
+		"JumpSpeed": 270,
+		"Gravity": 900
+	},
+	"Melee": {
+		"Damage": 20,
+		"KnockbackForce": 220,
+		"KnockbackAngleX": 1.0,
+		"KnockbackAngleY": -0.3,
+		"HitboxWidth": 35,
+		"HitboxHeight": 28,
+		"HitboxOffsetX": 28,
+		"Cooldown": 0.4,
+		"HitboxDuration": 0.15
+	},
+	"Sprite": {
+		"AtlasPath": "Content/Sprites/FutureAxe/atlas.atlas",
+		"RunAnimSpeed": 10
+	}
+}

@@ -24,7 +24,7 @@ namespace GorelordsBrawler.Components
 		public void Update()
 		{
 			// Gravity is universal
-			Velocity.Y += _movement.gravity * Time.DeltaTime;
+			Velocity.Y += _movement.Gravity * Time.DeltaTime;
 
 			// Move with collision
 			var motion = Velocity * Time.DeltaTime;
@@ -39,17 +39,14 @@ namespace GorelordsBrawler.Components
 				}
 
 				if (collisionResult.Normal.Y > GameConstants.Physics.CeilingNormalThreshold)
+				{
 					Velocity.Y = 0;
+				}
 			}
 			else
 			{
 				Grounded = false;
 			}
-
-			// Flip sprite based on facing direction
-			var renderer = Entity.GetComponent<PrototypeSpriteRenderer>();
-			if (renderer != null)
-				renderer.FlipX = FacingDirection < 0;
 		}
 	}
 }

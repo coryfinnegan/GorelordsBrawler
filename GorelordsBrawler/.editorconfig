@@ -1,0 +1,39 @@
+root = true
+
+[*.cs]
+# ── Naming rules ──────────────────────────────────────────────────────────────
+
+# Public members (fields, properties, methods, events, delegates) → PascalCase
+dotnet_naming_rule.public_members_pascal_case.symbols  = public_members
+dotnet_naming_rule.public_members_pascal_case.style    = pascal_case_style
+dotnet_naming_rule.public_members_pascal_case.severity = error
+
+dotnet_naming_symbols.public_members.applicable_kinds          = field,property,method,event,delegate
+dotnet_naming_symbols.public_members.applicable_accessibilities = public
+
+dotnet_naming_style.pascal_case_style.capitalization = pascal_case
+
+# Private constants → PascalCase (evaluated before the private fields rule)
+dotnet_naming_rule.private_constants_pascal_case.symbols  = private_constants
+dotnet_naming_rule.private_constants_pascal_case.style    = pascal_case_style
+dotnet_naming_rule.private_constants_pascal_case.severity = error
+
+dotnet_naming_symbols.private_constants.applicable_kinds          = field
+dotnet_naming_symbols.private_constants.applicable_accessibilities = private
+dotnet_naming_symbols.private_constants.required_modifiers        = const
+
+# Private fields (non-const) → _camelCase
+dotnet_naming_rule.private_fields_underscore.symbols  = private_fields
+dotnet_naming_rule.private_fields_underscore.style    = underscore_camel_case_style
+dotnet_naming_rule.private_fields_underscore.severity = error
+
+dotnet_naming_symbols.private_fields.applicable_kinds          = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+
+dotnet_naming_style.underscore_camel_case_style.capitalization   = camel_case
+dotnet_naming_style.underscore_camel_case_style.required_prefix  = _
+
+# ── Diagnostic severity ───────────────────────────────────────────────────────
+
+# Naming violation → build error
+dotnet_diagnostic.IDE1006.severity = error

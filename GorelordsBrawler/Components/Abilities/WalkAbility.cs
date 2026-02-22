@@ -24,7 +24,7 @@ namespace GorelordsBrawler.Components.Abilities
 		public void Update()
 		{
 			var moveDir = _input.MoveX.Value;
-			_body.Velocity.X = moveDir * _movement.moveSpeed;
+			_body.Velocity.X = moveDir * _movement.MoveSpeed;
 			if (moveDir != 0)
 				_body.FacingDirection = moveDir;
 		}

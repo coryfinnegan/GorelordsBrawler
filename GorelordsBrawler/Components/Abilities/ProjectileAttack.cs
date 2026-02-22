@@ -32,7 +32,7 @@ namespace GorelordsBrawler.Components.Abilities
 
 			if (_input.Attack.IsPressed && _cooldownTimer <= 0)
 			{
-				_cooldownTimer = _stats.cooldown;
+				_cooldownTimer = _stats.Cooldown;
 				SpawnProjectile();
 			}
 		}
@@ -40,18 +40,18 @@ namespace GorelordsBrawler.Components.Abilities
 		private void SpawnProjectile()
 		{
 			var facing = _body.FacingDirection;
-			var spawnOffset = new Vector2(_charStats.bodyWidth * 0.5f * facing, 0);
+			var spawnOffset = new Vector2(_charStats.BodyWidth * 0.5f * facing, 0);
 			var spawnPos = Entity.Transform.Position + spawnOffset;
 
 			var projectile = Entity.Scene.CreateEntity(GameConstants.EntityNames.Projectile);
 			projectile.Transform.Position = spawnPos;
 
 			var renderer = projectile.AddComponent(
-				new PrototypeSpriteRenderer(_stats.width, _stats.height));
+				new PrototypeSpriteRenderer(_stats.Width, _stats.Height));
 			renderer.SetColor(_charStats.BodyColor);
 			renderer.RenderLayer = GameConstants.Rendering.HitboxRenderLayer;
 
-			var collider = projectile.AddComponent(new BoxCollider(_stats.width, _stats.height));
+			var collider = projectile.AddComponent(new BoxCollider(_stats.Width, _stats.Height));
 			collider.PhysicsLayer = PhysicsLayers.Hitbox;
 			collider.CollidesWithLayers = PhysicsLayers.Hurtbox;
 			collider.IsTrigger = true;
@@ -61,14 +61,14 @@ namespace GorelordsBrawler.Components.Abilities
 			projectile.AddComponent(new AttackData
 			{
 				OwnerEntity = Entity,
-				Damage = _stats.damage,
-				KnockbackForce = _stats.knockbackForce,
+				Damage = _stats.Damage,
+				KnockbackForce = _stats.KnockbackForce,
 				KnockbackAngle = _stats.KnockbackAngle,
 				FacingDirection = facing
 			});
 
-			var velocity = new Vector2(_stats.speed * facing, 0);
-			projectile.AddComponent(new Projectile(velocity, _stats.maxLifetime));
+			var velocity = new Vector2(_stats.Speed * facing, 0);
+			projectile.AddComponent(new Projectile(velocity, _stats.MaxLifetime));
 		}
 	}
 }

@@ -1,26 +1,26 @@
 {
-	"name": "Trollborg",
-	"description": "Super heavy, slow, high armor, melee only. Simple for people who are simple.",
-	"maxHp": 150,
-	"bodyWidth": 32,
-	"bodyHeight": 48,
-	"colorR": 50,
-	"colorG": 120,
-	"colorB": 50,
-	"movement": {
-		"moveSpeed": 100,
-		"jumpSpeed": 250,
-		"gravity": 900
+	"Name": "Trollborg",
+	"Description": "Super heavy, slow, high armor, melee only. Simple for people who are simple.",
+	"MaxHp": 150,
+	"BodyWidth": 32,
+	"BodyHeight": 48,
+	"ColorR": 50,
+	"ColorG": 120,
+	"ColorB": 50,
+	"Movement": {
+		"MoveSpeed": 100,
+		"JumpSpeed": 250,
+		"Gravity": 900
 	},
-	"melee": {
-		"damage": 25,
-		"knockbackForce": 250,
-		"knockbackAngleX": 1.0,
-		"knockbackAngleY": -0.3,
-		"hitboxWidth": 40,
-		"hitboxHeight": 30,
-		"hitboxOffsetX": 30,
-		"cooldown": 0.5,
-		"hitboxDuration": 0.15
+	"Melee": {
+		"Damage": 25,
+		"KnockbackForce": 250,
+		"KnockbackAngleX": 1.0,
+		"KnockbackAngleY": -0.3,
+		"HitboxWidth": 40,
+		"HitboxHeight": 30,
+		"HitboxOffsetX": 30,
+		"Cooldown": 0.5,
+		"HitboxDuration": 0.15
 	}
 }

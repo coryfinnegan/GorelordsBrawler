@@ -157,7 +157,7 @@ namespace GorelordsBrawler.Systems
 
 				// Player label
 				var playerLabel = string.Format(GameConstants.UI.PlayerLabelFormat, i + 1);
-				var playerColor = player.GetComponent<PrototypeSpriteRenderer>().Color;
+				var playerColor = player.GetComponent<CharacterStats>().BodyColor;
 				column.Add(new Label(playerLabel, font, playerColor,
 					GameConstants.UI.TitleScale, GameConstants.UI.TitleScale));
 				column.Row();

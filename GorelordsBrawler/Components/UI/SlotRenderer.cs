@@ -49,14 +49,14 @@ namespace GorelordsBrawler.Components.UI
 
 			// Character color preview
 			var charData = GetCharacterData(slot);
-			var previewColor = new Color(charData.colorR, charData.colorG, charData.colorB);
-			var previewW = charData.bodyWidth * GameConstants.CharacterSelect.PreviewScale;
-			var previewH = charData.bodyHeight * GameConstants.CharacterSelect.PreviewScale;
+			var previewColor = new Color(charData.ColorR, charData.ColorG, charData.ColorB);
+			var previewW = charData.BodyWidth * GameConstants.CharacterSelect.PreviewScale;
+			var previewH = charData.BodyHeight * GameConstants.CharacterSelect.PreviewScale;
 			batcher.DrawRect(pos.X - previewW / 2, y, previewW, previewH, previewColor);
 			y += previewH + GameConstants.CharacterSelect.PanelPadding;
 
 			// Character name with arrows (hide arrows when ready)
-			var charName = charData.name ?? _characters[slot.CharacterIndex];
+			var charName = charData.Name ?? _characters[slot.CharacterIndex];
 			var displayName = slot.IsReady
 				? charName
 				: GameConstants.CharacterSelect.LeftArrow + charName + GameConstants.CharacterSelect.RightArrow;

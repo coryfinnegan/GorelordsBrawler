@@ -51,7 +51,7 @@ namespace GorelordsBrawler.Systems.Rules
 
 				// Player label
 				var playerLabel = string.Format(GameConstants.UI.PlayerLabelFormat, i + 1);
-				root.Add(new Label(playerLabel, font, player.GetComponent<PrototypeSpriteRenderer>().Color, scale))
+				root.Add(new Label(playerLabel, font, player.GetComponent<CharacterStats>().BodyColor, scale))
 					.SetPadRight(GameConstants.UI.StockSpacing);
 
 				// Stock hearts label
