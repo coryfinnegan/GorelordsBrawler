@@ -4,25 +4,19 @@ using GorelordsBrawler.Systems;
 
 namespace GorelordsBrawler.Components.UI
 {
-	public class SlotController : Component, IUpdatable
+	public class SlotController(int slotIndex, string[] characters) : Component, IUpdatable
 	{
-		public int SlotIndex { get; }
-		public InputProfile Input { get; private set; }
+        public int SlotIndex { get; } = slotIndex;
+        public InputProfile Input { get; private set; }
 		public InputDeviceType Device { get; private set; }
 		public int CharacterIndex { get; private set; }
 		public bool IsReady { get; private set; }
 		public bool IsJoined => Input != null;
 
-		private readonly string[] _characters;
+		private readonly string[] _characters = characters;
 		private bool _skipFrame;
 
-		public SlotController(int slotIndex, string[] characters)
-		{
-			SlotIndex = slotIndex;
-			_characters = characters;
-		}
-
-		public void Join(InputDeviceType device, InputProfile input)
+        public void Join(InputDeviceType device, InputProfile input)
 		{
 			Device = device;
 			Input = input;
@@ -33,12 +27,9 @@ namespace GorelordsBrawler.Components.UI
 
 		public void Unjoin()
 		{
-			if (Input != null)
-			{
-				Input.Deregister();
-				Input = null;
-			}
-			IsReady = false;
+            Input?.Deregister();
+            Input = null;
+            IsReady = false;
 		}
 
 		public void Update()

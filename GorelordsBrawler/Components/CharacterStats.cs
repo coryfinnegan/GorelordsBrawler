@@ -31,6 +31,6 @@ namespace GorelordsBrawler.Components
 		public int ColorB = 128;
 
 		[JsonExclude]
-		public Color BodyColor => new Color(ColorR, ColorG, ColorB);
+		public Color BodyColor => new(ColorR, ColorG, ColorB);
 	}
 }

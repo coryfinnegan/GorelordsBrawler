@@ -6,7 +6,7 @@ using GorelordsBrawler.Constants;
 
 namespace GorelordsBrawler.Components.UI
 {
-	public class HeaderRenderer : RenderableComponent
+	public class HeaderRenderer(BitmapFont font, BitmapFont titleFont) : RenderableComponent
 	{
 		public override float Width => GameConstants.Screen.DesignWidth;
 		public override float Height => GameConstants.Screen.DesignHeight;
@@ -14,16 +14,10 @@ namespace GorelordsBrawler.Components.UI
 		public string StatusText { get; set; } = GameConstants.CharacterSelect.NeedPlayersText;
 		public Color StatusColor { get; set; } = Color.Gray;
 
-		private readonly BitmapFont _font;
-		private readonly BitmapFont _titleFont;
+		private readonly BitmapFont _font = font;
+		private readonly BitmapFont _titleFont = titleFont;
 
-		public HeaderRenderer(BitmapFont font, BitmapFont titleFont)
-		{
-			_font = font;
-			_titleFont = titleFont;
-		}
-
-		public override void Render(Batcher batcher, Camera camera)
+        public override void Render(Batcher batcher, Camera camera)
 		{
 			var screenWidth = GameConstants.Screen.DesignWidth;
 			var screenHeight = GameConstants.Screen.DesignHeight;

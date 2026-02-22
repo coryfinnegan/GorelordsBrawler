@@ -7,7 +7,7 @@ namespace GorelordsBrawler
 	public class GorelordsBrawlerGame : Core
 	{
 		public static GorelordsBrawlerGame GameReference { get; private set; }
-		private Scene.SceneResolutionPolicy _sceneResolutionPolicy;
+		private readonly Scene.SceneResolutionPolicy _sceneResolutionPolicy;
 		private GameTime _gameTime;
 
 		public GorelordsBrawlerGame()
