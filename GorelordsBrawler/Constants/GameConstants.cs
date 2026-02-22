@@ -55,6 +55,9 @@ namespace GorelordsBrawler.Constants
 			public const float CeilingNormalThreshold = 0.5f;
 			public const int PhysicsBodyUpdateOrder = 100;
 			public const int LocomotionAnimatorUpdateOrder = 101;
+			// Cap per-frame delta time so window resize/focus-loss spikes
+			// don't cause physics to tunnel through platforms.
+			public const float MaxDeltaTime = 0.05f; // 50ms = 20fps floor
 		}
 
 		public static class Rendering
@@ -153,6 +156,7 @@ namespace GorelordsBrawler.Constants
 			public const float NameScale = 0.5f;
 			public const float ReadyScale = 0.6f;
 			public const float StatusScale = 0.5f;
+			public const float TitleScale = 2f;
 			public const float CountdownDuration = 2f;
 			public const int MinPlayers = 2;
 			public const float SlotWidth = 160f;

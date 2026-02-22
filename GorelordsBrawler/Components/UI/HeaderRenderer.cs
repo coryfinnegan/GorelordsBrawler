@@ -23,11 +23,11 @@ namespace GorelordsBrawler.Components.UI
 			var screenHeight = GameConstants.Screen.DesignHeight;
 
 			// Title — centered at top
-			var titleScale = GameConstants.UI.TitleScale;
+			var titleScale = GameConstants.CharacterSelect.TitleScale;
 			var titleText = GameConstants.CharacterSelect.TitleText;
 			var titleSize = _titleFont.MeasureString(titleText) * titleScale;
 			batcher.DrawString(_titleFont, titleText,
-				new Vector2(screenWidth / 2f - titleSize.X / 1.5f, GameConstants.CharacterSelect.PanelPadding),
+				new Vector2(screenWidth / 2f - titleSize.X / 2f, GameConstants.CharacterSelect.PanelPadding),
 				Color.Red, 0f, Vector2.Zero, new Vector2(titleScale),
 				SpriteEffects.None, 0f);
 

@@ -1,3 +1,4 @@
+using System;
 using Microsoft.Xna.Framework;
 using Nez;
 using GorelordsBrawler.Components.Stats;
@@ -23,11 +24,13 @@ namespace GorelordsBrawler.Components
 
 		public void Update()
 		{
+			var dt = Math.Min(Time.DeltaTime, GameConstants.Physics.MaxDeltaTime);
+
 			// Gravity is universal
-			Velocity.Y += _movement.Gravity * Time.DeltaTime;
+			Velocity.Y += _movement.Gravity * dt;
 
 			// Move with collision
-			var motion = Velocity * Time.DeltaTime;
+			var motion = Velocity * dt;
 			var collided = _mover.Move(motion, out var collisionResult);
 
 			if (collided)
