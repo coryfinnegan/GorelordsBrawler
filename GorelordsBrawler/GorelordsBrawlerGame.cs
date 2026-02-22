@@ -35,6 +35,10 @@ namespace GorelordsBrawler
 			SettingsManager.Initialize();
 			SettingsManager.Apply();
 
+#if DEBUG
+			DevTools.DebugCommands.RegisterKeybindings();
+#endif
+
 			Scene = new Scenes.MainMenuScene();
 		}
 

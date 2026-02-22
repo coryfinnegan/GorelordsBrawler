@@ -23,11 +23,28 @@ namespace GorelordsBrawler.Components.Abilities
 
 		public void Update()
 		{
-			if (_body.Grounded && _input.Jump.IsPressed)
+			// Can jump if grounded OR within coyote time window
+			var canJump = _body.Grounded || _body.TimeSinceGrounded <= _movement.CoyoteTime;
+
+			if (canJump && _input.Jump.IsPressed)
 			{
 				_body.Velocity.Y = -_movement.JumpSpeed;
 				_body.Grounded = false;
+				_body.TimeSinceGrounded = _movement.CoyoteTime + 1f; // exhaust coyote time
+				_body.JumpHeld = true;
 				_input.Jump.ConsumeBuffer();
+			}
+
+			// Release jump early = short hop (PhysicsBody applies ShortHopMultiplier)
+			if (_body.JumpHeld && !_input.Jump.IsDown)
+			{
+				_body.JumpHeld = false;
+			}
+
+			// Clear jump held at apex (start of descent)
+			if (_body.JumpHeld && _body.Velocity.Y >= 0)
+			{
+				_body.JumpHeld = false;
 			}
 		}
 	}

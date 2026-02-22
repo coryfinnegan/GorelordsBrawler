@@ -12,6 +12,17 @@ namespace GorelordsBrawler.Components
 		public bool Grounded;
 		public int FacingDirection = 1;
 
+		/// <summary>
+		/// True while the character is rising and the jump button is still held.
+		/// Set by JumpAbility on launch, cleared when button is released or apex is reached.
+		/// </summary>
+		public bool JumpHeld;
+
+		/// <summary>
+		/// Time since the character was last grounded. Used for coyote time.
+		/// </summary>
+		public float TimeSinceGrounded;
+
 		private Mover _mover;
 		private MovementStats _movement;
 
@@ -26,8 +37,31 @@ namespace GorelordsBrawler.Components
 		{
 			var dt = Math.Min(Time.DeltaTime, GameConstants.Physics.MaxDeltaTime);
 
-			// Gravity is universal
-			Velocity.Y += _movement.Gravity * dt;
+			// Track time since last grounded (for coyote time)
+			if (Grounded)
+			{
+				TimeSinceGrounded = 0f;
+			}
+			else
+			{
+				TimeSinceGrounded += dt;
+			}
+
+			// Gravity with variable multipliers for game feel:
+			// - Falling: higher gravity for snappy descent
+			// - Rising with jump released: higher gravity for short hops
+			// - Rising with jump held: normal gravity for full jump arc
+			var gravity = _movement.Gravity;
+			if (Velocity.Y > 0)
+			{
+				gravity *= _movement.FallMultiplier;
+			}
+			else if (Velocity.Y < 0 && !JumpHeld)
+			{
+				gravity *= _movement.ShortHopMultiplier;
+			}
+
+			Velocity.Y += gravity * dt;
 
 			// Move with collision
 			var motion = Velocity * dt;

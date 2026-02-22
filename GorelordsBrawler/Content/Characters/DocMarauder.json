@@ -9,8 +9,11 @@
 	"ColorB": 40,
 	"Movement": {
 		"MoveSpeed": 140,
-		"JumpSpeed": 280,
-		"Gravity": 900
+		"JumpSpeed": 580,
+		"Gravity": 1100,
+		"FallMultiplier": 1.6,
+		"ShortHopMultiplier": 3.0,
+		"CoyoteTime": 0.08
 	},
 	"Projectile": {
 		"Speed": 400,

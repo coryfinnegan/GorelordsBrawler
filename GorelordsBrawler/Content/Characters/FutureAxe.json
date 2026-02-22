@@ -9,8 +9,11 @@
 	"ColorB": 40,
 	"Movement": {
 		"MoveSpeed": 120,
-		"JumpSpeed": 270,
-		"Gravity": 900
+		"JumpSpeed": 700,
+		"Gravity": 1200,
+		"FallMultiplier": 1.8,
+		"ShortHopMultiplier": 3.5,
+		"CoyoteTime": 0.08
 	},
 	"Melee": {
 		"Damage": 20,
@@ -25,6 +28,7 @@
 	},
 	"Sprite": {
 		"AtlasPath": "Content/Sprites/FutureAxe/atlas.atlas",
-		"RunAnimSpeed": 10
+		"RunAnimSpeed": 10,
+		"JumpAnimSpeed": 10
 	}
 }

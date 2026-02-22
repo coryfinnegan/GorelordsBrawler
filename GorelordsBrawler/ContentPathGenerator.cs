@@ -94,6 +94,53 @@ namespace Nez
 						public const string Idle_0057 = @"Content\Sprites\FutureAxe\frames\idle\idle_0057.png";
 					}
 
+					public static class Jump
+					{
+						public const string Jump_0000 = @"Content\Sprites\FutureAxe\frames\jump\jump_0000.png";
+						public const string Jump_0001 = @"Content\Sprites\FutureAxe\frames\jump\jump_0001.png";
+						public const string Jump_0002 = @"Content\Sprites\FutureAxe\frames\jump\jump_0002.png";
+						public const string Jump_0003 = @"Content\Sprites\FutureAxe\frames\jump\jump_0003.png";
+						public const string Jump_0004 = @"Content\Sprites\FutureAxe\frames\jump\jump_0004.png";
+						public const string Jump_0005 = @"Content\Sprites\FutureAxe\frames\jump\jump_0005.png";
+						public const string Jump_0006 = @"Content\Sprites\FutureAxe\frames\jump\jump_0006.png";
+						public const string Jump_0007 = @"Content\Sprites\FutureAxe\frames\jump\jump_0007.png";
+						public const string Jump_0008 = @"Content\Sprites\FutureAxe\frames\jump\jump_0008.png";
+						public const string Jump_0009 = @"Content\Sprites\FutureAxe\frames\jump\jump_0009.png";
+						public const string Jump_0010 = @"Content\Sprites\FutureAxe\frames\jump\jump_0010.png";
+						public const string Jump_0011 = @"Content\Sprites\FutureAxe\frames\jump\jump_0011.png";
+						public const string Jump_0012 = @"Content\Sprites\FutureAxe\frames\jump\jump_0012.png";
+						public const string Jump_0013 = @"Content\Sprites\FutureAxe\frames\jump\jump_0013.png";
+						public const string Jump_0014 = @"Content\Sprites\FutureAxe\frames\jump\jump_0014.png";
+						public const string Jump_0015 = @"Content\Sprites\FutureAxe\frames\jump\jump_0015.png";
+						public const string Jump_0016 = @"Content\Sprites\FutureAxe\frames\jump\jump_0016.png";
+						public const string Jump_0017 = @"Content\Sprites\FutureAxe\frames\jump\jump_0017.png";
+						public const string Jump_0018 = @"Content\Sprites\FutureAxe\frames\jump\jump_0018.png";
+						public const string Jump_0019 = @"Content\Sprites\FutureAxe\frames\jump\jump_0019.png";
+						public const string Jump_0020 = @"Content\Sprites\FutureAxe\frames\jump\jump_0020.png";
+						public const string Jump_0021 = @"Content\Sprites\FutureAxe\frames\jump\jump_0021.png";
+						public const string Jump_0022 = @"Content\Sprites\FutureAxe\frames\jump\jump_0022.png";
+						public const string Jump_0023 = @"Content\Sprites\FutureAxe\frames\jump\jump_0023.png";
+						public const string Jump_0024 = @"Content\Sprites\FutureAxe\frames\jump\jump_0024.png";
+						public const string Jump_0025 = @"Content\Sprites\FutureAxe\frames\jump\jump_0025.png";
+						public const string Jump_0026 = @"Content\Sprites\FutureAxe\frames\jump\jump_0026.png";
+						public const string Jump_0027 = @"Content\Sprites\FutureAxe\frames\jump\jump_0027.png";
+						public const string Jump_0028 = @"Content\Sprites\FutureAxe\frames\jump\jump_0028.png";
+						public const string Jump_0029 = @"Content\Sprites\FutureAxe\frames\jump\jump_0029.png";
+						public const string Jump_0030 = @"Content\Sprites\FutureAxe\frames\jump\jump_0030.png";
+						public const string Jump_0031 = @"Content\Sprites\FutureAxe\frames\jump\jump_0031.png";
+						public const string Jump_0032 = @"Content\Sprites\FutureAxe\frames\jump\jump_0032.png";
+						public const string Jump_0033 = @"Content\Sprites\FutureAxe\frames\jump\jump_0033.png";
+						public const string Jump_0034 = @"Content\Sprites\FutureAxe\frames\jump\jump_0034.png";
+						public const string Jump_0035 = @"Content\Sprites\FutureAxe\frames\jump\jump_0035.png";
+						public const string Jump_0036 = @"Content\Sprites\FutureAxe\frames\jump\jump_0036.png";
+						public const string Jump_0037 = @"Content\Sprites\FutureAxe\frames\jump\jump_0037.png";
+						public const string Jump_0038 = @"Content\Sprites\FutureAxe\frames\jump\jump_0038.png";
+						public const string Jump_0039 = @"Content\Sprites\FutureAxe\frames\jump\jump_0039.png";
+						public const string Jump_0040 = @"Content\Sprites\FutureAxe\frames\jump\jump_0040.png";
+						public const string Jump_0041 = @"Content\Sprites\FutureAxe\frames\jump\jump_0041.png";
+						public const string Jump_0042 = @"Content\Sprites\FutureAxe\frames\jump\jump_0042.png";
+					}
+
 					public static class Run
 					{
 						public const string Run_0000 = @"Content\Sprites\FutureAxe\frames\run\run_0000.png";
@@ -144,8 +191,10 @@ namespace Nez
 
 				public const string Atlas = @"Content\Sprites\FutureAxe\atlas.png";
 				public const string Idle = @"Content\Sprites\FutureAxe\idle.png";
+				public const string Jump = @"Content\Sprites\FutureAxe\jump.png";
 				public const string Runslow = @"Content\Sprites\FutureAxe\run-slow.png";
 				public const string Run = @"Content\Sprites\FutureAxe\run.png";
+				public const string Sprites = @"Content\Sprites\FutureAxe\sprites.json";
 			}
 
 		}

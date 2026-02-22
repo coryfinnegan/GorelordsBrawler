@@ -9,8 +9,11 @@
 	"ColorB": 50,
 	"Movement": {
 		"MoveSpeed": 100,
-		"JumpSpeed": 250,
-		"Gravity": 900
+		"JumpSpeed": 500,
+		"Gravity": 1200,
+		"FallMultiplier": 2.0,
+		"ShortHopMultiplier": 3.5,
+		"CoyoteTime": 0.08
 	},
 	"Melee": {
 		"Damage": 25,

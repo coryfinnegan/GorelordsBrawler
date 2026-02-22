@@ -1,0 +1,12 @@
+{
+	"cellSize": 512,
+	"originX": 0.5,
+	"originY": 1.0,
+	"padding": 2,
+	"fps": 8,
+	"animations": {
+		"idle": { "sheet": "idle.png", "frames": 58 },
+		"run": { "sheet": "run.png", "frames": 42 },
+		"jump": { "sheet": "jump.png", "frames": 49 }
+	}
+}

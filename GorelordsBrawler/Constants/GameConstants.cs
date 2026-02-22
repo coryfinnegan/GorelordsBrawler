@@ -39,6 +39,7 @@ namespace GorelordsBrawler.Constants
 		{
 			public const string Idle = "idle";
 			public const string Run = "run";
+			public const string Jump = "jump";
 		}
 
 		public static class SceneNames
@@ -58,6 +59,9 @@ namespace GorelordsBrawler.Constants
 			// Cap per-frame delta time so window resize/focus-loss spikes
 			// don't cause physics to tunnel through platforms.
 			public const float MaxDeltaTime = 0.05f; // 50ms = 20fps floor
+			// Brief hold on the last jump frame after landing — gives a squash feel
+			// without needing separate landing frames in the atlas.
+			public const float LandingWindowDuration = 0.08f; // 80ms
 		}
 
 		public static class Rendering
