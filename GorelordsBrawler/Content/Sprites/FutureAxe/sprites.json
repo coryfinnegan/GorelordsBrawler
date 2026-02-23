@@ -1,12 +1,15 @@
 {
 	"cellSize": 512,
+	"targetSize": 256,
 	"originX": 0.5,
 	"originY": 1.0,
 	"padding": 2,
 	"fps": 8,
 	"animations": {
-		"idle": { "sheet": "idle.png", "frames": 58 },
-		"run": { "sheet": "run.png", "frames": 42 },
-		"jump": { "sheet": "jump.png", "frames": 49 }
+		"idle":      { "sheet": "idle.png", "frames": 58 },
+		"idle_left": { "sheet": "idle-left.png" },
+		"run":       { "sheet": "run.png" },
+		"run_left":  { "sheet": "run-left.png" },
+		"jump":      { "sheet": "jump.png", "frames": 49 }
 	}
 }

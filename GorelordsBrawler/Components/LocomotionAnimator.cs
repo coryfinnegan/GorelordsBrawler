@@ -20,6 +20,8 @@ namespace GorelordsBrawler.Components
 		private SpriteAnimator _animator;
 		private SpriteData _spriteData;
 		private bool _hasJumpAnim;
+		private bool _hasIdleLeftAnim;
+		private bool _hasRunLeftAnim;
 		private bool _wasGrounded;
 		private float _landingTimer;
 
@@ -30,6 +32,8 @@ namespace GorelordsBrawler.Components
 			_animator = Entity.GetComponent<SpriteAnimator>();
 			_spriteData = Entity.GetComponent<SpriteData>();
 			_hasJumpAnim = _animator.Animations.ContainsKey(GameConstants.Animations.Jump);
+			_hasIdleLeftAnim = _animator.Animations.ContainsKey(GameConstants.Animations.IdleLeft);
+			_hasRunLeftAnim = _animator.Animations.ContainsKey(GameConstants.Animations.RunLeft);
 			UpdateOrder = GameConstants.Physics.LocomotionAnimatorUpdateOrder;
 			_wasGrounded = _body.Grounded;
 		}
@@ -57,40 +61,73 @@ namespace GorelordsBrawler.Components
 			{
 				// Airborne — restart animation on takeoff, then drive speed via vertical velocity.
 				// At apex Velocity.Y ≈ 0 so Speed ≈ 0, giving a natural hang-time pause.
+				// Speed must be set before Play() so SetFrame() computes a valid FrameTimeLeft.
+				var jumpAnimSpeed = _spriteData != null ? _spriteData.JumpAnimSpeed : 1.0f;
+				_animator.Speed = (Math.Abs(_body.Velocity.Y) / _movement.JumpSpeed) * jumpAnimSpeed;
+
 				if (justLeftGround || !_animator.IsAnimationActive(GameConstants.Animations.Jump))
 				{
 					_animator.Play(GameConstants.Animations.Jump, SpriteAnimator.LoopMode.ClampForever);
 				}
-
-				var jumpAnimSpeed = _spriteData != null ? _spriteData.JumpAnimSpeed : 1.0f;
-				_animator.Speed = (Math.Abs(_body.Velocity.Y) / _movement.JumpSpeed) * jumpAnimSpeed;
 			}
 			else if (_landingTimer > 0f && _hasJumpAnim)
 			{
 				// Landing window — freeze on the last jump frame for a brief squash beat.
-				_animator.Speed = 0f;
+				// Use Pause() rather than Speed=0 to avoid corrupting FrameTimeLeft on the
+				// next Play() call (SetFrame computes FrameTimeLeft = 1/(fps*Speed), so
+				// Speed=0 would produce Infinity and permanently stall the next animation).
+				_animator.Pause();
 			}
 			else
 			{
-				// Grounded — idle or run
+				// Grounded — idle or run.
+				// Speed must be set before Play() so SetFrame() computes a valid FrameTimeLeft.
 				var isMoving = Math.Abs(_body.Velocity.X) > 0.1f;
-				var targetAnim = isMoving ? GameConstants.Animations.Run : GameConstants.Animations.Idle;
 
-				if (!_animator.IsAnimationActive(targetAnim))
-				{
-					_animator.Play(targetAnim);
-				}
-
-				// Scale run animation speed proportionally to current velocity
 				if (isMoving)
 				{
 					var normalizedSpeed = Math.Abs(_body.Velocity.X) / _movement.MoveSpeed;
 					var runAnimSpeed = _spriteData != null ? _spriteData.RunAnimSpeed : 1.0f;
 					_animator.Speed = normalizedSpeed * runAnimSpeed;
+
+					var useRunLeft = _hasRunLeftAnim && _body.FacingDirection < 0;
+					if (useRunLeft)
+					{
+						// Left-facing run sprite — no mirror needed; override the global FlipX.
+						_animator.FlipX = false;
+						if (!_animator.IsAnimationActive(GameConstants.Animations.RunLeft))
+						{
+							_animator.Play(GameConstants.Animations.RunLeft);
+						}
+					}
+					else
+					{
+						if (!_animator.IsAnimationActive(GameConstants.Animations.Run))
+						{
+							_animator.Play(GameConstants.Animations.Run);
+						}
+					}
 				}
 				else
 				{
 					_animator.Speed = 1.0f;
+					var useDedicatedLeft = _hasIdleLeftAnim && _body.FacingDirection < 0;
+					if (useDedicatedLeft)
+					{
+						// Left-facing idle sprite — no mirror needed; override the global FlipX.
+						_animator.FlipX = false;
+						if (!_animator.IsAnimationActive(GameConstants.Animations.IdleLeft))
+						{
+							_animator.Play(GameConstants.Animations.IdleLeft);
+						}
+					}
+					else
+					{
+						if (!_animator.IsAnimationActive(GameConstants.Animations.Idle))
+						{
+							_animator.Play(GameConstants.Animations.Idle);
+						}
+					}
 				}
 			}
 		}

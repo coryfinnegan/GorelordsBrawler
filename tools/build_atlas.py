@@ -20,8 +20,8 @@ Manifest format (sprites.json):
         "padding": 2,             // pixels between packed sprites
         "fps": 8,                 // default animation framerate
         "animations": {
-            "idle": { "sheet": "idle.png", "frames": 58 },
-            "run":  { "sheet": "run.png",  "frames": 42 }
+            "idle": { "sheet": "idle.png" },              // "frames" optional — black padding auto-skipped
+            "run":  { "sheet": "run.png", "frames": 42 }  // explicit limit still supported
         }
     }
 """
@@ -66,6 +66,16 @@ def load_manifest(sprite_dir):
     return manifest
 
 
+def is_black_padding(crop):
+    """Return True if every visible pixel (alpha > 0) has pure black RGB (0, 0, 0).
+    These are blank padding cells that 3D software leaves at the end of a sprite sheet."""
+    data = crop.convert("RGBA").tobytes()  # flat bytes: R,G,B,A per pixel
+    for i in range(0, len(data), 4):
+        if data[i+3] > 0 and (data[i] > 0 or data[i+1] > 0 or data[i+2] > 0):
+            return False
+    return True
+
+
 def split_sheet(sprite_dir, anim_name, anim_config, cell_size, target_size, frames_dir):
     """Split a sprite sheet into individual frame PNGs."""
     sheet_path = os.path.join(sprite_dir, anim_config["sheet"])
@@ -75,22 +85,33 @@ def split_sheet(sprite_dir, anim_name, anim_config, cell_size, target_size, fram
 
     img = Image.open(sheet_path)
     cols = img.width // cell_size
-    frame_count = anim_config["frames"]
+    rows = img.height // cell_size
+    # "frames" is optional — default to every cell in the sheet, then auto-trim black padding.
+    frame_limit = anim_config.get("frames", cols * rows)
 
     anim_dir = os.path.join(frames_dir, anim_name)
     os.makedirs(anim_dir, exist_ok=True)
 
     resize = target_size is not None and target_size != cell_size
+    flip_x = anim_config.get("flipX", False)
 
     frame = 0
-    for row in range(math.ceil(frame_count / cols)):
+    skipped = 0
+    for row in range(rows):
         for col in range(cols):
-            if frame >= frame_count:
+            if frame + skipped >= frame_limit:
                 break
 
             x = col * cell_size
             y = row * cell_size
             crop = img.crop((x, y, x + cell_size, y + cell_size))
+
+            if is_black_padding(crop):
+                skipped += 1
+                continue
+
+            if flip_x:
+                crop = crop.transpose(Image.FLIP_LEFT_RIGHT)
 
             if resize:
                 crop = crop.resize((target_size, target_size), Image.LANCZOS)
@@ -98,7 +119,15 @@ def split_sheet(sprite_dir, anim_name, anim_config, cell_size, target_size, fram
             crop.save(os.path.join(anim_dir, f"{anim_name}_{frame:04d}.png"))
             frame += 1
 
-    print(f"  {anim_name}: {frame} frames" + (f" (downscaled to {target_size}x{target_size})" if resize else ""))
+    flags = []
+    if flip_x:
+        flags.append("flipped X")
+    if resize:
+        flags.append(f"downscaled to {target_size}x{target_size}")
+    if skipped:
+        flags.append(f"skipped {skipped} black padding frames")
+    suffix = f" ({', '.join(flags)})" if flags else ""
+    print(f"  {anim_name}: {frame} frames{suffix}")
     return True
 
 

@@ -29,6 +29,7 @@
 	"Sprite": {
 		"AtlasPath": "Content/Sprites/FutureAxe/atlas.atlas",
 		"RunAnimSpeed": 10,
-		"JumpAnimSpeed": 10
+		"JumpAnimSpeed": 10,
+		"SpriteScale": 0.8
 	}
 }

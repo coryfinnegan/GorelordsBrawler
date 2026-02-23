@@ -17,5 +17,11 @@ namespace GorelordsBrawler.Components.Stats
 		// slows to 0 at the apex and accelerates during launch and fall.
 		[Inspectable] [Range(0.1f, 10f)]
 		public float JumpAnimSpeed = 1.0f;
+
+		// Visual scale applied to the entity transform for rendering.
+		// Purely visual — does not affect physics collider dimensions (BodyWidth/BodyHeight).
+		// Example: for a 512px-tall sprite frame to appear 48 world units tall, use 48/512 ≈ 0.094.
+		[Inspectable] [Range(0.01f, 2f)]
+		public float SpriteScale = 0.094f;
 	}
 }

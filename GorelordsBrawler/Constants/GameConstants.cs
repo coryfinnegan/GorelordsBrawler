@@ -37,9 +37,11 @@ namespace GorelordsBrawler.Constants
 
 		public static class Animations
 		{
-			public const string Idle = "idle";
-			public const string Run = "run";
-			public const string Jump = "jump";
+			public const string Idle     = "idle";
+			public const string IdleLeft = "idle_left";
+			public const string Run      = "run";
+			public const string RunLeft  = "run_left";
+			public const string Jump     = "jump";
 		}
 
 		public static class SceneNames

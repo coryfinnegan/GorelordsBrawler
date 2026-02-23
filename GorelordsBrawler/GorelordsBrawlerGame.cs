@@ -28,7 +28,7 @@ namespace GorelordsBrawler
 			Scene.SetDefaultDesignResolution(
 				Constants.GameConstants.Screen.DesignWidth,
 				Constants.GameConstants.Screen.DesignHeight,
-				Scene.SceneResolutionPolicy.BestFit);
+				Scene.SceneResolutionPolicy.ShowAll);
 
 			RegisterGlobalManager(new MatchSetupManager());
 

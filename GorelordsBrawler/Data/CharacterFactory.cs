@@ -104,10 +104,10 @@ namespace GorelordsBrawler.Data
 				animator.Play(GameConstants.Animations.Idle);
 				entity.AddComponent(animator);
 
-				// Scale sprite to match character body dimensions
-				var firstSprite = atlas.Sprites[0];
-				var scale = stats.BodyHeight / firstSprite.SourceRect.Height;
-				entity.Transform.SetScale(scale);
+				// Visual scale -- independent of physics body dimensions.
+				// LocalOffset above aligns the sprite feet to the collider bottom using
+				// BodyHeight (world units), which remains correct at any SpriteScale.
+				entity.Transform.SetScale(spriteData.SpriteScale);
 
 				return true;
 			}
