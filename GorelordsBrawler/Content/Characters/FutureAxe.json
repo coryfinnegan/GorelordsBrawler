@@ -27,9 +27,23 @@
 		"HitboxDuration": 0.15
 	},
 	"Sprite": {
-		"AtlasPath": "Content/Sprites/FutureAxe/atlas.atlas",
+		"AtlasPath": "Content/Sprites/FutureAxe/idle.atlas",
+		"SelectAtlasPath": "Content/Sprites/FutureAxe/select.atlas",
+		"ExtraAtlasPaths": [
+			"Content/Sprites/FutureAxe/idle-left.atlas",
+			"Content/Sprites/FutureAxe/run.atlas",
+			"Content/Sprites/FutureAxe/run-left.atlas",
+			"Content/Sprites/FutureAxe/jump.atlas",
+			"Content/Sprites/FutureAxe/jump-left.atlas",
+			"Content/Sprites/FutureAxe/attack-from-idle-left.atlas",
+			"Content/Sprites/FutureAxe/attack-from-run-left.atlas",
+			"Content/Sprites/FutureAxe/attack-from-run.atlas",
+			"Content/Sprites/FutureAxe/attack-from-idle.atlas"
+		],
 		"RunAnimSpeed": 10,
 		"JumpAnimSpeed": 10,
-		"SpriteScale": 0.8
+		"SpriteScale": 0.8,
+		"AttackAnimSpeed": 8,
+		"AttackSpriteScale": 0
 	}
 }

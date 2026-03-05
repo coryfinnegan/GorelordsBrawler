@@ -13,8 +13,9 @@ Usage:
 
 Manifest format (sprites.json):
     {
-        "cellSize": 512,          // source cell size in the sprite sheet
-        "targetSize": 128,        // downscale target (omit to keep original)
+        "cellSize": 512,          // source cell height (and width if square)
+        "cellWidth": 1024,        // optional wider cell width (e.g. for attack animations)
+        "targetSize": 128,        // downscale target height (omit to keep original; width scales proportionally)
         "originX": 0.5,           // atlas origin X (0.5 = center)
         "originY": 1.0,           // atlas origin Y (1.0 = bottom)
         "padding": 2,             // pixels between packed sprites
@@ -76,23 +77,36 @@ def is_black_padding(crop):
     return True
 
 
-def split_sheet(sprite_dir, anim_name, anim_config, cell_size, target_size, frames_dir):
-    """Split a sprite sheet into individual frame PNGs."""
+def split_sheet(sprite_dir, anim_name, anim_config, cell_w, cell_h, target_size, frames_dir):
+    """Split a sprite sheet into individual frame PNGs.
+
+    cell_w / cell_h are the source cell dimensions in pixels. They may differ
+    (e.g. cell_w=1024, cell_h=512 for a wider camera) — output frames keep the
+    same aspect ratio, scaled so the height equals target_size.
+    """
     sheet_path = os.path.join(sprite_dir, anim_config["sheet"])
     if not os.path.exists(sheet_path):
         print(f"  Error: Sheet not found: {sheet_path}")
         return False
 
     img = Image.open(sheet_path)
-    cols = img.width // cell_size
-    rows = img.height // cell_size
+    cols = img.width // cell_w
+    rows = img.height // cell_h
     # "frames" is optional — default to every cell in the sheet, then auto-trim black padding.
     frame_limit = anim_config.get("frames", cols * rows)
 
     anim_dir = os.path.join(frames_dir, anim_name)
     os.makedirs(anim_dir, exist_ok=True)
 
-    resize = target_size is not None and target_size != cell_size
+    # Compute output size: scale height to target_size, preserve aspect ratio.
+    if target_size is not None:
+        out_h = target_size
+        out_w = round(target_size * cell_w / cell_h)
+        resize = (out_w != cell_w or out_h != cell_h)
+    else:
+        out_w, out_h = cell_w, cell_h
+        resize = False
+
     flip_x = anim_config.get("flipX", False)
 
     frame = 0
@@ -102,9 +116,9 @@ def split_sheet(sprite_dir, anim_name, anim_config, cell_size, target_size, fram
             if frame + skipped >= frame_limit:
                 break
 
-            x = col * cell_size
-            y = row * cell_size
-            crop = img.crop((x, y, x + cell_size, y + cell_size))
+            x = col * cell_w
+            y = row * cell_h
+            crop = img.crop((x, y, x + cell_w, y + cell_h))
 
             if is_black_padding(crop):
                 skipped += 1
@@ -114,7 +128,7 @@ def split_sheet(sprite_dir, anim_name, anim_config, cell_size, target_size, fram
                 crop = crop.transpose(Image.FLIP_LEFT_RIGHT)
 
             if resize:
-                crop = crop.resize((target_size, target_size), Image.LANCZOS)
+                crop = crop.resize((out_w, out_h), Image.LANCZOS)
 
             crop.save(os.path.join(anim_dir, f"{anim_name}_{frame:04d}.png"))
             frame += 1
@@ -123,7 +137,7 @@ def split_sheet(sprite_dir, anim_name, anim_config, cell_size, target_size, fram
     if flip_x:
         flags.append("flipped X")
     if resize:
-        flags.append(f"downscaled to {target_size}x{target_size}")
+        flags.append(f"downscaled to {out_w}x{out_h}")
     if skipped:
         flags.append(f"skipped {skipped} black padding frames")
     suffix = f" ({', '.join(flags)})" if flags else ""
@@ -190,7 +204,10 @@ def build_character(sprite_dir, project_root, skip_pack=False):
     print(f"\n=== {char_name} ===")
 
     manifest = load_manifest(sprite_dir)
-    cell_size = manifest["cellSize"]
+    cell_h = manifest["cellSize"]
+    # cellWidth lets you use a wider camera (e.g. 1024x512 cells) without re-rendering
+    # all other animations. Omit to use square cells (cellWidth = cellSize).
+    cell_w = manifest.get("cellWidth", cell_h)
     target_size = manifest.get("targetSize")
     animations = manifest["animations"]
 
@@ -203,7 +220,9 @@ def build_character(sprite_dir, project_root, skip_pack=False):
     # Split each animation sheet
     print("  Splitting sheets...")
     for anim_name, anim_config in animations.items():
-        if not split_sheet(sprite_dir, anim_name, anim_config, cell_size, target_size, frames_dir):
+        # Per-animation cellWidth override (e.g. attack uses wider camera than idle/run).
+        anim_cell_w = anim_config.get("cellWidth", cell_w)
+        if not split_sheet(sprite_dir, anim_name, anim_config, anim_cell_w, cell_h, target_size, frames_dir):
             return False
 
     # Run packer

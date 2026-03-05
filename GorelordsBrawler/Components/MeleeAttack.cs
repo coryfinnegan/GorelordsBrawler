@@ -15,6 +15,9 @@ namespace GorelordsBrawler.Components
 		private float _hitboxTimer;
 		private Entity _hitboxEntity;
 
+		/// <summary>True from the moment the attack is triggered until the cooldown expires.</summary>
+		public bool IsAttacking => _cooldownTimer > 0;
+
 		public MeleeAttack(InputProfile input)
 		{
 			_input = input;

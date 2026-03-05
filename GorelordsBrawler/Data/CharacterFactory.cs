@@ -96,6 +96,23 @@ namespace GorelordsBrawler.Data
 				var animator = new SpriteAnimator();
 				animator.AddAnimationsFromAtlas(atlas);
 
+				// Load any additional atlases (e.g. attack/hurt animations packed separately)
+				if (spriteData.ExtraAtlasPaths != null)
+				{
+					foreach (var extraPath in spriteData.ExtraAtlasPaths)
+					{
+						try
+						{
+							var extraAtlas = SpriteAtlasLoader.ParseSpriteAtlas(extraPath, premultiplyAlpha: true);
+							animator.AddAnimationsFromAtlas(extraAtlas);
+						}
+						catch (Exception e)
+						{
+							Debug.Warn("Failed to load extra atlas '{0}': {1}", extraPath, e.Message);
+						}
+					}
+				}
+
 				// Atlas origin is bottom-center (0.5, 1.0) so sprite renders upward
 				// from its position. Shift it down by half body height to align
 				// the sprite's feet with the bottom of the centered collider.

@@ -2,6 +2,8 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Nez;
 using Nez.BitmapFonts;
+using Nez.Sprites;
+using Nez.Textures;
 using GorelordsBrawler.Constants;
 using GorelordsBrawler.Data;
 using GorelordsBrawler.Systems;
@@ -17,6 +19,7 @@ namespace GorelordsBrawler.Components.UI
 		private readonly BitmapFont _font;
 		private readonly string[] _characters;
 		private readonly Dictionary<string, CharacterData> _characterDataCache = new();
+		private readonly Dictionary<string, (Sprite[] frames, float fps)> _selectSpritesCache = new();
 
 		public SlotRenderer(BitmapFont font, string[] characters)
 		{
@@ -47,12 +50,36 @@ namespace GorelordsBrawler.Components.UI
 				SpriteEffects.None, 0f);
 			y += playerSize.Y + GameConstants.CharacterSelect.PanelPadding;
 
-			// Character color preview
+			// Character preview — animated sprite if available, color rect fallback
 			var charData = GetCharacterData(slot);
-			var previewColor = new Color(charData.ColorR, charData.ColorG, charData.ColorB);
-			var previewW = charData.BodyWidth * GameConstants.CharacterSelect.PreviewScale;
+			var characterType = _characters[slot.CharacterIndex];
 			var previewH = charData.BodyHeight * GameConstants.CharacterSelect.PreviewScale;
-			batcher.DrawRect(pos.X - previewW / 2, y, previewW, previewH, previewColor);
+			var selectSprites = GetSelectSprites(characterType, charData);
+
+			if (selectSprites.frames != null && selectSprites.frames.Length > 0)
+			{
+				var frameIndex = (int)(Time.TotalTime * selectSprites.fps) % selectSprites.frames.Length;
+				var frame = selectSprites.frames[frameIndex];
+				// Scale the sprite so its visual height matches previewH.
+				// frame.Origin is bottom-center in pixel coords (set in the atlas),
+				// so drawing at (pos.X, y + previewH) puts the sprite feet at the bottom of the preview area.
+				var spriteScale = previewH / frame.SourceRect.Height;
+				batcher.Draw(frame.Texture2D,
+					new Vector2(pos.X, y + previewH),
+					frame.SourceRect,
+					Color.White,
+					0f,
+					frame.Origin,
+					new Vector2(spriteScale),
+					SpriteEffects.None,
+					0f);
+			}
+			else
+			{
+				var previewColor = new Color(charData.ColorR, charData.ColorG, charData.ColorB);
+				var previewW = charData.BodyWidth * GameConstants.CharacterSelect.PreviewScale;
+				batcher.DrawRect(pos.X - previewW / 2, y, previewW, previewH, previewColor);
+			}
 			y += previewH + GameConstants.CharacterSelect.PanelPadding;
 
 			// Character name with arrows (hide arrows when ready)
@@ -85,6 +112,36 @@ namespace GorelordsBrawler.Components.UI
 				DrawCenteredText(batcher, GameConstants.CharacterSelect.ReadyPrompt, pos.X, y, scale, Color.DarkGray);
 				y += _font.LineHeight * scale + 4;
 				DrawCenteredText(batcher, GameConstants.CharacterSelect.LeavePrompt, pos.X, y, scale, Color.DarkGray);
+			}
+		}
+
+		private (Sprite[] frames, float fps) GetSelectSprites(string characterType, CharacterData charData)
+		{
+			if (_selectSpritesCache.TryGetValue(characterType, out var cached))
+			{
+				return cached;
+			}
+
+			if (charData.Sprite?.SelectAtlasPath == null)
+			{
+				_selectSpritesCache[characterType] = (null, 0f);
+				return (null, 0f);
+			}
+
+			try
+			{
+				var atlas = SpriteAtlasLoader.ParseSpriteAtlas(charData.Sprite.SelectAtlasPath, premultiplyAlpha: true);
+				var anim = atlas.GetAnimation(GameConstants.Animations.Select);
+				var fps = anim.FrameRates.Length > 0 ? anim.FrameRates[0] : 8f;
+				var result = (anim.Sprites, fps);
+				_selectSpritesCache[characterType] = result;
+				return result;
+			}
+			catch (System.Exception e)
+			{
+				Debug.Warn("Failed to load select atlas '{0}': {1}", charData.Sprite.SelectAtlasPath, e.Message);
+				_selectSpritesCache[characterType] = (null, 0f);
+				return (null, 0f);
 			}
 		}
 

@@ -297,14 +297,17 @@ namespace Nez
 
 				}
 
-				public const string Atlas = @"Content\Sprites\FutureAxe\atlas.png";
+				public const string Attackfromidleleft = @"Content\Sprites\FutureAxe\attack-from-idle-left.png";
+				public const string Attackfromidle = @"Content\Sprites\FutureAxe\attack-from-idle.png";
+				public const string Attackfromrunleft = @"Content\Sprites\FutureAxe\attack-from-run-left.png";
+				public const string Attackfromrun = @"Content\Sprites\FutureAxe\attack-from-run.png";
 				public const string Idleleft = @"Content\Sprites\FutureAxe\idle-left.png";
 				public const string Idle = @"Content\Sprites\FutureAxe\idle.png";
+				public const string Jumpleft = @"Content\Sprites\FutureAxe\jump-left.png";
 				public const string Jump = @"Content\Sprites\FutureAxe\jump.png";
 				public const string Runleft = @"Content\Sprites\FutureAxe\run-left.png";
-				public const string Runslow = @"Content\Sprites\FutureAxe\run-slow.png";
 				public const string Run = @"Content\Sprites\FutureAxe\run.png";
-				public const string Sprites = @"Content\Sprites\FutureAxe\sprites.json";
+				public const string Select = @"Content\Sprites\FutureAxe\select.png";
 			}
 
 		}
