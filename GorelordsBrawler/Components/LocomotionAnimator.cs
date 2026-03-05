@@ -238,6 +238,10 @@ namespace GorelordsBrawler.Components
 				// Use Pause() rather than Speed=0 to avoid corrupting FrameTimeLeft on the
 				// next Play() call (SetFrame computes FrameTimeLeft = 1/(fps*Speed), so
 				// Speed=0 would produce Infinity and permanently stall the next animation).
+				if (_hasJumpLeftAnim && _body.FacingDirection < 0)
+				{
+					_animator.FlipX = false;
+				}
 				_animator.Pause();
 			}
 			else
