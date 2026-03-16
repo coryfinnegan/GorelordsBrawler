@@ -9,6 +9,7 @@ namespace GorelordsBrawler.Components.Abilities
 		private readonly InputProfile _input;
 		private PhysicsBody _body;
 		private MovementStats _movement;
+		private Hitstun _hitstun;
 
 		public JumpAbility(InputProfile input)
 		{
@@ -19,10 +20,16 @@ namespace GorelordsBrawler.Components.Abilities
 		{
 			_body = Entity.GetComponent<PhysicsBody>();
 			_movement = Entity.GetComponent<MovementStats>();
+			_hitstun = Entity.GetComponent<Hitstun>();
 		}
 
 		public void Update()
 		{
+			if (_hitstun != null && _hitstun.IsActive)
+			{
+				return;
+			}
+
 			// Can jump if grounded OR within coyote time window
 			var canJump = _body.Grounded || _body.TimeSinceGrounded <= _movement.CoyoteTime;
 

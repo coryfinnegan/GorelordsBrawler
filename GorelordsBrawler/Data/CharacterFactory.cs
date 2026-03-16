@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json;
 using Microsoft.Xna.Framework;
 using Nez;
 using Nez.Sprites;
@@ -60,7 +61,9 @@ namespace GorelordsBrawler.Data
 			entity.AddComponent(new JumpAbility(input));
 
 			// Hurtbox + Health (always present)
-			var hurtboxCollider = entity.AddComponent(new BoxCollider(stats.BodyWidth, stats.BodyHeight));
+			float hurtW = data.HurtboxWidth  > 0 ? data.HurtboxWidth  : data.BodyWidth;
+			float hurtH = data.HurtboxHeight > 0 ? data.HurtboxHeight : data.BodyHeight;
+			var hurtboxCollider = entity.AddComponent(new BoxCollider(hurtW, hurtH));
 			hurtboxCollider.PhysicsLayer = PhysicsLayers.Hurtbox;
 			hurtboxCollider.CollidesWithLayers = PhysicsLayers.Hitbox;
 			hurtboxCollider.IsTrigger = true;
@@ -68,6 +71,8 @@ namespace GorelordsBrawler.Data
 
 			entity.AddComponent(new Health { MaxHp = stats.MaxHp, CurrentHp = stats.MaxHp });
 			entity.AddComponent(new Hurtbox());
+			entity.AddComponent(new Hitstun());
+			entity.AddComponent(new HitFlash());
 			entity.AddComponent(new HealthBar());
 			entity.AddComponent(new RespawnHandler(spawnPosition));
 
@@ -96,6 +101,9 @@ namespace GorelordsBrawler.Data
 				var animator = new SpriteAnimator();
 				animator.AddAnimationsFromAtlas(atlas);
 
+				var socketData = new WeaponSocketData();
+				TryLoadSocketSidecar(entity.Scene, spriteData.AtlasPath, socketData);
+
 				// Load any additional atlases (e.g. attack/hurt animations packed separately)
 				if (spriteData.ExtraAtlasPaths != null)
 				{
@@ -105,6 +113,7 @@ namespace GorelordsBrawler.Data
 						{
 							var extraAtlas = SpriteAtlasLoader.ParseSpriteAtlas(extraPath, premultiplyAlpha: true);
 							animator.AddAnimationsFromAtlas(extraAtlas);
+							TryLoadSocketSidecar(entity.Scene, extraPath, socketData);
 						}
 						catch (Exception e)
 						{
@@ -113,12 +122,17 @@ namespace GorelordsBrawler.Data
 					}
 				}
 
+				if (socketData.Animations.Count > 0)
+				{
+					entity.AddComponent(socketData);
+				}
+
 				// Atlas origin is bottom-center (0.5, 1.0) so sprite renders upward
 				// from its position. Shift it down by half body height to align
 				// the sprite's feet with the bottom of the centered collider.
 				animator.LocalOffset = new Vector2(0, stats.BodyHeight / 2f);
 
-				animator.Play(GameConstants.Animations.Idle);
+				animator.Play(new AnimationKeyBuilder(spriteData.AnimPrefix).Idle);
 				entity.AddComponent(animator);
 
 				// Visual scale -- independent of physics body dimensions.
@@ -133,6 +147,48 @@ namespace GorelordsBrawler.Data
 				Debug.Warn("Failed to load sprite atlas '{0}', falling back to rectangle: {1}",
 					spriteData.AtlasPath, e.Message);
 				return false;
+			}
+		}
+
+		private static void TryLoadSocketSidecar(Scene scene, string atlasPath, WeaponSocketData socketData)
+		{
+			var sidePath = atlasPath.Replace(".atlas", ".sockets.json");
+			try
+			{
+				var json = scene.Content.LoadJson(sidePath);
+				using var doc = JsonDocument.Parse(json);
+				var root = doc.RootElement;
+
+				int fw = root.GetProperty("frame_width").GetInt32();
+				int fh = root.GetProperty("frame_height").GetInt32();
+
+				// Last sidecar's dimensions win; attack atlases for one character
+				// are typically all the same size.
+				socketData.FrameWidth  = fw;
+				socketData.FrameHeight = fh;
+
+				foreach (var animProp in root.GetProperty("animations").EnumerateObject())
+				{
+					var framesEl = animProp.Value;
+					var positions = new Vector2?[framesEl.GetArrayLength()];
+					int i = 0;
+					foreach (var frameEl in framesEl.EnumerateArray())
+					{
+						if (frameEl.ValueKind == JsonValueKind.Array)
+						{
+							float x = frameEl[0].GetSingle();
+							float y = frameEl[1].GetSingle();
+							positions[i] = new Vector2(x, y);
+						}
+						// else null — leave positions[i] as null (default)
+						i++;
+					}
+					socketData.Animations[animProp.Name] = positions;
+				}
+			}
+			catch
+			{
+				// Missing sidecar is normal for locomotion atlases — silently skip.
 			}
 		}
 	}

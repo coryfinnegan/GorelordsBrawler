@@ -4,6 +4,11 @@ namespace GorelordsBrawler.Components.Stats
 {
 	public class SpriteData : Component
 	{
+		// Character name prefix used to build animation keys (e.g. "FutureAxe").
+		// Combined with AnimationKeyBuilder to produce "FutureAxe_Idle" etc.
+		// Must match the character_prefix set in the Sprite Baker addon.
+		public string AnimPrefix = "";
+
 		public string AtlasPath;
 
 		// Optional additional atlas files whose animations are merged into the same

@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Nez;
+using GorelordsBrawler.Constants;
 
 namespace GorelordsBrawler.Components
 {
@@ -12,6 +14,12 @@ namespace GorelordsBrawler.Components
 	{
 		private readonly List<Entity> _targets = [];
 		private Camera _camera;
+		private float _shakeTrauma;
+
+		public void AddShake(float intensity)
+		{
+			_shakeTrauma = Math.Min(_shakeTrauma + intensity, 1f);
+		}
 
         [Inspectable]
         /// <summary>
@@ -93,6 +101,20 @@ namespace GorelordsBrawler.Components
 			// Smoothly interpolate camera position and zoom
 			_camera.Position = Vector2.Lerp(_camera.Position, center, FollowLerp);
 			_camera.RawZoom = MathHelper.Lerp(_camera.RawZoom, targetZoom, FollowLerp);
+
+			// Apply trauma-based screen shake on top of the lerped position
+			if (_shakeTrauma > 0f)
+			{
+				var shakeMag = _shakeTrauma * _shakeTrauma * GameConstants.Combat.MaxShakeOffset;
+				_camera.Position += new Vector2(
+					(Nez.Random.NextFloat() * 2f - 1f) * shakeMag,
+					(Nez.Random.NextFloat() * 2f - 1f) * shakeMag);
+				_shakeTrauma -= GameConstants.Combat.ShakeDecay * Time.DeltaTime;
+				if (_shakeTrauma < 0f)
+				{
+					_shakeTrauma = 0f;
+				}
+			}
 		}
 	}
 }

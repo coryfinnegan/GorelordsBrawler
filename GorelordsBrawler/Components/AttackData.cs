@@ -10,5 +10,6 @@ namespace GorelordsBrawler.Components
 		public float KnockbackForce;
 		public Vector2 KnockbackAngle;
 		public int FacingDirection;
+		public float HitstunDuration;
 	}
 }

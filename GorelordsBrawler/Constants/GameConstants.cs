@@ -35,19 +35,33 @@ namespace GorelordsBrawler.Constants
 			public static readonly string[] All = { Trollborg, DocMarauder, FutureAxe };
 		}
 
+		/// <summary>
+		/// Animation name suffixes (no character prefix). Combine with
+		/// <see cref="AnimationKeyBuilder"/> to get the full atlas key for a character.
+		/// All values use nameof() so renaming the identifier auto-updates the string.
+		/// </summary>
 		public static class Animations
 		{
-			public const string Idle       = "idle";
-			public const string IdleLeft   = "idle_left";
-			public const string Select     = "select";
-			public const string Run        = "run";
-			public const string RunLeft    = "run_left";
-			public const string Jump       = "jump";
-			public const string JumpLeft   = "jump_left";
-			public const string AttackFromIdle     = "attack-from-idle";
-			public const string AttackFromIdleLeft = "attack-from-idle-left";
-			public const string AttackFromRun      = "attack-from-run";
-			public const string AttackFromRunLeft  = "attack-from-run-left";
+			// ── Locomotion ────────────────────────────────────────────────
+			public const string Idle         = nameof(Idle);
+			public const string IdleFaceLeft = nameof(IdleFaceLeft);
+			public const string Run          = nameof(Run);
+			public const string RunFaceLeft  = nameof(RunFaceLeft);
+			public const string Jump         = nameof(Jump);
+			public const string JumpFaceLeft = nameof(JumpFaceLeft);
+			public const string Select       = nameof(Select);
+
+			// ── Attack — LeftHand (original) ──────────────────────────────
+			public const string AttackIdleLeftHand            = nameof(AttackIdleLeftHand);
+			public const string AttackIdleLeftHandFaceLeft    = nameof(AttackIdleLeftHandFaceLeft);
+			public const string AttackRunLeftHand             = nameof(AttackRunLeftHand);
+			public const string AttackRunLeftHandFaceLeft     = nameof(AttackRunLeftHandFaceLeft);
+
+			// ── Attack — RightHand (mirrored) ─────────────────────────────
+			public const string AttackIdleRightHand           = nameof(AttackIdleRightHand);
+			public const string AttackIdleRightHandFaceLeft   = nameof(AttackIdleRightHandFaceLeft);
+			public const string AttackRunRightHand            = nameof(AttackRunRightHand);
+			public const string AttackRunRightHandFaceLeft    = nameof(AttackRunRightHandFaceLeft);
 		}
 
 		public static class SceneNames
@@ -185,6 +199,22 @@ namespace GorelordsBrawler.Constants
 			public static readonly Color HealthBarHighColor = Color.Green;
 			public static readonly Color HealthBarLowColor = Color.Red;
 			public const int DefaultStockCount = 3;
+
+			// Knockback scaling — multiplier range: 1× (fresh) → (1 + KnockbackScaling)× (just killed)
+			public const float KnockbackScaling   = 2.0f;
+
+			// Hit freeze — hard TimeScale=0 pause on every hit (unscaled countdown)
+			public const float HitstopDuration    = 0.06f;   // 60 ms ≈ 4 frames
+
+			// Hit flash — white tint on the defender (unscaled so visible during hitstop)
+			public const float HitFlashDuration   = 0.10f;   // 100 ms
+
+			// Camera shake — trauma-based, decays after hit
+			public const float MaxShakeOffset     = 8f;      // pixels of max displacement
+			public const float ShakeDecay         = 6f;      // trauma/sec (~200 ms to clear)
+
+			// Input buffer — forgiveness window for attack input before cooldown expires
+			public const float AttackBufferWindow = 0.10f;   // 100 ms
 		}
 
 		public static class Match

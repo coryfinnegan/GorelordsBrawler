@@ -12,6 +12,8 @@ namespace GorelordsBrawler.Data
 		public int ColorR = 128;
 		public int ColorG = 128;
 		public int ColorB = 128;
+		public float HurtboxWidth  = 0f;
+		public float HurtboxHeight = 0f;
 		public MovementStats Movement;
 		public MeleeStats Melee;
 		public ProjectileStats Projectile;
