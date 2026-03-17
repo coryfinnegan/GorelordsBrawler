@@ -21,6 +21,11 @@ namespace GorelordsBrawler.Components
 		private float _hitboxTimer;
 		private float _attackBufferTimer;
 		private Entity _hitboxEntity;
+		// True from attack trigger until the attack animation completes.
+		// Controls hitbox lifecycle independently of _cooldownTimer so the
+		// hitbox stays active for the full ActiveStartFrame–ActiveEndFrame
+		// window even if the cooldown expires first.
+		private bool _attackAnimActive;
 		// Cached offset from entity center → last valid socket position.
 		// When a frame has no socket data (null in sidecar), we hold this offset
 		// instead of snapping to the static MeleeStats fallback.
@@ -54,6 +59,17 @@ namespace GorelordsBrawler.Components
 
 		public override void OnRemovedFromEntity()
 		{
+			_attackAnimActive = false;
+			DestroyHitbox();
+		}
+
+		/// <summary>
+		/// Called by LocomotionAnimator when the attack animation completes.
+		/// Ends the hitbox lifecycle so the frame-range gate stops checking.
+		/// </summary>
+		public void OnAttackAnimationCompleted()
+		{
+			_attackAnimActive = false;
 			DestroyHitbox();
 		}
 
@@ -61,8 +77,8 @@ namespace GorelordsBrawler.Components
 		{
 			_cooldownTimer -= Time.DeltaTime;
 
-			// Destroy hitbox when the attack window closes
-			if (_hitboxEntity != null && _cooldownTimer <= 0)
+			// Destroy hitbox when the attack animation ends
+			if (_hitboxEntity != null && !_attackAnimActive)
 			{
 				DestroyHitbox();
 			}
@@ -83,9 +99,12 @@ namespace GorelordsBrawler.Components
 
 			// Fire attack when buffer is active, cooldown ready, and not stunned
 			var isStunned = _hitstun != null && _hitstun.IsActive;
-			if (_attackBufferTimer > 0 && _cooldownTimer <= 0 && _hitboxEntity == null && !isStunned)
+			if (_attackBufferTimer > 0 && _cooldownTimer <= 0 && !isStunned)
 			{
 				_attackBufferTimer = 0;
+				DestroyHitbox();          // clean up any lingering hitbox from previous attack
+				_lastSocketOffset = null;
+				_attackAnimActive = true;  // controls hitbox lifecycle independently of cooldown
 				// Toggle hand BEFORE setting cooldown so LocomotionAnimator reads the new value
 				// in the same frame when it checks IsAttacking rising-edge.
 				AttackIndex = (AttackIndex + 1) % 2;
@@ -100,7 +119,7 @@ namespace GorelordsBrawler.Components
 			}
 
 			// Frame-range mode: manage hitbox by animation frame
-			if (useFrameMode && _cooldownTimer > 0)
+			if (useFrameMode && _attackAnimActive)
 			{
 				int frame = _animator.CurrentFrame;
 				bool inWindow = frame >= _melee.ActiveStartFrame && frame <= _melee.ActiveEndFrame;

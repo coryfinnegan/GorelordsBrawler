@@ -59,7 +59,6 @@ namespace GorelordsBrawler.Components
 		private float _defaultScale;
 		private bool _isPlayingAttack;   // true until OnAnimationCompletedEvent fires
 		private bool _prevIsAttacking;   // for rising-edge detection on MeleeAttack.IsAttacking
-		private bool _pendingAttack;     // new attack triggered while animation was still playing
 
 		/// <summary>True while an attack animation is playing (cleared by OnAnimationCompletedEvent).</summary>
 		public bool IsPlayingAttack => _isPlayingAttack;
@@ -112,6 +111,7 @@ namespace GorelordsBrawler.Components
 					{
 						_isPlayingAttack = false;
 						Entity.Transform.SetScale(_defaultScale);
+						_meleeAttack?.OnAttackAnimationCompleted();
 						return;
 					}
 				}
@@ -127,10 +127,22 @@ namespace GorelordsBrawler.Components
 				{
 					var isAttackingNow = _meleeAttack.IsAttacking;
 					if (isAttackingNow && !_prevIsAttacking)
-						_pendingAttack = true;
-					_prevIsAttacking = isAttackingNow;
+					{
+						// New attack triggered mid-animation — break out and restart below
+						_isPlayingAttack = false;
+						Entity.Transform.SetScale(_defaultScale);
+						// Fall through to attack-start logic
+					}
+					else
+					{
+						_prevIsAttacking = isAttackingNow;
+						return;
+					}
 				}
-				return;
+				else
+				{
+					return;
+				}
 			}
 
 			// Flip sprite to face the correct direction (directional variants override below)
@@ -146,8 +158,7 @@ namespace GorelordsBrawler.Components
 			if (hasAnyAttackAnim && _meleeAttack != null)
 			{
 				var isAttacking = _meleeAttack.IsAttacking;
-				var attackJustStarted = (isAttacking && !_prevIsAttacking) || _pendingAttack;
-				_pendingAttack = false;
+				var attackJustStarted = isAttacking && !_prevIsAttacking;
 				_prevIsAttacking = isAttacking;
 
 				if (attackJustStarted)
