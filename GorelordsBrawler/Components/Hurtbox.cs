@@ -62,7 +62,9 @@ namespace GorelordsBrawler.Components
 			{
 				_effectsManager = Entity.Scene.GetSceneComponent<CombatEffectsManager>();
 			}
-			_effectsManager?.TriggerHit(Entity, attackData.KnockbackForce * knockbackScale);
+			var hitPosition = (other.AbsolutePosition + local.AbsolutePosition) / 2f;
+			_effectsManager?.TriggerHit(Entity, attackData.KnockbackForce * knockbackScale,
+				hitPosition, knockback);
 		}
 
 		public void OnTriggerExit(Collider other, Collider local) { }

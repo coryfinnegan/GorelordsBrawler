@@ -221,6 +221,22 @@ namespace GorelordsBrawler.Constants
 			public const float HurtVibrationFrequency = 40f;   // oscillations/sec
 			public const float HurtVibrationAmplitude = 2.0f;  // pixels of displacement
 
+			// Blood splatter particles
+			public const int BloodBaseCount       = 6;       // min particles per hit
+			public const int BloodMaxExtra        = 4;       // extra particles at max intensity
+			public const float BloodSpeed         = 100f;    // px/sec
+			public const float BloodSpeedVariance = 30f;
+			public const float BloodAngleVariance = 35f;     // cone spread degrees
+			public const float BloodLifespan      = 0.4f;    // seconds
+			public const float BloodGravity       = 300f;    // px/sec²
+			public const float BloodStartSize     = 3f;      // pixels
+
+			// Impact flash particles
+			public const int FlashCount           = 5;
+			public const float FlashSpeed         = 50f;
+			public const float FlashLifespan      = 0.08f;   // very brief
+			public const float FlashStartSize     = 6f;
+
 			// Input buffer — forgiveness window for attack input before cooldown expires
 			public const float AttackBufferWindow = 0.10f;   // 100 ms
 		}

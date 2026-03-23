@@ -19,6 +19,7 @@ namespace GorelordsBrawler.Scenes
 
 			AddSceneComponent(new PauseManager());
 			AddSceneComponent(new CombatEffectsManager());
+			AddSceneComponent(new HitParticleManager());
 			var playerManager = AddSceneComponent(new PlayerManager());
 			var setup = Core.GetGlobalManager<MatchSetupManager>();
 

@@ -14,8 +14,10 @@ namespace GorelordsBrawler.Systems
 	{
 		private float _hitstopTimer;
 		private BrawlerCamera _brawlerCam;
+		private HitParticleManager _particleManager;
 
-		public void TriggerHit(Entity defender, float scaledKnockbackForce)
+		public void TriggerHit(Entity defender, float scaledKnockbackForce,
+			Vector2 hitPosition, Vector2 knockbackDirection)
 		{
 			// Hitstop — freeze everything for a few frames
 			Time.TimeScale = 0f;
@@ -31,6 +33,13 @@ namespace GorelordsBrawler.Systems
 
 			// Hit flash on the defender
 			defender?.GetComponent<HitFlash>()?.Trigger();
+
+			// Blood splatter + impact flash particles
+			if (_particleManager == null)
+			{
+				_particleManager = Scene.GetSceneComponent<HitParticleManager>();
+			}
+			_particleManager?.SpawnHitEffect(hitPosition, knockbackDirection, intensity);
 		}
 
 		public override void Update()
