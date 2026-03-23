@@ -95,7 +95,7 @@ RIGHT_HAND_TYPES = {
 }
 
 # Types that skip hurtbox tracking.
-SKIP_HURTBOX_TYPES = {"Select"}
+SKIP_HURTBOX_TYPES = {"Select", "Hurt", "Death"}
 
 # Zone definitions: (empty_name, props_bone_attr, props_pointer_attr)
 _HURTBOX_ZONES = [
@@ -147,6 +147,18 @@ class SPRITE_ActionItem(PropertyGroup):
         default=0,
         min=0,
         max=120,
+    )
+    start_frame: IntProperty(
+        name="Start",
+        description="Override start frame (0 = use action start)",
+        default=0,
+        min=0,
+    )
+    end_frame: IntProperty(
+        name="End",
+        description="Override end frame (0 = use action end)",
+        default=0,
+        min=0,
     )
 
 
@@ -315,6 +327,7 @@ class SPRITE_UL_ActionList(UIList):
             label = f"{char_prefix}_{suffix}" if char_prefix else suffix
             type_tag = f"  [{item.action.name}]"
             fps_str = f"  [{item.fps} fps]" if item.fps > 0 else ""
+            frames_str = f"  [f{item.start_frame}-{item.end_frame}]" if item.start_frame > 0 or item.end_frame > 0 else ""
             # Warn if action bones don't match subject armature
             armature = props.subject
             warn_icon = "ACTION"
@@ -322,7 +335,7 @@ class SPRITE_UL_ActionList(UIList):
                 matched, total = _validate_action_bones(item.action, armature)
                 if total > 0 and matched == 0:
                     warn_icon = "ERROR"
-            row.label(text=label + type_tag + fps_str, icon=warn_icon)
+            row.label(text=label + type_tag + fps_str + frames_str, icon=warn_icon)
         else:
             row.label(text="(empty)", icon="ERROR")
 
@@ -799,6 +812,8 @@ class SPRITE_OT_BakeAll(Operator):
                         track_socket=track_socket,
                         hurtbox_empties=hurtbox_empties,
                         track_hurtboxes=track_hurtboxes,
+                        start_frame_override=item.start_frame,
+                        end_frame_override=item.end_frame,
                     )
 
                     # Compute zone sizes from distances on first valid action
@@ -842,6 +857,8 @@ class SPRITE_OT_BakeAll(Operator):
                             hurtbox_empties=[],
                             track_hurtboxes=False,
                             rotation_z_offset=math.pi,
+                            start_frame_override=item.start_frame,
+                            end_frame_override=item.end_frame,
                         )
 
                         fl_png = os.path.join(output_dir, f"{fl_atlas_name}.png")
@@ -904,7 +921,8 @@ class SPRITE_OT_BakeAll(Operator):
     def _render_action(self, context, obj, action, anim_name, tmp_dir,
                        socket_obj=None, track_socket=True,
                        hurtbox_empties=None, track_hurtboxes=True,
-                       rotation_z_offset=0.0):
+                       rotation_z_offset=0.0,
+                       start_frame_override=0, end_frame_override=0):
         """Render each frame of an action to tmp_dir/{anim_name}/frame_NNNN.png.
 
         Returns (socket_positions, hurtbox_zones, origin_x).
@@ -916,8 +934,8 @@ class SPRITE_OT_BakeAll(Operator):
         render = scene.render
 
         obj.animation_data.action = action
-        frame_start = int(action.frame_range[0])
-        frame_end = int(action.frame_range[1])
+        frame_start = start_frame_override if start_frame_override > 0 else int(action.frame_range[0])
+        frame_end = end_frame_override if end_frame_override > 0 else int(action.frame_range[1])
 
         anim_dir = os.path.join(tmp_dir, anim_name)
         os.makedirs(anim_dir, exist_ok=True)
@@ -1028,11 +1046,11 @@ class SPRITE_OT_BakeAll(Operator):
 
         head_h = max(avg_hb, 10)
         body_h = max(avg_hb * 0.8, 10)
-        legs_h = max(avg_bl * 2.5, 10)
+        legs_h = max(avg_bl * 2.0, 10)
 
         head_w = head_h * 0.75
         body_w = body_h * 1.2
-        legs_w = legs_h * 0.9
+        legs_w = legs_h * 0.7
 
         result = {
             "Head": {"width": round(head_w), "height": round(head_h)},
@@ -1299,6 +1317,9 @@ class SPRITE_PT_Actions(_Base, Panel):
                     if total > 0 and matched == 0:
                         box.label(text="Bones don't match armature!", icon="ERROR")
             box.prop(item, "fps", text="FPS (0 = global)")
+            row = box.row(align=True)
+            row.prop(item, "start_frame", text="Start (0 = auto)")
+            row.prop(item, "end_frame", text="End (0 = auto)")
 
         enabled = [i for i in props.actions if i.enabled and i.action]
         layout.separator()

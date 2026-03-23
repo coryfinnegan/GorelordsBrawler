@@ -11,14 +11,19 @@ namespace GorelordsBrawler.Components
 	public class Hitstun : Component, IUpdatable
 	{
 		private float _timer;
+		private float _duration;
 
 		public bool IsActive => _timer > 0;
+
+		/// <summary>The full duration of the current hitstun (for animation speed scaling).</summary>
+		public float Duration => _duration;
 
 		public void Trigger(float duration)
 		{
 			if (duration > _timer)
 			{
 				_timer = duration;
+				_duration = duration;
 			}
 		}
 

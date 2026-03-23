@@ -103,9 +103,10 @@ namespace GorelordsBrawler.Components
 					float dx = rawDx * facing + (1 - facing) * pivotCorrection;
 					float dy = bodyHalfH + (center.Value.Y - _zoneData.FrameHeight) * scale;
 
-					collider.LocalOffset = new Vector2(dx, dy);
+					var offset = new Vector2(dx + _zoneData.OffsetX, dy + _zoneData.OffsetY);
+					collider.LocalOffset = offset;
 					collider.Enabled = true;
-					_lastOffsets[zoneName] = new Vector2(dx, dy);
+					_lastOffsets[zoneName] = offset;
 				}
 				else if (_lastOffsets.TryGetValue(zoneName, out var lastOffset))
 				{

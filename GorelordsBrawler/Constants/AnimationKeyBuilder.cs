@@ -50,6 +50,10 @@ namespace GorelordsBrawler.Constants
 		public string AttackRunRightHand         => B(GameConstants.Animations.AttackRunRightHand);
 		public string AttackRunRightHandFaceLeft  => B(GameConstants.Animations.AttackRunRightHandFaceLeft);
 
+		// ── Hurt ──────────────────────────────────────────────────────────────
+		public string Hurt         => B(GameConstants.Animations.Hurt);
+		public string HurtFaceLeft => B(GameConstants.Animations.HurtFaceLeft);
+
 		// ── Attack — all variants (used for OnAnimationCompleted checks) ──────
 		/// <summary>All attack animation keys for this character.</summary>
 		public string[] AllAttackAnims => new[]

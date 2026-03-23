@@ -62,6 +62,10 @@ namespace GorelordsBrawler.Constants
 			public const string AttackIdleRightHandFaceLeft   = nameof(AttackIdleRightHandFaceLeft);
 			public const string AttackRunRightHand            = nameof(AttackRunRightHand);
 			public const string AttackRunRightHandFaceLeft    = nameof(AttackRunRightHandFaceLeft);
+
+			// ── Hurt ──────────────────────────────────────────────────────
+			public const string Hurt         = nameof(Hurt);
+			public const string HurtFaceLeft = nameof(HurtFaceLeft);
 		}
 
 		public static class SceneNames
@@ -212,6 +216,10 @@ namespace GorelordsBrawler.Constants
 			// Camera shake — trauma-based, decays after hit
 			public const float MaxShakeOffset     = 8f;      // pixels of max displacement
 			public const float ShakeDecay         = 6f;      // trauma/sec (~200 ms to clear)
+
+			// Hurt vibration — rapid X-axis oscillation on the defender during hitstun
+			public const float HurtVibrationFrequency = 40f;   // oscillations/sec
+			public const float HurtVibrationAmplitude = 2.0f;  // pixels of displacement
 
 			// Input buffer — forgiveness window for attack input before cooldown expires
 			public const float AttackBufferWindow = 0.10f;   // 100 ms

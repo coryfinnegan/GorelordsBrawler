@@ -32,6 +32,12 @@ namespace GorelordsBrawler.Components
 
 			if (attackData.OwnerEntity == Entity) return;
 
+			// Skip if this attack already hit us (persists for the attack's lifetime)
+			if (!attackData.HitTargets.Add(Entity))
+			{
+				return;
+			}
+
 			// Identify which zone was hit (for future damage multipliers / limb removal)
 			string hitZone = _zoneTracker?.GetZoneName(local);
 

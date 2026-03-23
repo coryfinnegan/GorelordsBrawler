@@ -313,6 +313,8 @@ namespace Nez
 				public const string FutureAxe_AttackRunRightHand = @"Content\Sprites\FutureAxe\FutureAxe_AttackRunRightHand.png";
 				public const string FutureAxe_AttackRunRightHandsockets = @"Content\Sprites\FutureAxe\FutureAxe_AttackRunRightHand.sockets.json";
 				public const string FutureAxe_AttackRunRightHandFaceLeft = @"Content\Sprites\FutureAxe\FutureAxe_AttackRunRightHandFaceLeft.png";
+				public const string FutureAxe_Hurt = @"Content\Sprites\FutureAxe\FutureAxe_Hurt.png";
+				public const string FutureAxe_HurtFaceLeft = @"Content\Sprites\FutureAxe\FutureAxe_HurtFaceLeft.png";
 				public const string FutureAxe_Idlehurtboxes = @"Content\Sprites\FutureAxe\FutureAxe_Idle.hurtboxes.json";
 				public const string FutureAxe_Idle = @"Content\Sprites\FutureAxe\FutureAxe_Idle.png";
 				public const string FutureAxe_IdleFaceLeft = @"Content\Sprites\FutureAxe\FutureAxe_IdleFaceLeft.png";

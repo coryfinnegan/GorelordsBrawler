@@ -1,0 +1,13 @@
+FutureAxe_HurtFaceLeft_0000
+	0,0,256,256
+	0.5,1
+FutureAxe_HurtFaceLeft_0001
+	258,0,256,256
+	0.5,1
+FutureAxe_HurtFaceLeft_0002
+	516,0,256,256
+	0.5,1
+
+FutureAxe_HurtFaceLeft
+	8
+	0,1,2

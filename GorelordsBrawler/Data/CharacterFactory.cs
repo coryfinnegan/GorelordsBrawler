@@ -78,6 +78,8 @@ namespace GorelordsBrawler.Data
 
 			if (hasZoneData)
 			{
+				hurtboxZoneData.OffsetX = data.HurtboxOffsetX;
+				hurtboxZoneData.OffsetY = data.HurtboxOffsetY;
 				entity.AddComponent(hurtboxZoneData);
 				entity.AddComponent(new HurtboxZoneTracker());
 				// Zone colliders are created by HurtboxZoneTracker.OnAddedToEntity()
@@ -98,6 +100,7 @@ namespace GorelordsBrawler.Data
 			entity.AddComponent(new Hurtbox());
 			entity.AddComponent(new Hitstun());
 			entity.AddComponent(new HitFlash());
+			entity.AddComponent(new HurtVibration());
 			entity.AddComponent(new HealthBar());
 			entity.AddComponent(new RespawnHandler(spawnPosition));
 

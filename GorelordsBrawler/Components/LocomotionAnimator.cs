@@ -30,6 +30,7 @@ namespace GorelordsBrawler.Components
 		private SpriteAnimator _animator;
 		private SpriteData _spriteData;
 		private MeleeAttack _meleeAttack;
+		private Hitstun _hitstun;
 
 		// Built from SpriteData.AnimPrefix — all animation key lookups go through this.
 		private AnimationKeyBuilder _keys;
@@ -52,6 +53,10 @@ namespace GorelordsBrawler.Components
 		private bool _hasAttackRunRightHandAnim;
 		private bool _hasAttackRunRightHandFaceLeftAnim;
 
+		// Hurt existence flags
+		private bool _hasHurtAnim;
+		private bool _hasHurtFaceLeftAnim;
+
 		private bool _wasGrounded;
 		private float _landingTimer;
 
@@ -70,6 +75,7 @@ namespace GorelordsBrawler.Components
 			_animator    = Entity.GetComponent<SpriteAnimator>();
 			_spriteData  = Entity.GetComponent<SpriteData>();
 			_meleeAttack = Entity.GetComponent<MeleeAttack>();
+			_hitstun     = Entity.GetComponent<Hitstun>();
 
 			_keys = new AnimationKeyBuilder(_spriteData?.AnimPrefix ?? "");
 
@@ -87,6 +93,9 @@ namespace GorelordsBrawler.Components
 			_hasAttackIdleRightHandFaceLeftAnim    = _animator.Animations.ContainsKey(_keys.AttackIdleRightHandFaceLeft);
 			_hasAttackRunRightHandAnim            = _animator.Animations.ContainsKey(_keys.AttackRunRightHand);
 			_hasAttackRunRightHandFaceLeftAnim     = _animator.Animations.ContainsKey(_keys.AttackRunRightHandFaceLeft);
+
+			_hasHurtAnim         = _animator.Animations.ContainsKey(_keys.Hurt);
+			_hasHurtFaceLeftAnim = _animator.Animations.ContainsKey(_keys.HurtFaceLeft);
 
 			UpdateOrder = GameConstants.Physics.LocomotionAnimatorUpdateOrder;
 			_wasGrounded = _body.Grounded;
@@ -275,6 +284,27 @@ namespace GorelordsBrawler.Components
 					_wasGrounded = _body.Grounded;
 					return;
 				}
+			}
+
+			// ── Hurt (between attack and jump) ───────────────────────────────────
+			if (_hasHurtAnim && _hitstun != null && _hitstun.IsActive)
+			{
+				var useHurtFaceLeft = _hasHurtFaceLeftAnim && _body.FacingDirection < 0;
+				var hurtAnim = useHurtFaceLeft ? _keys.HurtFaceLeft : _keys.Hurt;
+
+				if (useHurtFaceLeft)
+				{
+					_animator.FlipX = false;
+				}
+
+				if (!_animator.IsAnimationActive(hurtAnim))
+				{
+					_animator.Speed = 1.0f;
+					_animator.Play(hurtAnim, SpriteAnimator.LoopMode.ClampForever);
+				}
+
+				_wasGrounded = _body.Grounded;
+				return;
 			}
 
 			// ── Locomotion ────────────────────────────────────────────────────────

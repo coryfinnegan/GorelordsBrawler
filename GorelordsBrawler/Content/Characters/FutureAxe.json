@@ -49,7 +49,9 @@
 			"Content/Sprites/FutureAxe/FutureAxe_AttackIdleRightHand.atlas",
 			"Content/Sprites/FutureAxe/FutureAxe_AttackIdleRightHandFaceLeft.atlas",
 			"Content/Sprites/FutureAxe/FutureAxe_AttackRunRightHand.atlas",
-			"Content/Sprites/FutureAxe/FutureAxe_AttackRunRightHandFaceLeft.atlas"
+			"Content/Sprites/FutureAxe/FutureAxe_AttackRunRightHandFaceLeft.atlas",
+			"Content/Sprites/FutureAxe/FutureAxe_Hurt.atlas",
+			"Content/Sprites/FutureAxe/FutureAxe_HurtFaceLeft.atlas"
 		],
 		"RunAnimSpeed": 10,
 		"JumpAnimSpeed": 10,

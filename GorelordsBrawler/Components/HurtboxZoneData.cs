@@ -25,6 +25,10 @@ namespace GorelordsBrawler.Components
 		/// <summary>Returns OriginX if set, otherwise falls back to FrameWidth/2.</summary>
 		public float EffectiveOriginX => OriginX >= 0f ? OriginX : FrameWidth / 2f;
 
+		/// <summary>World-space offset applied to all zone colliders (from character JSON).</summary>
+		public float OffsetX;
+		public float OffsetY;
+
 		/// <summary>Zone name → pixel dimensions (width, height) from sidecar "zones" block.</summary>
 		public Dictionary<string, Vector2> ZoneSizes = new();
 
