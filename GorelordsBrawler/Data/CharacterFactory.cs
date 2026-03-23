@@ -61,13 +61,38 @@ namespace GorelordsBrawler.Data
 			entity.AddComponent(new JumpAbility(input));
 
 			// Hurtbox + Health (always present)
-			float hurtW = data.HurtboxWidth  > 0 ? data.HurtboxWidth  : data.BodyWidth;
-			float hurtH = data.HurtboxHeight > 0 ? data.HurtboxHeight : data.BodyHeight;
-			var hurtboxCollider = entity.AddComponent(new BoxCollider(hurtW, hurtH));
-			hurtboxCollider.PhysicsLayer = PhysicsLayers.Hurtbox;
-			hurtboxCollider.CollidesWithLayers = PhysicsLayers.Hitbox;
-			hurtboxCollider.IsTrigger = true;
-			hurtboxCollider.ShouldColliderScaleAndRotateWithTransform = false;
+			// Try to load per-frame hurtbox zone data from sidecars
+			var hurtboxZoneData = new HurtboxZoneData();
+			bool hasZoneData = false;
+			if (data.Sprite != null)
+			{
+				hasZoneData |= TryLoadHurtboxSidecar(scene, data.Sprite.AtlasPath, hurtboxZoneData);
+				if (data.Sprite.ExtraAtlasPaths != null)
+				{
+					foreach (var extraPath in data.Sprite.ExtraAtlasPaths)
+					{
+						hasZoneData |= TryLoadHurtboxSidecar(scene, extraPath, hurtboxZoneData);
+					}
+				}
+			}
+
+			if (hasZoneData)
+			{
+				entity.AddComponent(hurtboxZoneData);
+				entity.AddComponent(new HurtboxZoneTracker());
+				// Zone colliders are created by HurtboxZoneTracker.OnAddedToEntity()
+			}
+			else
+			{
+				// Fallback: single static hurtbox (characters without zone data)
+				float hurtW = data.HurtboxWidth  > 0 ? data.HurtboxWidth  : data.BodyWidth;
+				float hurtH = data.HurtboxHeight > 0 ? data.HurtboxHeight : data.BodyHeight;
+				var hurtboxCollider = entity.AddComponent(new BoxCollider(hurtW, hurtH));
+				hurtboxCollider.PhysicsLayer = PhysicsLayers.Hurtbox;
+				hurtboxCollider.CollidesWithLayers = PhysicsLayers.Hitbox;
+				hurtboxCollider.IsTrigger = true;
+				hurtboxCollider.ShouldColliderScaleAndRotateWithTransform = false;
+			}
 
 			entity.AddComponent(new Health { MaxHp = stats.MaxHp, CurrentHp = stats.MaxHp });
 			entity.AddComponent(new Hurtbox());
@@ -146,6 +171,64 @@ namespace GorelordsBrawler.Data
 			{
 				Debug.Warn("Failed to load sprite atlas '{0}', falling back to rectangle: {1}",
 					spriteData.AtlasPath, e.Message);
+				return false;
+			}
+		}
+
+		private static bool TryLoadHurtboxSidecar(Scene scene, string atlasPath, HurtboxZoneData zoneData)
+		{
+			var sidePath = atlasPath.Replace(".atlas", ".hurtboxes.json");
+			try
+			{
+				var json = scene.Content.LoadJson(sidePath);
+				using var doc = JsonDocument.Parse(json);
+				var root = doc.RootElement;
+
+				zoneData.FrameWidth = root.GetProperty("frame_width").GetInt32();
+				zoneData.FrameHeight = root.GetProperty("frame_height").GetInt32();
+
+				if (root.TryGetProperty("origin_x", out var originEl))
+				{
+					zoneData.OriginX = originEl.GetSingle();
+				}
+
+				// Parse zone sizes
+				foreach (var zoneProp in root.GetProperty("zones").EnumerateObject())
+				{
+					float w = zoneProp.Value.GetProperty("width").GetInt32();
+					float h = zoneProp.Value.GetProperty("height").GetInt32();
+					zoneData.ZoneSizes[zoneProp.Name] = new Vector2(w, h);
+				}
+
+				// Parse per-animation per-zone frame positions
+				foreach (var animProp in root.GetProperty("animations").EnumerateObject())
+				{
+					var animZones = new System.Collections.Generic.Dictionary<string, Vector2?[]>();
+					foreach (var zoneProp in animProp.Value.EnumerateObject())
+					{
+						var framesEl = zoneProp.Value;
+						var positions = new Vector2?[framesEl.GetArrayLength()];
+						int i = 0;
+						foreach (var frameEl in framesEl.EnumerateArray())
+						{
+							if (frameEl.ValueKind == JsonValueKind.Array)
+							{
+								float x = frameEl[0].GetSingle();
+								float y = frameEl[1].GetSingle();
+								positions[i] = new Vector2(x, y);
+							}
+							i++;
+						}
+						animZones[zoneProp.Name] = positions;
+					}
+					zoneData.Animations[animProp.Name] = animZones;
+				}
+
+				return true;
+			}
+			catch
+			{
+				// Missing hurtbox sidecar is normal — silently skip.
 				return false;
 			}
 		}

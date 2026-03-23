@@ -297,25 +297,31 @@ namespace Nez
 
 				}
 
+				public const string FutureAxe_AttackIdleLeftHandhurtboxes = @"Content\Sprites\FutureAxe\FutureAxe_AttackIdleLeftHand.hurtboxes.json";
 				public const string FutureAxe_AttackIdleLeftHand = @"Content\Sprites\FutureAxe\FutureAxe_AttackIdleLeftHand.png";
 				public const string FutureAxe_AttackIdleLeftHandsockets = @"Content\Sprites\FutureAxe\FutureAxe_AttackIdleLeftHand.sockets.json";
 				public const string FutureAxe_AttackIdleLeftHandFaceLeft = @"Content\Sprites\FutureAxe\FutureAxe_AttackIdleLeftHandFaceLeft.png";
+				public const string FutureAxe_AttackIdleRightHandhurtboxes = @"Content\Sprites\FutureAxe\FutureAxe_AttackIdleRightHand.hurtboxes.json";
 				public const string FutureAxe_AttackIdleRightHand = @"Content\Sprites\FutureAxe\FutureAxe_AttackIdleRightHand.png";
 				public const string FutureAxe_AttackIdleRightHandsockets = @"Content\Sprites\FutureAxe\FutureAxe_AttackIdleRightHand.sockets.json";
 				public const string FutureAxe_AttackIdleRightHandFaceLeft = @"Content\Sprites\FutureAxe\FutureAxe_AttackIdleRightHandFaceLeft.png";
+				public const string FutureAxe_AttackRunLeftHandhurtboxes = @"Content\Sprites\FutureAxe\FutureAxe_AttackRunLeftHand.hurtboxes.json";
 				public const string FutureAxe_AttackRunLeftHand = @"Content\Sprites\FutureAxe\FutureAxe_AttackRunLeftHand.png";
 				public const string FutureAxe_AttackRunLeftHandsockets = @"Content\Sprites\FutureAxe\FutureAxe_AttackRunLeftHand.sockets.json";
 				public const string FutureAxe_AttackRunLeftHandFaceLeft = @"Content\Sprites\FutureAxe\FutureAxe_AttackRunLeftHandFaceLeft.png";
+				public const string FutureAxe_AttackRunRightHandhurtboxes = @"Content\Sprites\FutureAxe\FutureAxe_AttackRunRightHand.hurtboxes.json";
 				public const string FutureAxe_AttackRunRightHand = @"Content\Sprites\FutureAxe\FutureAxe_AttackRunRightHand.png";
 				public const string FutureAxe_AttackRunRightHandsockets = @"Content\Sprites\FutureAxe\FutureAxe_AttackRunRightHand.sockets.json";
 				public const string FutureAxe_AttackRunRightHandFaceLeft = @"Content\Sprites\FutureAxe\FutureAxe_AttackRunRightHandFaceLeft.png";
+				public const string FutureAxe_Idlehurtboxes = @"Content\Sprites\FutureAxe\FutureAxe_Idle.hurtboxes.json";
 				public const string FutureAxe_Idle = @"Content\Sprites\FutureAxe\FutureAxe_Idle.png";
 				public const string FutureAxe_IdleFaceLeft = @"Content\Sprites\FutureAxe\FutureAxe_IdleFaceLeft.png";
+				public const string FutureAxe_Jumphurtboxes = @"Content\Sprites\FutureAxe\FutureAxe_Jump.hurtboxes.json";
 				public const string FutureAxe_Jump = @"Content\Sprites\FutureAxe\FutureAxe_Jump.png";
 				public const string FutureAxe_JumpFaceLeft = @"Content\Sprites\FutureAxe\FutureAxe_JumpFaceLeft.png";
+				public const string FutureAxe_Runhurtboxes = @"Content\Sprites\FutureAxe\FutureAxe_Run.hurtboxes.json";
 				public const string FutureAxe_Run = @"Content\Sprites\FutureAxe\FutureAxe_Run.png";
 				public const string FutureAxe_RunFaceLeft = @"Content\Sprites\FutureAxe\FutureAxe_RunFaceLeft.png";
-				public const string FutureAxe_Select = @"Content\Sprites\FutureAxe\FutureAxe_Select.png";
 			}
 
 		}

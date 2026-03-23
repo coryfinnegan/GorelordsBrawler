@@ -97,9 +97,9 @@ namespace GorelordsBrawler.Components
 			// Timer mode: hitbox is spawned immediately and lives for HitboxDuration.
 			bool useFrameMode = _melee.ActiveStartFrame >= 0 && _animator != null;
 
-			// Fire attack when buffer is active, cooldown ready, and not stunned
+			// Fire attack when buffer is active, cooldown ready, animation done, and not stunned
 			var isStunned = _hitstun != null && _hitstun.IsActive;
-			if (_attackBufferTimer > 0 && _cooldownTimer <= 0 && !isStunned)
+			if (_attackBufferTimer > 0 && _cooldownTimer <= 0 && !_attackAnimActive && !isStunned)
 			{
 				_attackBufferTimer = 0;
 				DestroyHitbox();          // clean up any lingering hitbox from previous attack
@@ -162,11 +162,6 @@ namespace GorelordsBrawler.Components
 
 			// Position from socket data (or static fallback) — also used for tracking each frame
 			TrackHitboxPosition();
-
-			var hitboxRenderer = _hitboxEntity.AddComponent(
-				new PrototypeSpriteRenderer(_melee.HitboxWidth, _melee.HitboxHeight));
-			hitboxRenderer.SetColor(Color.Red * GameConstants.Rendering.HitboxColorAlpha);
-			hitboxRenderer.RenderLayer = GameConstants.Rendering.HitboxRenderLayer;
 
 			var hitboxCollider = _hitboxEntity.AddComponent(
 				new BoxCollider(_melee.HitboxWidth, _melee.HitboxHeight));

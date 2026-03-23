@@ -10,6 +10,7 @@ namespace GorelordsBrawler.Components
 		private Health _health;
 		private PhysicsBody _body;
 		private Hitstun _hitstun;
+		private HurtboxZoneTracker _zoneTracker;
 		private CombatEffectsManager _effectsManager;
 
 		public override void OnAddedToEntity()
@@ -17,6 +18,7 @@ namespace GorelordsBrawler.Components
 			_health = Entity.GetComponent<Health>();
 			_body = Entity.GetComponent<PhysicsBody>();
 			_hitstun = Entity.GetComponent<Hitstun>();
+			_zoneTracker = Entity.GetComponent<HurtboxZoneTracker>();
 		}
 
 		public void OnTriggerEnter(Collider other, Collider local)
@@ -29,6 +31,9 @@ namespace GorelordsBrawler.Components
 			if (attackData == null) return;
 
 			if (attackData.OwnerEntity == Entity) return;
+
+			// Identify which zone was hit (for future damage multipliers / limb removal)
+			string hitZone = _zoneTracker?.GetZoneName(local);
 
 			_health.TakeDamage(attackData.Damage);
 
