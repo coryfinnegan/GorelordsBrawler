@@ -10,18 +10,16 @@ namespace GorelordsBrawler.Components
 	/// Drives sprite animation state from character velocity and grounded state.
 	///
 	/// Priority (highest first):
-	///   attack (LeftHand / RightHand) — plays to completion via OnAnimationCompletedEvent;
-	///                                   restores entity scale when done; alternates via MeleeAttack.AttackIndex
-	///   jump                          — airborne; speed driven by |Velocity.Y| / JumpSpeed
-	///   landing window                — brief Pause() on last jump frame after touching ground
-	///   run / run_FaceLeft            — grounded and moving; speed driven by |Velocity.X| / MoveSpeed
-	///   idle / idle_FaceLeft          — grounded and still
+	///   attack  — plays to completion; supports both legacy (LeftHand/RightHand) and
+	///             new dynamic animations via CombatController.CurrentAnimSuffix
+	///   hurt    — during hitstun
+	///   jump    — airborne; speed driven by |Velocity.Y| / JumpSpeed
+	///   landing — brief Pause() on last jump frame after touching ground
+	///   run     — grounded and moving; speed driven by |Velocity.X| / MoveSpeed
+	///   idle    — grounded and still
 	///
-	/// Directional variants (IdleFaceLeft, RunFaceLeft, attack FaceLeft) play when facing left
-	/// and the animation exists in the atlas, overriding the global FlipX to avoid double-mirroring.
-	///
-	/// Animation keys are built via AnimationKeyBuilder using SpriteData.AnimPrefix so they are
-	/// character-specific (e.g. "FutureAxe_Idle") without any hardcoding here.
+	/// Directional variants (FaceLeft suffix) play when facing left and the animation
+	/// exists in the atlas, overriding global FlipX to avoid double-mirroring.
 	/// </summary>
 	public class LocomotionAnimator : Component, IUpdatable
 	{
@@ -29,25 +27,22 @@ namespace GorelordsBrawler.Components
 		private MovementStats _movement;
 		private SpriteAnimator _animator;
 		private SpriteData _spriteData;
-		private MeleeAttack _meleeAttack;
+		private CombatController _combat;
 		private Hitstun _hitstun;
 
-		// Built from SpriteData.AnimPrefix — all animation key lookups go through this.
 		private AnimationKeyBuilder _keys;
 
-		// Existence flags — set once in OnAddedToEntity based on what the atlas actually contains.
+		// Existence flags — set once in OnAddedToEntity based on what the atlas contains.
 		private bool _hasJumpAnim;
 		private bool _hasJumpFaceLeftAnim;
 		private bool _hasIdleFaceLeftAnim;
 		private bool _hasRunFaceLeftAnim;
 
-		// LeftHand attack existence flags
+		// Legacy LeftHand attack existence flags (used when CombatController.IsLegacyAttack)
 		private bool _hasAttackIdleLeftHandAnim;
 		private bool _hasAttackIdleLeftHandFaceLeftAnim;
 		private bool _hasAttackRunLeftHandAnim;
 		private bool _hasAttackRunLeftHandFaceLeftAnim;
-
-		// RightHand attack existence flags (mirrored action)
 		private bool _hasAttackIdleRightHandAnim;
 		private bool _hasAttackIdleRightHandFaceLeftAnim;
 		private bool _hasAttackRunRightHandAnim;
@@ -60,39 +55,41 @@ namespace GorelordsBrawler.Components
 		private bool _wasGrounded;
 		private float _landingTimer;
 
-		// Attack lifecycle — independent of hitbox cooldown timing.
+		// Attack lifecycle
 		private float _defaultScale;
-		private bool _isPlayingAttack;   // true until OnAnimationCompletedEvent fires
-		private bool _prevIsAttacking;   // for rising-edge detection on MeleeAttack.IsAttacking
+		private bool _isPlayingAttack;
+		private bool _prevIsAttacking;
 
-		/// <summary>True while an attack animation is playing (cleared by OnAnimationCompletedEvent).</summary>
+		// The animation name currently playing for an attack (used for completion detection)
+		private string _currentAttackAnim;
+
+		/// <summary>True while an attack animation is playing.</summary>
 		public bool IsPlayingAttack => _isPlayingAttack;
 
 		public override void OnAddedToEntity()
 		{
-			_body        = Entity.GetComponent<PhysicsBody>();
-			_movement    = Entity.GetComponent<MovementStats>();
-			_animator    = Entity.GetComponent<SpriteAnimator>();
-			_spriteData  = Entity.GetComponent<SpriteData>();
-			_meleeAttack = Entity.GetComponent<MeleeAttack>();
-			_hitstun     = Entity.GetComponent<Hitstun>();
+			_body       = Entity.GetComponent<PhysicsBody>();
+			_movement   = Entity.GetComponent<MovementStats>();
+			_animator   = Entity.GetComponent<SpriteAnimator>();
+			_spriteData = Entity.GetComponent<SpriteData>();
+			_hitstun    = Entity.GetComponent<Hitstun>();
 
 			_keys = new AnimationKeyBuilder(_spriteData?.AnimPrefix ?? "");
 
-			_hasJumpAnim           = _animator.Animations.ContainsKey(_keys.Jump);
-			_hasJumpFaceLeftAnim   = _animator.Animations.ContainsKey(_keys.JumpFaceLeft);
-			_hasIdleFaceLeftAnim   = _animator.Animations.ContainsKey(_keys.IdleFaceLeft);
-			_hasRunFaceLeftAnim    = _animator.Animations.ContainsKey(_keys.RunFaceLeft);
+			_hasJumpAnim         = _animator.Animations.ContainsKey(_keys.Jump);
+			_hasJumpFaceLeftAnim = _animator.Animations.ContainsKey(_keys.JumpFaceLeft);
+			_hasIdleFaceLeftAnim = _animator.Animations.ContainsKey(_keys.IdleFaceLeft);
+			_hasRunFaceLeftAnim  = _animator.Animations.ContainsKey(_keys.RunFaceLeft);
 
-			_hasAttackIdleLeftHandAnim            = _animator.Animations.ContainsKey(_keys.AttackIdleLeftHand);
-			_hasAttackIdleLeftHandFaceLeftAnim     = _animator.Animations.ContainsKey(_keys.AttackIdleLeftHandFaceLeft);
-			_hasAttackRunLeftHandAnim             = _animator.Animations.ContainsKey(_keys.AttackRunLeftHand);
-			_hasAttackRunLeftHandFaceLeftAnim      = _animator.Animations.ContainsKey(_keys.AttackRunLeftHandFaceLeft);
+			_hasAttackIdleLeftHandAnim           = _animator.Animations.ContainsKey(_keys.AttackIdleLeftHand);
+			_hasAttackIdleLeftHandFaceLeftAnim   = _animator.Animations.ContainsKey(_keys.AttackIdleLeftHandFaceLeft);
+			_hasAttackRunLeftHandAnim            = _animator.Animations.ContainsKey(_keys.AttackRunLeftHand);
+			_hasAttackRunLeftHandFaceLeftAnim    = _animator.Animations.ContainsKey(_keys.AttackRunLeftHandFaceLeft);
 
-			_hasAttackIdleRightHandAnim           = _animator.Animations.ContainsKey(_keys.AttackIdleRightHand);
-			_hasAttackIdleRightHandFaceLeftAnim    = _animator.Animations.ContainsKey(_keys.AttackIdleRightHandFaceLeft);
-			_hasAttackRunRightHandAnim            = _animator.Animations.ContainsKey(_keys.AttackRunRightHand);
-			_hasAttackRunRightHandFaceLeftAnim     = _animator.Animations.ContainsKey(_keys.AttackRunRightHandFaceLeft);
+			_hasAttackIdleRightHandAnim          = _animator.Animations.ContainsKey(_keys.AttackIdleRightHand);
+			_hasAttackIdleRightHandFaceLeftAnim  = _animator.Animations.ContainsKey(_keys.AttackIdleRightHandFaceLeft);
+			_hasAttackRunRightHandAnim           = _animator.Animations.ContainsKey(_keys.AttackRunRightHand);
+			_hasAttackRunRightHandFaceLeftAnim   = _animator.Animations.ContainsKey(_keys.AttackRunRightHandFaceLeft);
 
 			_hasHurtAnim         = _animator.Animations.ContainsKey(_keys.Hurt);
 			_hasHurtFaceLeftAnim = _animator.Animations.ContainsKey(_keys.HurtFaceLeft);
@@ -111,36 +108,35 @@ namespace GorelordsBrawler.Components
 
 		private void OnAnimationCompleted(string animationName)
 		{
-			// Check if the completed animation is any attack animation for this character
-			if (_keys != null)
+			if (_isPlayingAttack && animationName == _currentAttackAnim)
 			{
-				foreach (var key in _keys.AllAttackAnims)
-				{
-					if (animationName == key)
-					{
-						_isPlayingAttack = false;
-						Entity.Transform.SetScale(_defaultScale);
-						_meleeAttack?.OnAttackAnimationCompleted();
-						return;
-					}
-				}
+				_isPlayingAttack = false;
+				_currentAttackAnim = null;
+				Entity.Transform.SetScale(_defaultScale);
+				_combat?.OnAttackAnimationCompleted();
 			}
 		}
 
 		public void Update()
 		{
+			// Lazy resolve: CombatController may be added after LocomotionAnimator
+			if (_combat == null)
+			{
+				_combat = Entity.GetComponent<CombatController>();
+			}
+
 			if (_isPlayingAttack)
 			{
 				_wasGrounded = _body.Grounded;
-				if (_meleeAttack != null)
+				if (_combat != null)
 				{
-					var isAttackingNow = _meleeAttack.IsAttacking;
+					var isAttackingNow = _combat.IsAttacking;
 					if (isAttackingNow && !_prevIsAttacking)
 					{
 						// New attack triggered mid-animation — break out and restart below
 						_isPlayingAttack = false;
+						_currentAttackAnim = null;
 						Entity.Transform.SetScale(_defaultScale);
-						// Fall through to attack-start logic
 					}
 					else
 					{
@@ -154,129 +150,44 @@ namespace GorelordsBrawler.Components
 				}
 			}
 
-			// Flip sprite to face the correct direction (directional variants override below)
+			// Flip sprite to face the correct direction
 			_animator.FlipX = _body.FacingDirection < 0;
 
 			// ── Attack (highest priority) ─────────────────────────────────────────
-			var hasAnyLeftHandAnim  = _hasAttackIdleLeftHandAnim  || _hasAttackIdleLeftHandFaceLeftAnim  ||
-			                          _hasAttackRunLeftHandAnim   || _hasAttackRunLeftHandFaceLeftAnim;
-			var hasAnyRightHandAnim = _hasAttackIdleRightHandAnim || _hasAttackIdleRightHandFaceLeftAnim ||
-			                          _hasAttackRunRightHandAnim  || _hasAttackRunRightHandFaceLeftAnim;
-			var hasAnyAttackAnim    = hasAnyLeftHandAnim || hasAnyRightHandAnim;
-
-			if (hasAnyAttackAnim && _meleeAttack != null)
+			if (_combat != null)
 			{
-				var isAttacking = _meleeAttack.IsAttacking;
+				var isAttacking = _combat.IsAttacking;
 				var attackJustStarted = isAttacking && !_prevIsAttacking;
 				_prevIsAttacking = isAttacking;
 
 				if (attackJustStarted)
 				{
-					var wasMoving  = Math.Abs(_body.Velocity.X) > 0.1f;
-					var facingLeft = _body.FacingDirection < 0;
+					string animName = null;
 
-					// Use right-hand animation set if: AttackIndex == 1 AND right-hand anims exist
-					var useRightHand = _meleeAttack.AttackIndex == 1 && hasAnyRightHandAnim;
-
-					string animName;
-					bool animHasLeft;
-
-					if (wasMoving)
+					if (_combat.IsLegacyAttack)
 					{
-						if (useRightHand)
-						{
-							if (facingLeft && _hasAttackRunRightHandFaceLeftAnim)
-							{
-								animName = _keys.AttackRunRightHandFaceLeft;
-								animHasLeft = true;
-							}
-							else if (_hasAttackRunRightHandAnim)
-							{
-								animName = _keys.AttackRunRightHand;
-								animHasLeft = false;
-							}
-							else
-							{
-								animName = _keys.AttackRunRightHandFaceLeft;
-								animHasLeft = true;
-							}
-						}
-						else
-						{
-							if (facingLeft && _hasAttackRunLeftHandFaceLeftAnim)
-							{
-								animName = _keys.AttackRunLeftHandFaceLeft;
-								animHasLeft = true;
-							}
-							else if (_hasAttackRunLeftHandAnim)
-							{
-								animName = _keys.AttackRunLeftHand;
-								animHasLeft = false;
-							}
-							else
-							{
-								animName = _keys.AttackRunLeftHandFaceLeft;
-								animHasLeft = true;
-							}
-						}
+						animName = SelectLegacyAttackAnim();
 					}
-					else
+					else if (_combat.CurrentAnimSuffix != null)
 					{
-						if (useRightHand)
-						{
-							if (facingLeft && _hasAttackIdleRightHandFaceLeftAnim)
-							{
-								animName = _keys.AttackIdleRightHandFaceLeft;
-								animHasLeft = true;
-							}
-							else if (_hasAttackIdleRightHandAnim)
-							{
-								animName = _keys.AttackIdleRightHand;
-								animHasLeft = false;
-							}
-							else
-							{
-								animName = _keys.AttackIdleRightHandFaceLeft;
-								animHasLeft = true;
-							}
-						}
-						else
-						{
-							if (facingLeft && _hasAttackIdleLeftHandFaceLeftAnim)
-							{
-								animName = _keys.AttackIdleLeftHandFaceLeft;
-								animHasLeft = true;
-							}
-							else if (_hasAttackIdleLeftHandAnim)
-							{
-								animName = _keys.AttackIdleLeftHand;
-								animHasLeft = false;
-							}
-							else
-							{
-								animName = _keys.AttackIdleLeftHandFaceLeft;
-								animHasLeft = true;
-							}
-						}
+						animName = SelectDynamicAttackAnim(_combat.CurrentAnimSuffix);
 					}
 
-					// For left-facing anims: no flip when facing left, flip when facing right.
-					if (animHasLeft)
+					if (animName != null)
 					{
-						_animator.FlipX = !facingLeft;
+						_animator.Speed = _spriteData != null && _spriteData.AttackAnimSpeed > 0
+							? _spriteData.AttackAnimSpeed
+							: 1.0f;
+
+						if (_spriteData != null && _spriteData.AttackSpriteScale > 0f)
+						{
+							Entity.Transform.SetScale(_spriteData.AttackSpriteScale);
+						}
+
+						_animator.Play(animName, SpriteAnimator.LoopMode.ClampForever);
+						_isPlayingAttack = true;
+						_currentAttackAnim = animName;
 					}
-
-					_animator.Speed = _spriteData != null && _spriteData.AttackAnimSpeed > 0
-						? _spriteData.AttackAnimSpeed
-						: 1.0f;
-
-					if (_spriteData != null && _spriteData.AttackSpriteScale > 0f)
-					{
-						Entity.Transform.SetScale(_spriteData.AttackSpriteScale);
-					}
-
-					_animator.Play(animName, SpriteAnimator.LoopMode.ClampForever);
-					_isPlayingAttack = true;
 				}
 
 				if (_isPlayingAttack)
@@ -354,7 +265,7 @@ namespace GorelordsBrawler.Components
 
 				if (isMoving)
 				{
-					var normalizedSpeed = Math.Abs(_body.Velocity.X) / _movement.MoveSpeed;
+					var normalizedSpeed = Math.Max(Math.Abs(_body.Velocity.X) / _movement.MoveSpeed, 0.3f);
 					var runAnimSpeed    = _spriteData != null ? _spriteData.RunAnimSpeed : 1.0f;
 					_animator.Speed = normalizedSpeed * runAnimSpeed;
 
@@ -394,6 +305,122 @@ namespace GorelordsBrawler.Components
 							_animator.Play(_keys.Idle);
 						}
 					}
+				}
+			}
+		}
+
+		/// <summary>
+		/// Selects an attack animation using the new dynamic suffix system.
+		/// Tries "{Prefix}_{Suffix}FaceLeft" when facing left, falls back to "{Prefix}_{Suffix}",
+		/// then falls back to any existing legacy attack animation as a final fallback.
+		/// </summary>
+		private string SelectDynamicAttackAnim(string suffix)
+		{
+			var facingLeft = _body.FacingDirection < 0;
+			var prefix = _spriteData?.AnimPrefix ?? "";
+			var baseName = string.IsNullOrEmpty(prefix) ? suffix : string.Concat(prefix, "_", suffix);
+			var faceLeftName = baseName + "FaceLeft";
+
+			// Try FaceLeft variant when facing left
+			if (facingLeft && _animator.Animations.ContainsKey(faceLeftName))
+			{
+				_animator.FlipX = false;
+				return faceLeftName;
+			}
+
+			// Try the base animation
+			if (_animator.Animations.ContainsKey(baseName))
+			{
+				return baseName;
+			}
+
+			// Graceful fallback: use any existing legacy attack animation so that
+			// new attack types (SideTilt, UpTilt, etc.) still visually play something
+			// until dedicated animations are created.
+			return SelectLegacyAttackAnim();
+		}
+
+		/// <summary>
+		/// Selects an attack animation from the legacy LeftHand/RightHand system.
+		/// Returns null if no legacy attack animations exist.
+		/// </summary>
+		private string SelectLegacyAttackAnim()
+		{
+			var hasAnyLeftHandAnim  = _hasAttackIdleLeftHandAnim  || _hasAttackIdleLeftHandFaceLeftAnim  ||
+			                          _hasAttackRunLeftHandAnim   || _hasAttackRunLeftHandFaceLeftAnim;
+			var hasAnyRightHandAnim = _hasAttackIdleRightHandAnim || _hasAttackIdleRightHandFaceLeftAnim ||
+			                          _hasAttackRunRightHandAnim  || _hasAttackRunRightHandFaceLeftAnim;
+
+			if (!hasAnyLeftHandAnim && !hasAnyRightHandAnim)
+			{
+				return null;
+			}
+
+			var wasMoving  = Math.Abs(_body.Velocity.X) > 0.1f;
+			var facingLeft = _body.FacingDirection < 0;
+
+			var useRightHand = _combat != null && _combat.AttackIndex == 1 && hasAnyRightHandAnim;
+
+			if (wasMoving)
+			{
+				if (useRightHand)
+				{
+					if (facingLeft && _hasAttackRunRightHandFaceLeftAnim)
+					{
+						_animator.FlipX = false;
+						return _keys.AttackRunRightHandFaceLeft;
+					}
+					if (_hasAttackRunRightHandAnim)
+					{
+						return _keys.AttackRunRightHand;
+					}
+					_animator.FlipX = !facingLeft;
+					return _keys.AttackRunRightHandFaceLeft;
+				}
+				else
+				{
+					if (facingLeft && _hasAttackRunLeftHandFaceLeftAnim)
+					{
+						_animator.FlipX = false;
+						return _keys.AttackRunLeftHandFaceLeft;
+					}
+					if (_hasAttackRunLeftHandAnim)
+					{
+						return _keys.AttackRunLeftHand;
+					}
+					_animator.FlipX = !facingLeft;
+					return _keys.AttackRunLeftHandFaceLeft;
+				}
+			}
+			else
+			{
+				if (useRightHand)
+				{
+					if (facingLeft && _hasAttackIdleRightHandFaceLeftAnim)
+					{
+						_animator.FlipX = false;
+						return _keys.AttackIdleRightHandFaceLeft;
+					}
+					if (_hasAttackIdleRightHandAnim)
+					{
+						return _keys.AttackIdleRightHand;
+					}
+					_animator.FlipX = !facingLeft;
+					return _keys.AttackIdleRightHandFaceLeft;
+				}
+				else
+				{
+					if (facingLeft && _hasAttackIdleLeftHandFaceLeftAnim)
+					{
+						_animator.FlipX = false;
+						return _keys.AttackIdleLeftHandFaceLeft;
+					}
+					if (_hasAttackIdleLeftHandAnim)
+					{
+						return _keys.AttackIdleLeftHand;
+					}
+					_animator.FlipX = !facingLeft;
+					return _keys.AttackIdleLeftHandFaceLeft;
 				}
 			}
 		}

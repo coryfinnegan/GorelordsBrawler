@@ -28,11 +28,9 @@ namespace GorelordsBrawler.Constants
 
 		public static class Characters
 		{
-			public const string Trollborg = "Trollborg";
-			public const string DocMarauder = "DocMarauder";
 			public const string FutureAxe = "FutureAxe";
 
-			public static readonly string[] All = { Trollborg, DocMarauder, FutureAxe };
+			public static readonly string[] All = { FutureAxe };
 		}
 
 		/// <summary>
@@ -51,17 +49,27 @@ namespace GorelordsBrawler.Constants
 			public const string JumpFaceLeft = nameof(JumpFaceLeft);
 			public const string Select       = nameof(Select);
 
-			// ── Attack — LeftHand (original) ──────────────────────────────
+			// ── Attack — Legacy LeftHand (original) ───────────────────────
 			public const string AttackIdleLeftHand            = nameof(AttackIdleLeftHand);
 			public const string AttackIdleLeftHandFaceLeft    = nameof(AttackIdleLeftHandFaceLeft);
 			public const string AttackRunLeftHand             = nameof(AttackRunLeftHand);
 			public const string AttackRunLeftHandFaceLeft     = nameof(AttackRunLeftHandFaceLeft);
 
-			// ── Attack — RightHand (mirrored) ─────────────────────────────
+			// ── Attack — Legacy RightHand (mirrored) ──────────────────────
 			public const string AttackIdleRightHand           = nameof(AttackIdleRightHand);
 			public const string AttackIdleRightHandFaceLeft   = nameof(AttackIdleRightHandFaceLeft);
 			public const string AttackRunRightHand            = nameof(AttackRunRightHand);
 			public const string AttackRunRightHandFaceLeft    = nameof(AttackRunRightHandFaceLeft);
+
+			// ── Attack — Dynamic suffixes (used by CombatController) ──────
+			// Ground normals
+			public const string Jab       = nameof(Jab);
+			public const string SideTilt  = nameof(SideTilt);
+			public const string UpTilt    = nameof(UpTilt);
+			public const string DownTilt  = nameof(DownTilt);
+
+			// Aerial (single aerial attack)
+			public const string NeutralAir = nameof(NeutralAir);
 
 			// ── Hurt ──────────────────────────────────────────────────────
 			public const string Hurt         = nameof(Hurt);
@@ -155,15 +163,19 @@ namespace GorelordsBrawler.Constants
 			public const string MoveLabel = "Move";
 			public const string JumpLabel = "Jump";
 			public const string AttackLabel = "Attack";
+			public const string SpecialLabel = "Special";
 			public const string Player1MoveKeys = "A / D";
 			public const string Player1JumpKey = "W";
 			public const string Player1AttackKey = "F";
+			public const string Player1SpecialKey = "G";
 			public const string Player2MoveKeys = "Left / Right";
 			public const string Player2JumpKey = "Up";
 			public const string Player2AttackKey = "Right Ctrl";
+			public const string Player2SpecialKey = "Right Shift";
 			public const string GamepadMoveInput = "L-Stick / D-Pad";
 			public const string GamepadJumpInput = "A Button";
 			public const string GamepadAttackInput = "X Button";
+			public const string GamepadSpecialInput = "Y Button";
 		}
 
 		public static class CharacterSelect
@@ -270,40 +282,22 @@ namespace GorelordsBrawler.Constants
 			public const float ControlsSectionPadding = 12f;
 		}
 
+		public static class Maps
+		{
+			public const string Arena1 = "Content/maps/arena1.tmx";
+			public const string CollisionLayerName = "collision";
+		}
+
 		public static class Arena
 		{
-			// Player spawn positions (indexed by slot)
-			public static readonly Vector2[] SpawnPositions = new[]
+			// Fallback spawn positions if map has no spawns object layer
+			public static readonly Vector2[] FallbackSpawnPositions = new[]
 			{
-				new Vector2(200, 500),
-				new Vector2(600, 500),
-				new Vector2(350, 500),
-				new Vector2(450, 500),
+				new Vector2(256, 732),
+				new Vector2(1024, 732),
+				new Vector2(544, 508),
+				new Vector2(960, 508),
 			};
-
-			// Platform colors
-			public static readonly Color GroundColor = new Color(80, 80, 80);
-			public static readonly Color PlatformColor = new Color(100, 100, 100);
-
-			// Ground
-			public static readonly Vector2 GroundPosition = new Vector2(400, 568);
-			public const float GroundWidth = 800f;
-			public const float GroundHeight = 32f;
-
-			// Mid platform
-			public static readonly Vector2 PlatformMidPosition = new Vector2(400, 420);
-			public const float PlatformMidWidth = 200f;
-			public const float PlatformMidHeight = 16f;
-
-			// Left platform
-			public static readonly Vector2 PlatformLeftPosition = new Vector2(150, 300);
-			public const float PlatformLeftWidth = 120f;
-			public const float PlatformLeftHeight = 16f;
-
-			// Right platform
-			public static readonly Vector2 PlatformRightPosition = new Vector2(650, 300);
-			public const float PlatformRightWidth = 120f;
-			public const float PlatformRightHeight = 16f;
 		}
 	}
 }

@@ -13,9 +13,7 @@ namespace Nez
     {
 		public static class Characters
 		{
-			public const string DocMarauder = @"Content\Characters\DocMarauder.json";
 			public const string FutureAxe = @"Content\Characters\FutureAxe.json";
-			public const string Trollborg = @"Content\Characters\Trollborg.json";
 		}
 
 		public static class Fonts
@@ -24,6 +22,10 @@ namespace Nez
 			public const string GoreFont = @"Content\Fonts\GoreFont.fnt";
 			public const string Sludgeborn_0 = @"Content\Fonts\Sludgeborn_0.png";
 			public const string Sludgeborn = @"Content\Fonts\Sludgeborn.fnt";
+		}
+
+		public static class Maps
+		{
 		}
 
 		public static class Sprites
@@ -313,6 +315,12 @@ namespace Nez
 				public const string FutureAxe_AttackRunRightHand = @"Content\Sprites\FutureAxe\FutureAxe_AttackRunRightHand.png";
 				public const string FutureAxe_AttackRunRightHandsockets = @"Content\Sprites\FutureAxe\FutureAxe_AttackRunRightHand.sockets.json";
 				public const string FutureAxe_AttackRunRightHandFaceLeft = @"Content\Sprites\FutureAxe\FutureAxe_AttackRunRightHandFaceLeft.png";
+				public const string FutureAxe_CrouchIdlehurtboxes = @"Content\Sprites\FutureAxe\FutureAxe_CrouchIdle.hurtboxes.json";
+				public const string FutureAxe_CrouchIdle = @"Content\Sprites\FutureAxe\FutureAxe_CrouchIdle.png";
+				public const string FutureAxe_CrouchIdleFaceLeft = @"Content\Sprites\FutureAxe\FutureAxe_CrouchIdleFaceLeft.png";
+				public const string FutureAxe_CrouchRunhurtboxes = @"Content\Sprites\FutureAxe\FutureAxe_CrouchRun.hurtboxes.json";
+				public const string FutureAxe_CrouchRun = @"Content\Sprites\FutureAxe\FutureAxe_CrouchRun.png";
+				public const string FutureAxe_CrouchRunFaceLeft = @"Content\Sprites\FutureAxe\FutureAxe_CrouchRunFaceLeft.png";
 				public const string FutureAxe_Hurt = @"Content\Sprites\FutureAxe\FutureAxe_Hurt.png";
 				public const string FutureAxe_HurtFaceLeft = @"Content\Sprites\FutureAxe\FutureAxe_HurtFaceLeft.png";
 				public const string FutureAxe_Idlehurtboxes = @"Content\Sprites\FutureAxe\FutureAxe_Idle.hurtboxes.json";
@@ -321,11 +329,28 @@ namespace Nez
 				public const string FutureAxe_Jumphurtboxes = @"Content\Sprites\FutureAxe\FutureAxe_Jump.hurtboxes.json";
 				public const string FutureAxe_Jump = @"Content\Sprites\FutureAxe\FutureAxe_Jump.png";
 				public const string FutureAxe_JumpFaceLeft = @"Content\Sprites\FutureAxe\FutureAxe_JumpFaceLeft.png";
+				public const string FutureAxe_NeutralAirhurtboxes = @"Content\Sprites\FutureAxe\FutureAxe_NeutralAir.hurtboxes.json";
+				public const string FutureAxe_NeutralAir = @"Content\Sprites\FutureAxe\FutureAxe_NeutralAir.png";
+				public const string FutureAxe_NeutralAirsockets = @"Content\Sprites\FutureAxe\FutureAxe_NeutralAir.sockets.json";
+				public const string FutureAxe_NeutralAirFaceLeft = @"Content\Sprites\FutureAxe\FutureAxe_NeutralAirFaceLeft.png";
 				public const string FutureAxe_Runhurtboxes = @"Content\Sprites\FutureAxe\FutureAxe_Run.hurtboxes.json";
 				public const string FutureAxe_Run = @"Content\Sprites\FutureAxe\FutureAxe_Run.png";
 				public const string FutureAxe_RunFaceLeft = @"Content\Sprites\FutureAxe\FutureAxe_RunFaceLeft.png";
+				public const string FutureAxe_SideTilthurtboxes = @"Content\Sprites\FutureAxe\FutureAxe_SideTilt.hurtboxes.json";
+				public const string FutureAxe_SideTilt = @"Content\Sprites\FutureAxe\FutureAxe_SideTilt.png";
+				public const string FutureAxe_SideTiltsockets = @"Content\Sprites\FutureAxe\FutureAxe_SideTilt.sockets.json";
+				public const string FutureAxe_SideTiltFaceLeft = @"Content\Sprites\FutureAxe\FutureAxe_SideTiltFaceLeft.png";
+				public const string FutureAxe_UpTilthurtboxes = @"Content\Sprites\FutureAxe\FutureAxe_UpTilt.hurtboxes.json";
+				public const string FutureAxe_UpTilt = @"Content\Sprites\FutureAxe\FutureAxe_UpTilt.png";
+				public const string FutureAxe_UpTiltsockets = @"Content\Sprites\FutureAxe\FutureAxe_UpTilt.sockets.json";
+				public const string FutureAxe_UpTiltFaceLeft = @"Content\Sprites\FutureAxe\FutureAxe_UpTiltFaceLeft.png";
 			}
 
+		}
+
+		public static class Tilesets
+		{
+			public const string Arena = @"Content\tilesets\arena.png";
 		}
 
 

@@ -28,10 +28,14 @@ namespace GorelordsBrawler.Input
 			{
 				MoveX = new VirtualIntegerAxis()
 					.AddKeyboardKeys(VirtualInput.OverlapBehavior.TakeNewer, Keys.A, Keys.D),
+				MoveY = new VirtualIntegerAxis()
+					.AddKeyboardKeys(VirtualInput.OverlapBehavior.TakeNewer, Keys.W, Keys.S),
 				Jump = new VirtualButton(GameConstants.Input.JumpBufferTime)
 					.AddKeyboardKey(Keys.W),
 				Attack = new VirtualButton()
 					.AddKeyboardKey(Keys.F),
+				Special = new VirtualButton()
+					.AddKeyboardKey(Keys.G),
 			};
 		}
 
@@ -41,10 +45,14 @@ namespace GorelordsBrawler.Input
 			{
 				MoveX = new VirtualIntegerAxis()
 					.AddKeyboardKeys(VirtualInput.OverlapBehavior.TakeNewer, Keys.Left, Keys.Right),
+				MoveY = new VirtualIntegerAxis()
+					.AddKeyboardKeys(VirtualInput.OverlapBehavior.TakeNewer, Keys.Up, Keys.Down),
 				Jump = new VirtualButton(GameConstants.Input.JumpBufferTime)
 					.AddKeyboardKey(Keys.Up),
 				Attack = new VirtualButton()
 					.AddKeyboardKey(Keys.RightControl),
+				Special = new VirtualButton()
+					.AddKeyboardKey(Keys.RightShift),
 			};
 		}
 
@@ -55,10 +63,15 @@ namespace GorelordsBrawler.Input
 				MoveX = new VirtualIntegerAxis()
 					.AddGamePadLeftStickX(gamepadIndex)
 					.AddGamePadDPadLeftRight(gamepadIndex),
+				MoveY = new VirtualIntegerAxis()
+					.AddGamePadLeftStickY(gamepadIndex)
+					.AddGamePadDPadUpDown(gamepadIndex),
 				Jump = new VirtualButton(GameConstants.Input.JumpBufferTime)
 					.AddGamePadButton(gamepadIndex, Buttons.A),
 				Attack = new VirtualButton()
 					.AddGamePadButton(gamepadIndex, Buttons.X),
+				Special = new VirtualButton()
+					.AddGamePadButton(gamepadIndex, Buttons.Y),
 			};
 		}
 	}

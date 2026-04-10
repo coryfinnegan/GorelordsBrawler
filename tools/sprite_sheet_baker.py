@@ -57,7 +57,10 @@ from bpy.types import Operator, Panel, PropertyGroup, UIList
 
 # (identifier, label, description)  — identifier becomes the atlas suffix.
 ANIM_TYPE_ITEMS = [
+    # ── Locomotion ────────────────────────────────────────────────────────
     ("Idle",                  "Idle",                         "Standing idle"),
+    ("CrouchIdle",            "Crouch Idle",                  "Crouching idle (hold down on ground)"),
+    ("CrouchRun",             "Crouch Run",                   "Crouching walk/run cycle"),
     ("Run",                   "Run",                          "Run cycle"),
     ("Jump",                  "Jump",                         "Jump animation"),
     ("Fall",                  "Fall",                         "Falling animation"),
@@ -65,21 +68,31 @@ ANIM_TYPE_ITEMS = [
     ("Hurt",                  "Hurt",                         "Hit reaction"),
     ("Death",                 "Death",                        "Death animation"),
     ("Select",                "Select",                       "Character-select screen pose"),
+    # ── Legacy attacks (LeftHand / RightHand) ─────────────────────────────
     ("AttackIdleLeftHand",    "Attack Idle — Left Hand",      "Attack from idle (left hand weapon)"),
     ("AttackIdleRightHand",   "Attack Idle — Right Hand",     "Attack from idle (right hand weapon)"),
     ("AttackRunLeftHand",     "Attack Run — Left Hand",       "Attack while running (left hand weapon)"),
     ("AttackRunRightHand",    "Attack Run — Right Hand",      "Attack while running (right hand weapon)"),
     ("AttackJumpLeftHand",    "Attack Jump — Left Hand",      "Attack while jumping (left hand weapon)"),
     ("AttackJumpRightHand",   "Attack Jump — Right Hand",     "Attack while jumping (right hand weapon)"),
+    # ── Directional attacks (new combat system) ───────────────────────────
+    ("Jab",                   "Jab",                          "Quick neutral ground attack"),
+    ("SideTilt",              "Side Tilt",                    "Horizontal power attack"),
+    ("UpTilt",                "Up Tilt",                      "Upward launcher attack"),
+    ("DownTilt",              "Down Tilt",                    "Low crouch attack"),
+    # ── Aerial attack (single aerial for all airborne states) ────────────
+    ("NeutralAir",            "Neutral Air",                  "All-purpose aerial attack"),
 ]
 
 # Types that auto-generate a FaceLeft atlas variant.
 FACE_LEFT_TYPES = {
-    "Idle", "Run", "Jump", "Fall", "Land",
+    "Idle", "CrouchIdle", "CrouchRun", "Run", "Jump", "Fall", "Land",
     "Hurt", "Death",
     "AttackIdleLeftHand", "AttackIdleRightHand",
     "AttackRunLeftHand", "AttackRunRightHand",
     "AttackJumpLeftHand", "AttackJumpRightHand",
+    "Jab", "SideTilt", "UpTilt", "DownTilt",
+    "NeutralAir",
 }
 
 # Types that track a weapon socket (attack types).
@@ -87,6 +100,8 @@ SOCKET_TYPES = {
     "AttackIdleLeftHand", "AttackIdleRightHand",
     "AttackRunLeftHand", "AttackRunRightHand",
     "AttackJumpLeftHand", "AttackJumpRightHand",
+    "Jab", "SideTilt", "UpTilt", "DownTilt",
+    "NeutralAir",
 }
 
 # Types that use the RIGHT hand socket. Everything else in SOCKET_TYPES uses left.
@@ -156,9 +171,13 @@ class SPRITE_ActionItem(PropertyGroup):
     )
     end_frame: IntProperty(
         name="End",
-        description="Override end frame (0 = use action end)",
+        description=(
+            "Override end frame. "
+            "0 = use action end. "
+            "Positive = absolute frame number. "
+            "Negative = trim from end (e.g. -10 = stop 10 frames before the action ends)"
+        ),
         default=0,
-        min=0,
     )
 
 
@@ -327,7 +346,7 @@ class SPRITE_UL_ActionList(UIList):
             label = f"{char_prefix}_{suffix}" if char_prefix else suffix
             type_tag = f"  [{item.action.name}]"
             fps_str = f"  [{item.fps} fps]" if item.fps > 0 else ""
-            frames_str = f"  [f{item.start_frame}-{item.end_frame}]" if item.start_frame > 0 or item.end_frame > 0 else ""
+            frames_str = f"  [f{item.start_frame}-{item.end_frame}]" if item.start_frame > 0 or item.end_frame != 0 else ""
             # Warn if action bones don't match subject armature
             armature = props.subject
             warn_icon = "ACTION"
@@ -935,7 +954,13 @@ class SPRITE_OT_BakeAll(Operator):
 
         obj.animation_data.action = action
         frame_start = start_frame_override if start_frame_override > 0 else int(action.frame_range[0])
-        frame_end = end_frame_override if end_frame_override > 0 else int(action.frame_range[1])
+        action_end = int(action.frame_range[1])
+        if end_frame_override > 0:
+            frame_end = end_frame_override
+        elif end_frame_override < 0:
+            frame_end = max(frame_start, action_end + end_frame_override)
+        else:
+            frame_end = action_end
 
         anim_dir = os.path.join(tmp_dir, anim_name)
         os.makedirs(anim_dir, exist_ok=True)
@@ -1319,7 +1344,7 @@ class SPRITE_PT_Actions(_Base, Panel):
             box.prop(item, "fps", text="FPS (0 = global)")
             row = box.row(align=True)
             row.prop(item, "start_frame", text="Start (0 = auto)")
-            row.prop(item, "end_frame", text="End (0 = auto)")
+            row.prop(item, "end_frame", text="End (0=auto, -N=trim)")
 
         enabled = [i for i in props.actions if i.enabled and i.action]
         layout.separator()

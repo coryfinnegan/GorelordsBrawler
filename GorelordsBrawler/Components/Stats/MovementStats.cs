@@ -5,7 +5,7 @@ namespace GorelordsBrawler.Components.Stats
 	public class MovementStats : Component
 	{
 		[Inspectable] [Range(0, 500)]
-		public float MoveSpeed = 100f;
+		public float MoveSpeed = 400f;
 
 		[Inspectable] [Range(0, 2000)]
 		public float JumpSpeed = 250f;
@@ -24,5 +24,22 @@ namespace GorelordsBrawler.Components.Stats
 		// Grace period (seconds) after walking off an edge where jump is still allowed.
 		[Inspectable] [Range(0f, 0.3f)]
 		public float CoyoteTime = 0f;
+
+		// Acceleration/friction — controls how fast characters reach full speed and stop.
+		[Inspectable] [Range(0, 3000)]
+		public float GroundAcceleration = 800f;
+
+		[Inspectable] [Range(0, 3000)]
+		public float GroundFriction = 600f;
+
+		[Inspectable] [Range(0, 3000)]
+		public float AirAcceleration = 400f;
+
+		[Inspectable] [Range(0, 3000)]
+		public float AirFriction = 100f;
+
+		// Fast fall gravity multiplier — applied when player taps down while airborne and falling.
+		[Inspectable] [Range(1f, 5f)]
+		public float FastFallMultiplier = 1.8f;
 	}
 }

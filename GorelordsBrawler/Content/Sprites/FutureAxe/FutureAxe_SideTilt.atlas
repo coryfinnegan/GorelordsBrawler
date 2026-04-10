@@ -1,0 +1,292 @@
+FutureAxe_SideTilt_0000
+	0,0,256,256
+	0.5,1
+FutureAxe_SideTilt_0001
+	258,0,256,256
+	0.5,1
+FutureAxe_SideTilt_0002
+	516,0,256,256
+	0.5,1
+FutureAxe_SideTilt_0003
+	0,258,256,256
+	0.5,1
+FutureAxe_SideTilt_0004
+	258,258,256,256
+	0.5,1
+FutureAxe_SideTilt_0005
+	0,516,256,256
+	0.5,1
+FutureAxe_SideTilt_0006
+	258,516,256,256
+	0.5,1
+FutureAxe_SideTilt_0007
+	516,258,256,256
+	0.5,1
+FutureAxe_SideTilt_0008
+	516,516,256,256
+	0.5,1
+FutureAxe_SideTilt_0009
+	774,0,256,256
+	0.5,1
+FutureAxe_SideTilt_0010
+	774,258,256,256
+	0.5,1
+FutureAxe_SideTilt_0011
+	1032,0,256,256
+	0.5,1
+FutureAxe_SideTilt_0012
+	774,516,256,256
+	0.5,1
+FutureAxe_SideTilt_0013
+	1032,258,256,256
+	0.5,1
+FutureAxe_SideTilt_0014
+	1290,0,256,256
+	0.5,1
+FutureAxe_SideTilt_0015
+	1548,0,256,256
+	0.5,1
+FutureAxe_SideTilt_0016
+	1290,258,256,256
+	0.5,1
+FutureAxe_SideTilt_0017
+	1032,516,256,256
+	0.5,1
+FutureAxe_SideTilt_0018
+	1290,516,256,256
+	0.5,1
+FutureAxe_SideTilt_0019
+	1548,258,256,256
+	0.5,1
+FutureAxe_SideTilt_0020
+	1548,516,256,256
+	0.5,1
+FutureAxe_SideTilt_0021
+	0,774,256,256
+	0.5,1
+FutureAxe_SideTilt_0022
+	0,1032,256,256
+	0.5,1
+FutureAxe_SideTilt_0023
+	258,774,256,256
+	0.5,1
+FutureAxe_SideTilt_0024
+	258,1032,256,256
+	0.5,1
+FutureAxe_SideTilt_0025
+	0,1290,256,256
+	0.5,1
+FutureAxe_SideTilt_0026
+	516,774,256,256
+	0.5,1
+FutureAxe_SideTilt_0027
+	258,1290,256,256
+	0.5,1
+FutureAxe_SideTilt_0028
+	0,1548,256,256
+	0.5,1
+FutureAxe_SideTilt_0029
+	774,774,256,256
+	0.5,1
+FutureAxe_SideTilt_0030
+	516,1032,256,256
+	0.5,1
+FutureAxe_SideTilt_0031
+	516,1290,256,256
+	0.5,1
+FutureAxe_SideTilt_0032
+	1032,774,256,256
+	0.5,1
+FutureAxe_SideTilt_0033
+	258,1548,256,256
+	0.5,1
+FutureAxe_SideTilt_0034
+	774,1032,256,256
+	0.5,1
+FutureAxe_SideTilt_0035
+	516,1548,256,256
+	0.5,1
+FutureAxe_SideTilt_0036
+	1032,1032,256,256
+	0.5,1
+FutureAxe_SideTilt_0037
+	774,1290,256,256
+	0.5,1
+FutureAxe_SideTilt_0038
+	1290,774,256,256
+	0.5,1
+FutureAxe_SideTilt_0039
+	1032,1290,256,256
+	0.5,1
+FutureAxe_SideTilt_0040
+	774,1548,256,256
+	0.5,1
+FutureAxe_SideTilt_0041
+	1548,774,256,256
+	0.5,1
+FutureAxe_SideTilt_0042
+	1290,1032,256,256
+	0.5,1
+FutureAxe_SideTilt_0043
+	1548,1032,256,256
+	0.5,1
+FutureAxe_SideTilt_0044
+	1290,1290,256,256
+	0.5,1
+FutureAxe_SideTilt_0045
+	1032,1548,256,256
+	0.5,1
+FutureAxe_SideTilt_0046
+	1290,1548,256,256
+	0.5,1
+FutureAxe_SideTilt_0047
+	1548,1290,256,256
+	0.5,1
+FutureAxe_SideTilt_0048
+	1548,1548,256,256
+	0.5,1
+FutureAxe_SideTilt_0049
+	1806,0,256,256
+	0.5,1
+FutureAxe_SideTilt_0050
+	1806,258,256,256
+	0.5,1
+FutureAxe_SideTilt_0051
+	2064,0,256,256
+	0.5,1
+FutureAxe_SideTilt_0052
+	2064,258,256,256
+	0.5,1
+FutureAxe_SideTilt_0053
+	1806,516,256,256
+	0.5,1
+FutureAxe_SideTilt_0054
+	2322,0,256,256
+	0.5,1
+FutureAxe_SideTilt_0055
+	2322,258,256,256
+	0.5,1
+FutureAxe_SideTilt_0056
+	2064,516,256,256
+	0.5,1
+FutureAxe_SideTilt_0057
+	1806,774,256,256
+	0.5,1
+FutureAxe_SideTilt_0058
+	2580,0,256,256
+	0.5,1
+FutureAxe_SideTilt_0059
+	2838,0,256,256
+	0.5,1
+FutureAxe_SideTilt_0060
+	2580,258,256,256
+	0.5,1
+FutureAxe_SideTilt_0061
+	2322,516,256,256
+	0.5,1
+FutureAxe_SideTilt_0062
+	2064,774,256,256
+	0.5,1
+FutureAxe_SideTilt_0063
+	1806,1032,256,256
+	0.5,1
+FutureAxe_SideTilt_0064
+	2580,516,256,256
+	0.5,1
+FutureAxe_SideTilt_0065
+	2322,774,256,256
+	0.5,1
+FutureAxe_SideTilt_0066
+	2064,1032,256,256
+	0.5,1
+FutureAxe_SideTilt_0067
+	1806,1290,256,256
+	0.5,1
+FutureAxe_SideTilt_0068
+	3096,0,256,256
+	0.5,1
+FutureAxe_SideTilt_0069
+	2838,258,256,256
+	0.5,1
+FutureAxe_SideTilt_0070
+	1806,1548,256,256
+	0.5,1
+FutureAxe_SideTilt_0071
+	3354,0,256,256
+	0.5,1
+FutureAxe_SideTilt_0072
+	3096,258,256,256
+	0.5,1
+FutureAxe_SideTilt_0073
+	2838,516,256,256
+	0.5,1
+FutureAxe_SideTilt_0074
+	2322,1032,256,256
+	0.5,1
+FutureAxe_SideTilt_0075
+	2064,1290,256,256
+	0.5,1
+FutureAxe_SideTilt_0076
+	2580,774,256,256
+	0.5,1
+FutureAxe_SideTilt_0077
+	2322,1290,256,256
+	0.5,1
+FutureAxe_SideTilt_0078
+	2064,1548,256,256
+	0.5,1
+FutureAxe_SideTilt_0079
+	2838,774,256,256
+	0.5,1
+FutureAxe_SideTilt_0080
+	2580,1032,256,256
+	0.5,1
+FutureAxe_SideTilt_0081
+	3096,516,256,256
+	0.5,1
+FutureAxe_SideTilt_0082
+	3354,258,256,256
+	0.5,1
+FutureAxe_SideTilt_0083
+	3612,0,256,256
+	0.5,1
+FutureAxe_SideTilt_0084
+	3354,516,256,256
+	0.5,1
+FutureAxe_SideTilt_0085
+	3612,258,256,256
+	0.5,1
+FutureAxe_SideTilt_0086
+	2838,1032,256,256
+	0.5,1
+FutureAxe_SideTilt_0087
+	2580,1290,256,256
+	0.5,1
+FutureAxe_SideTilt_0088
+	3096,774,256,256
+	0.5,1
+FutureAxe_SideTilt_0089
+	2322,1548,256,256
+	0.5,1
+FutureAxe_SideTilt_0090
+	2838,1290,256,256
+	0.5,1
+FutureAxe_SideTilt_0091
+	2580,1548,256,256
+	0.5,1
+FutureAxe_SideTilt_0092
+	3354,774,256,256
+	0.5,1
+FutureAxe_SideTilt_0093
+	3096,1032,256,256
+	0.5,1
+FutureAxe_SideTilt_0094
+	3612,516,256,256
+	0.5,1
+FutureAxe_SideTilt_0095
+	3354,1032,256,256
+	0.5,1
+
+FutureAxe_SideTilt
+	8
+	0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95

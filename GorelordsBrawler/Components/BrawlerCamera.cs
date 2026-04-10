@@ -15,6 +15,9 @@ namespace GorelordsBrawler.Components
 		private readonly List<Entity> _targets = [];
 		private Camera _camera;
 		private float _shakeTrauma;
+		private bool _hasMapBounds;
+		private float _mapWidth;
+		private float _mapHeight;
 
 		public void AddShake(float intensity)
 		{
@@ -62,6 +65,16 @@ namespace GorelordsBrawler.Components
 			_targets.Add(target);
 		}
 
+		/// <summary>
+		/// Set map bounds so the camera doesn't scroll past edges.
+		/// </summary>
+		public void SetMapBounds(float width, float height)
+		{
+			_hasMapBounds = true;
+			_mapWidth = width;
+			_mapHeight = height;
+		}
+
 		public override void OnAddedToEntity()
 		{
 			_camera = Entity.Scene.Camera;
@@ -101,6 +114,16 @@ namespace GorelordsBrawler.Components
 			// Smoothly interpolate camera position and zoom
 			_camera.Position = Vector2.Lerp(_camera.Position, center, FollowLerp);
 			_camera.RawZoom = MathHelper.Lerp(_camera.RawZoom, targetZoom, FollowLerp);
+
+			// Clamp camera to map bounds so it doesn't scroll past edges
+			if (_hasMapBounds)
+			{
+				var halfViewW = (DesignWidth / _camera.RawZoom) * 0.5f;
+				var halfViewH = (DesignHeight / _camera.RawZoom) * 0.5f;
+				_camera.Position = new Vector2(
+					MathHelper.Clamp(_camera.Position.X, halfViewW, _mapWidth - halfViewW),
+					MathHelper.Clamp(_camera.Position.Y, halfViewH, _mapHeight - halfViewH));
+			}
 
 			// Apply trauma-based screen shake on top of the lerped position
 			if (_shakeTrauma > 0f)

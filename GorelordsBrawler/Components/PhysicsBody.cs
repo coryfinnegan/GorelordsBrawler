@@ -23,6 +23,12 @@ namespace GorelordsBrawler.Components
 		/// </summary>
 		public float TimeSinceGrounded;
 
+		/// <summary>
+		/// True when the player has activated fast fall (tap down while airborne and falling).
+		/// Multiplies gravity by FastFallMultiplier. Reset on landing.
+		/// </summary>
+		public bool FastFalling;
+
 		private Mover _mover;
 		private MovementStats _movement;
 
@@ -47,12 +53,23 @@ namespace GorelordsBrawler.Components
 				TimeSinceGrounded += dt;
 			}
 
+			// Reset fast fall on landing
+			if (Grounded)
+			{
+				FastFalling = false;
+			}
+
 			// Gravity with variable multipliers for game feel:
+			// - Fast falling: even higher gravity for aggressive aerial approaches
 			// - Falling: higher gravity for snappy descent
 			// - Rising with jump released: higher gravity for short hops
 			// - Rising with jump held: normal gravity for full jump arc
 			var gravity = _movement.Gravity;
-			if (Velocity.Y > 0)
+			if (FastFalling)
+			{
+				gravity *= _movement.FallMultiplier * _movement.FastFallMultiplier;
+			}
+			else if (Velocity.Y > 0)
 			{
 				gravity *= _movement.FallMultiplier;
 			}

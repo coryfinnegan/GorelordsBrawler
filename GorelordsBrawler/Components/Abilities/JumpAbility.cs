@@ -53,6 +53,13 @@ namespace GorelordsBrawler.Components.Abilities
 			{
 				_body.JumpHeld = false;
 			}
+
+			// Fast fall: tap down while airborne and falling (or at apex)
+			if (!_body.Grounded && !_body.FastFalling && _body.Velocity.Y >= 0
+				&& _input.MoveY != null && _input.MoveY.Value > 0)
+			{
+				_body.FastFalling = true;
+			}
 		}
 	}
 }

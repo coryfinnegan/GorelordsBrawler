@@ -18,6 +18,7 @@ namespace GorelordsBrawler.Data
 		public float HurtboxOffsetY = 0f;
 		public MovementStats Movement;
 		public MeleeStats Melee;
+		public AttackMoveSet Attacks;
 		public ProjectileStats Projectile;
 		public SpriteData Sprite;
 	}

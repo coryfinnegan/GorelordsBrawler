@@ -105,10 +105,18 @@ namespace GorelordsBrawler.Data
 			entity.AddComponent(new RespawnHandler(spawnPosition));
 
 			// Data-driven abilities — attach based on what the JSON provides
-			if (data.Melee != null)
+			if (data.Attacks != null)
 			{
+				// New moveset system — full directional attacks
+				entity.AddComponent(data.Attacks);
+				entity.AddComponent(new CombatController(input));
+			}
+			else if (data.Melee != null)
+			{
+				// Legacy migration — convert MeleeStats into an AttackMoveSet with just a Jab
 				entity.AddComponent(data.Melee);
-				entity.AddComponent(new MeleeAttack(input));
+				entity.AddComponent(AttackMoveSet.FromMeleeStats(data.Melee));
+				entity.AddComponent(new CombatController(input));
 			}
 
 			if (data.Projectile != null)

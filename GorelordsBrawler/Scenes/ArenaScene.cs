@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Nez;
+using Nez.Tiled;
 using GorelordsBrawler.Components;
 using GorelordsBrawler.Constants;
 using GorelordsBrawler.Input;
@@ -23,65 +25,68 @@ namespace GorelordsBrawler.Scenes
 			var playerManager = AddSceneComponent(new PlayerManager());
 			var setup = Core.GetGlobalManager<MatchSetupManager>();
 
+			// Load Tiled map
+			var tiledMap = Content.LoadTiledMap(GameConstants.Maps.Arena1);
+			var mapEntity = CreateEntity("tiled-map");
+			var renderer = mapEntity.AddComponent(
+				new TiledMapRenderer(tiledMap, GameConstants.Maps.CollisionLayerName));
+			renderer.SetLayersToRender("background", "platforms");
+			renderer.RenderLayer = GameConstants.Rendering.DefaultRenderLayer;
+			renderer.PhysicsLayer = PhysicsLayers.Platforms;
+
+			// Read spawn positions from map object layer (fallback to constants)
+			var spawnPositions = ReadSpawnPositions(tiledMap);
+
 			foreach (var selection in setup.Selections)
 			{
 				var input = InputProfileFactory.CreateFromDevice(selection.Device);
-				var spawn = GameConstants.Arena.SpawnPositions[selection.SlotIndex];
+				var spawn = selection.SlotIndex < spawnPositions.Length
+					? spawnPositions[selection.SlotIndex]
+					: spawnPositions[0];
 				playerManager.AddPlayer(selection.SlotIndex, input, selection.CharacterType, spawn);
 			}
 
-			CreatePlatforms();
-
 			var cameraEntity = CreateEntity(GameConstants.EntityNames.Camera);
 			var brawlerCam = cameraEntity.AddComponent(new BrawlerCamera());
+			brawlerCam.SetMapBounds(tiledMap.WorldWidth, tiledMap.WorldHeight);
 			foreach (var player in playerManager.GetActivePlayers())
+			{
 				brawlerCam.AddTarget(player);
+			}
 
 			var ruleset = new StockRuleset();
 			AddSceneComponent(new MatchManager(ruleset));
 			AddSceneComponent(new MatchHUD(ruleset));
 		}
 
-		private void CreatePlatforms()
+		private static Vector2[] ReadSpawnPositions(TmxMap map)
 		{
-			CreatePlatform(GameConstants.EntityNames.Ground,
-				GameConstants.Arena.GroundPosition,
-				GameConstants.Arena.GroundWidth,
-				GameConstants.Arena.GroundHeight,
-				GameConstants.Arena.GroundColor);
+			var spawnGroup = map.GetObjectGroup("spawns");
+			if (spawnGroup == null || spawnGroup.Objects.Count == 0)
+			{
+				return GameConstants.Arena.FallbackSpawnPositions;
+			}
 
-			CreatePlatform(GameConstants.EntityNames.PlatformMid,
-				GameConstants.Arena.PlatformMidPosition,
-				GameConstants.Arena.PlatformMidWidth,
-				GameConstants.Arena.PlatformMidHeight,
-				GameConstants.Arena.PlatformColor);
+			// Build a dictionary of index -> position from spawn objects
+			var spawns = new SortedDictionary<int, Vector2>();
+			foreach (var obj in spawnGroup.Objects)
+			{
+				int index = 0;
+				if (obj.Properties != null && obj.Properties.TryGetValue("index", out var indexStr))
+				{
+					int.TryParse(indexStr, out index);
+				}
+				spawns[index] = new Vector2(obj.X, obj.Y);
+			}
 
-			CreatePlatform(GameConstants.EntityNames.PlatformLeft,
-				GameConstants.Arena.PlatformLeftPosition,
-				GameConstants.Arena.PlatformLeftWidth,
-				GameConstants.Arena.PlatformLeftHeight,
-				GameConstants.Arena.PlatformColor);
+			var result = new Vector2[spawns.Count];
+			int i = 0;
+			foreach (var kvp in spawns)
+			{
+				result[i++] = kvp.Value;
+			}
 
-			CreatePlatform(GameConstants.EntityNames.PlatformRight,
-				GameConstants.Arena.PlatformRightPosition,
-				GameConstants.Arena.PlatformRightWidth,
-				GameConstants.Arena.PlatformRightHeight,
-				GameConstants.Arena.PlatformColor);
-		}
-
-		private Entity CreatePlatform(string name, Vector2 position, float width, float height, Color color)
-		{
-			var platform = CreateEntity(name);
-			platform.Transform.Position = position;
-
-			var renderer = platform.AddComponent(new PrototypeSpriteRenderer(width, height));
-			renderer.SetColor(color);
-
-			var collider = platform.AddComponent(new BoxCollider(width, height));
-			collider.PhysicsLayer = PhysicsLayers.Platforms;
-			collider.CollidesWithLayers = PhysicsLayers.Player;
-
-			return platform;
+			return result;
 		}
 	}
 }
