@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Nez;
+using GorelordsBrawler.Components.Hazards;
 using GorelordsBrawler.Constants;
 
 namespace GorelordsBrawler.Components
@@ -18,6 +19,7 @@ namespace GorelordsBrawler.Components
 		private bool _hasMapBounds;
 		private float _mapWidth;
 		private float _mapHeight;
+		private AcidSurface _acid;
 
 		public void AddShake(float intensity)
 		{
@@ -63,6 +65,16 @@ namespace GorelordsBrawler.Components
 		public void AddTarget(Entity target)
 		{
 			_targets.Add(target);
+		}
+
+		/// <summary>
+		/// When set, the camera is constrained so the acid surface is always visible
+		/// in the upper portion of the view — prevents the camera from showing only
+		/// the interior of the acid when players are submerged.
+		/// </summary>
+		public void SetAcidSurface(AcidSurface acid)
+		{
+			_acid = acid;
 		}
 
 		/// <summary>
@@ -123,6 +135,17 @@ namespace GorelordsBrawler.Components
 				_camera.Position = new Vector2(
 					MathHelper.Clamp(_camera.Position.X, halfViewW, _mapWidth - halfViewW),
 					MathHelper.Clamp(_camera.Position.Y, halfViewH, _mapHeight - halfViewH));
+			}
+
+			// Acid surface constraint: keep the rising surface in the upper 60% of the view
+			// so players always see where the acid is, even when submerged below it.
+			if (_acid != null && _acid.IsRising)
+			{
+				var halfViewH = (DesignHeight / _camera.RawZoom) * 0.5f;
+				// Minimum camera Y ensures acidLevel appears no lower than 60% down the view.
+				float minCamY = _acid.CurrentLevel - halfViewH * 0.8f;
+				if (_camera.Position.Y < minCamY)
+					_camera.Position = new Vector2(_camera.Position.X, minCamY);
 			}
 
 			// Apply trauma-based screen shake on top of the lerped position

@@ -30,13 +30,17 @@ namespace GorelordsBrawler.Constants
 				: string.Concat(_prefix, "_", suffix);
 
 		// ── Locomotion ────────────────────────────────────────────────────────
-		public string Idle         => B(GameConstants.Animations.Idle);
-		public string IdleFaceLeft => B(GameConstants.Animations.IdleFaceLeft);
-		public string Run          => B(GameConstants.Animations.Run);
-		public string RunFaceLeft  => B(GameConstants.Animations.RunFaceLeft);
-		public string Jump         => B(GameConstants.Animations.Jump);
-		public string JumpFaceLeft => B(GameConstants.Animations.JumpFaceLeft);
-		public string Select       => B(GameConstants.Animations.Select);
+		public string Idle              => B(GameConstants.Animations.Idle);
+		public string IdleFaceLeft      => B(GameConstants.Animations.IdleFaceLeft);
+		public string Run               => B(GameConstants.Animations.Run);
+		public string RunFaceLeft       => B(GameConstants.Animations.RunFaceLeft);
+		public string Jump              => B(GameConstants.Animations.Jump);
+		public string JumpFaceLeft      => B(GameConstants.Animations.JumpFaceLeft);
+		public string Select            => B(GameConstants.Animations.Select);
+		public string CrouchIdle        => B(GameConstants.Animations.CrouchIdle);
+		public string CrouchIdleFaceLeft => B(GameConstants.Animations.CrouchIdleFaceLeft);
+		public string CrouchRun         => B(GameConstants.Animations.CrouchRun);
+		public string CrouchRunFaceLeft => B(GameConstants.Animations.CrouchRunFaceLeft);
 
 		// ── Attack — LeftHand ─────────────────────────────────────────────────
 		public string AttackIdleLeftHand         => B(GameConstants.Animations.AttackIdleLeftHand);
@@ -53,6 +57,12 @@ namespace GorelordsBrawler.Constants
 		// ── Hurt ──────────────────────────────────────────────────────────────
 		public string Hurt         => B(GameConstants.Animations.Hurt);
 		public string HurtFaceLeft => B(GameConstants.Animations.HurtFaceLeft);
+
+		// ── Ledge ─────────────────────────────────────────────────────────────
+		public string LedgeIdle         => B(GameConstants.Animations.LedgeIdle);
+		public string LedgeIdleFaceLeft => B(GameConstants.Animations.LedgeIdleFaceLeft);
+		public string LedgeClimb         => B(GameConstants.Animations.LedgeClimb);
+		public string LedgeClimbFaceLeft => B(GameConstants.Animations.LedgeClimbFaceLeft);
 
 		// ── Attack — all variants (used for OnAnimationCompleted checks) ──────
 		/// <summary>All attack animation keys for this character.</summary>

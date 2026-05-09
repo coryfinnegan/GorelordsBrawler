@@ -4,13 +4,15 @@ namespace GorelordsBrawler.Components.Stats
 {
 	public class AttackMoveSet : Component
 	{
-		// ── Ground normals ────────────────────────────────────────────────
 		public AttackDefinition Jab;
-		public AttackDefinition SideTilt;
-		public AttackDefinition UpTilt;
-		public AttackDefinition DownTilt;
 
-		// ── Aerial (single aerial attack for all airborne states) ────────
+		// ── Crouch (ground, while holding down) ───────────────────────────
+		public AttackDefinition CrouchAttack;
+
+		// ── Heavy (ground, Special button) ────────────────────────────────
+		public AttackDefinition Heavy;
+
+		// ── Aerial ────────────────────────────────────────────────────────
 		public AttackDefinition NeutralAir;
 
 		/// <summary>

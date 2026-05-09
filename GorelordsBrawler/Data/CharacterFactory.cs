@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Text.Json;
 using Microsoft.Xna.Framework;
 using Nez;
@@ -59,6 +62,10 @@ namespace GorelordsBrawler.Data
 			entity.AddComponent(new PhysicsBody());
 			entity.AddComponent(new WalkAbility(input));
 			entity.AddComponent(new JumpAbility(input));
+			entity.AddComponent(new CrouchAbility(input));
+			if (AppSettings.LedgeHangEnabled)
+				entity.AddComponent(new LedgeHangAbility(input));
+			entity.AddComponent(new PlayerPushback());
 
 			// Hurtbox + Health (always present)
 			// Try to load per-frame hurtbox zone data from sidecars
@@ -67,13 +74,8 @@ namespace GorelordsBrawler.Data
 			if (data.Sprite != null)
 			{
 				hasZoneData |= TryLoadHurtboxSidecar(scene, data.Sprite.AtlasPath, hurtboxZoneData);
-				if (data.Sprite.ExtraAtlasPaths != null)
-				{
-					foreach (var extraPath in data.Sprite.ExtraAtlasPaths)
-					{
-						hasZoneData |= TryLoadHurtboxSidecar(scene, extraPath, hurtboxZoneData);
-					}
-				}
+				foreach (var extraPath in DiscoverAtlases(data.Sprite))
+					hasZoneData |= TryLoadHurtboxSidecar(scene, extraPath, hurtboxZoneData);
 			}
 
 			if (hasZoneData)
@@ -140,21 +142,18 @@ namespace GorelordsBrawler.Data
 				var socketData = new WeaponSocketData();
 				TryLoadSocketSidecar(entity.Scene, spriteData.AtlasPath, socketData);
 
-				// Load any additional atlases (e.g. attack/hurt animations packed separately)
-				if (spriteData.ExtraAtlasPaths != null)
+				// Load all other atlases in the same directory automatically
+				foreach (var extraPath in DiscoverAtlases(spriteData))
 				{
-					foreach (var extraPath in spriteData.ExtraAtlasPaths)
+					try
 					{
-						try
-						{
-							var extraAtlas = SpriteAtlasLoader.ParseSpriteAtlas(extraPath, premultiplyAlpha: true);
-							animator.AddAnimationsFromAtlas(extraAtlas);
-							TryLoadSocketSidecar(entity.Scene, extraPath, socketData);
-						}
-						catch (Exception e)
-						{
-							Debug.Warn("Failed to load extra atlas '{0}': {1}", extraPath, e.Message);
-						}
+						var extraAtlas = SpriteAtlasLoader.ParseSpriteAtlas(extraPath, premultiplyAlpha: true);
+						animator.AddAnimationsFromAtlas(extraAtlas);
+						TryLoadSocketSidecar(entity.Scene, extraPath, socketData);
+					}
+					catch (Exception e)
+					{
+						Debug.Warn("Failed to load extra atlas '{0}': {1}", extraPath, e.Message);
 					}
 				}
 
@@ -183,6 +182,34 @@ namespace GorelordsBrawler.Data
 				Debug.Warn("Failed to load sprite atlas '{0}', falling back to rectangle: {1}",
 					spriteData.AtlasPath, e.Message);
 				return false;
+			}
+		}
+
+		/// <summary>
+		/// Returns all .atlas files in the same directory as the primary atlas,
+		/// excluding the primary atlas itself and the select atlas.
+		/// This replaces the manual ExtraAtlasPaths list in character JSON files.
+		/// </summary>
+		private static IEnumerable<string> DiscoverAtlases(SpriteData spriteData)
+		{
+			var primaryPath = spriteData.AtlasPath;
+			var selectPath  = spriteData.SelectAtlasPath ?? string.Empty;
+
+			var lastSlash = primaryPath.LastIndexOf('/');
+			if (lastSlash < 0) yield break;
+			var contentDir = primaryPath.Substring(0, lastSlash);
+
+			var fullDir = Path.Combine(
+				AppDomain.CurrentDomain.BaseDirectory,
+				contentDir.Replace('/', Path.DirectorySeparatorChar));
+
+			if (!Directory.Exists(fullDir)) yield break;
+
+			foreach (var fullPath in Directory.GetFiles(fullDir, "*.atlas").OrderBy(p => p))
+			{
+				var rel = contentDir + "/" + Path.GetFileName(fullPath);
+				if (rel == primaryPath || rel == selectPath) continue;
+				yield return rel;
 			}
 		}
 

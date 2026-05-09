@@ -38,6 +38,7 @@ from statistics import mean
 
 import bpy
 import bpy_extras.object_utils
+import mathutils
 from bpy.props import (
     BoolProperty,
     CollectionProperty,
@@ -75,13 +76,14 @@ ANIM_TYPE_ITEMS = [
     ("AttackRunRightHand",    "Attack Run — Right Hand",      "Attack while running (right hand weapon)"),
     ("AttackJumpLeftHand",    "Attack Jump — Left Hand",      "Attack while jumping (left hand weapon)"),
     ("AttackJumpRightHand",   "Attack Jump — Right Hand",     "Attack while jumping (right hand weapon)"),
-    # ── Directional attacks (new combat system) ───────────────────────────
-    ("Jab",                   "Jab",                          "Quick neutral ground attack"),
-    ("SideTilt",              "Side Tilt",                    "Horizontal power attack"),
-    ("UpTilt",                "Up Tilt",                      "Upward launcher attack"),
-    ("DownTilt",              "Down Tilt",                    "Low crouch attack"),
-    # ── Aerial attack (single aerial for all airborne states) ────────────
+    # ── Attack (new combat system) ──────────────────────────────────────
+    ("Jab",                   "Jab",                          "Quick neutral attack"),
     ("NeutralAir",            "Neutral Air",                  "All-purpose aerial attack"),
+    ("Heavy",                 "Heavy",                        "Slow powerful ground attack"),
+    ("CrouchAttack",          "Crouch Attack",                "Attack while crouching"),
+    # ── Ledge ───────────────────────────────────────────────────────────
+    ("LedgeIdle",             "Ledge Idle",                   "Hanging on a platform ledge"),
+    ("LedgeClimb",            "Ledge Climb",                  "Climbing up from a ledge hang"),
 ]
 
 # Types that auto-generate a FaceLeft atlas variant.
@@ -91,8 +93,8 @@ FACE_LEFT_TYPES = {
     "AttackIdleLeftHand", "AttackIdleRightHand",
     "AttackRunLeftHand", "AttackRunRightHand",
     "AttackJumpLeftHand", "AttackJumpRightHand",
-    "Jab", "SideTilt", "UpTilt", "DownTilt",
-    "NeutralAir",
+    "Jab", "NeutralAir", "Heavy", "CrouchAttack",
+    "LedgeIdle", "LedgeClimb",
 }
 
 # Types that track a weapon socket (attack types).
@@ -100,8 +102,8 @@ SOCKET_TYPES = {
     "AttackIdleLeftHand", "AttackIdleRightHand",
     "AttackRunLeftHand", "AttackRunRightHand",
     "AttackJumpLeftHand", "AttackJumpRightHand",
-    "Jab", "SideTilt", "UpTilt", "DownTilt",
-    "NeutralAir",
+    "Jab", "NeutralAir", "Heavy", "CrouchAttack",
+    "LedgeIdle",
 }
 
 # Types that use the RIGHT hand socket. Everything else in SOCKET_TYPES uses left.
@@ -973,7 +975,7 @@ class SPRITE_OT_BakeAll(Operator):
             scene.frame_set(frame_num)
 
             if rotation_z_offset != 0.0:
-                obj.rotation_euler[2] += rotation_z_offset
+                self._apply_z_rotation(obj, rotation_z_offset)
                 context.view_layer.update()
 
             depsgraph = context.evaluated_depsgraph_get() if (
@@ -1024,11 +1026,36 @@ class SPRITE_OT_BakeAll(Operator):
             bpy.ops.render.render(write_still=True)
 
             if rotation_z_offset != 0.0:
-                obj.rotation_euler[2] -= rotation_z_offset
+                self._apply_z_rotation(obj, -rotation_z_offset)
 
         frame_count = frame_end - frame_start + 1
         print(f"  {anim_name}: {frame_count} frames → {anim_dir}")
         return socket_positions, hurtbox_zones, origin_x
+
+    # ── Rotation-mode-aware Z rotation ───────────────────────────────────────
+
+    @staticmethod
+    def _apply_z_rotation(obj, angle):
+        """Apply a Z-axis rotation to *obj*, respecting its rotation_mode.
+
+        The old code always modified ``rotation_euler[2]``, which is silently
+        ignored when the armature uses QUATERNION or AXIS_ANGLE mode (common
+        with Mixamo FBX imports).
+        """
+        mode = obj.rotation_mode
+        if mode == 'QUATERNION':
+            q = mathutils.Quaternion((0, 0, 1), angle)
+            obj.rotation_quaternion = q @ obj.rotation_quaternion
+        elif mode == 'AXIS_ANGLE':
+            # Convert current axis-angle → quaternion, rotate, convert back
+            aa = obj.rotation_axis_angle
+            cur_q = mathutils.Quaternion(aa[1:4], aa[0])
+            rot_q = mathutils.Quaternion((0, 0, 1), angle) @ cur_q
+            axis, angle_val = rot_q.to_axis_angle()
+            obj.rotation_axis_angle = (angle_val, *axis)
+        else:
+            # Any Euler order (XYZ, ZYX, etc.) — Z is always index 2
+            obj.rotation_euler[2] += angle
 
     # ── Zone sizing ───────────────────────────────────────────────────────────
 

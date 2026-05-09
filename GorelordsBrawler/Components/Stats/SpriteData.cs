@@ -11,10 +11,6 @@ namespace GorelordsBrawler.Components.Stats
 
 		public string AtlasPath;
 
-		// Optional additional atlas files whose animations are merged into the same
-		// SpriteAnimator (e.g. separate attack/hurt atlases with non-square frames).
-		public string[] ExtraAtlasPaths;
-
 		// Optional atlas used for the animated preview in the character select screen.
 		// Expected to contain an animation named "select". Falls back to a color rectangle
 		// if not set.
@@ -53,5 +49,19 @@ namespace GorelordsBrawler.Components.Stats
 		// Set to 0 to use the same SpriteScale as locomotion (correct when frame sizes match).
 		[Inspectable] [Range(0f, 2f)]
 		public float AttackSpriteScale = 0f;
+
+		// Multiplier applied to ledge climb animation playback speed.
+		// Climb animations tend to be long (100+ frames at 8fps) and play too slowly at 1x.
+		// Formula: (frameCount / atlasFps) / desiredDurationSeconds
+		// Example: 117 frames at 8fps to play in 1s -> speed = (117/8) / 1 = 14.6
+		[Inspectable] [Range(0.1f, 30f)]
+		public float LedgeClimbAnimSpeed = 1.0f;
+
+		// Pixel row from the TOP of the ledge animation frame where the character's
+		// hands grip the ledge. Used to align the grip point with the platform edge.
+		// 0 = grip at the very top of the frame (rare). Increase until the character's
+		// hands sit flush at the ledge in-game.
+		[Inspectable] [Range(0f, 256f)]
+		public float LedgeGripPixelFromTop = 0f;
 	}
 }

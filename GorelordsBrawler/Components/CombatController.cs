@@ -4,6 +4,7 @@ using Nez;
 using Nez.Sprites;
 using GorelordsBrawler.Components.Stats;
 using GorelordsBrawler.Constants;
+using GorelordsBrawler.Components.Abilities;
 using GorelordsBrawler.Input;
 
 namespace GorelordsBrawler.Components
@@ -28,9 +29,12 @@ namespace GorelordsBrawler.Components
 		private float _cooldownTimer;
 		private float _hitboxTimer;
 		private float _attackBufferTimer;
+		private float _heavyBufferTimer;
 		private Entity _hitboxEntity;
 		private bool _attackAnimActive;
 		private Vector2? _lastSocketOffset;
+		private LedgeHangAbility _ledge;
+		private CrouchAbility _crouch;
 
 		/// <summary>The currently active attack definition, or null when not attacking.</summary>
 		public AttackDefinition CurrentAttack { get; private set; }
@@ -39,7 +43,7 @@ namespace GorelordsBrawler.Components
 		public bool IsAttacking => _cooldownTimer > 0;
 
 		/// <summary>
-		/// The animation suffix of the current attack (e.g. "Jab", "UpTilt", "NeutralAir").
+		/// The animation suffix of the current attack (e.g. "Jab").
 		/// Null when using legacy LeftHand/RightHand animations or not attacking.
 		/// </summary>
 		public string CurrentAnimSuffix { get; private set; }
@@ -55,6 +59,19 @@ namespace GorelordsBrawler.Components
 		/// LocomotionAnimator checks this to decide which animation path to use.
 		/// </summary>
 		public bool IsLegacyAttack { get; private set; }
+
+		/// <summary>
+		/// Incremented each time a new attack triggers. LocomotionAnimator compares this
+		/// against its last-seen value to detect new attacks reliably, even when two
+		/// attacks trigger back-to-back in the same frame (avoiding missed rising edges).
+		/// </summary>
+		public int AttackSequence { get; private set; }
+
+		/// <summary>
+		/// True when the current attack was initiated while airborne.
+		/// WalkAbility uses this to kill momentum when an aerial attack lands.
+		/// </summary>
+		public bool IsAerialAttack { get; private set; }
 
 		public CombatController(InputProfile input)
 		{
@@ -87,11 +104,18 @@ namespace GorelordsBrawler.Components
 			CurrentAttack = null;
 			CurrentAnimSuffix = null;
 			IsLegacyAttack = false;
+			IsAerialAttack = false;
 			DestroyHitbox();
 		}
 
 		public void Update()
 		{
+			// Lazy resolve: components may be added after CombatController
+			if (_ledge == null)
+				_ledge = Entity.GetComponent<LedgeHangAbility>();
+			if (_crouch == null)
+				_crouch = Entity.GetComponent<CrouchAbility>();
+
 			_cooldownTimer -= Time.DeltaTime;
 
 			if (_hitboxEntity != null && !_attackAnimActive)
@@ -99,45 +123,55 @@ namespace GorelordsBrawler.Components
 				DestroyHitbox();
 			}
 
-			// Buffer attack input
+			// Suppress attacks while on a ledge (LedgeHangAbility handles attack-release)
+			if (_ledge != null && _ledge.IsOnLedge)
+			{
+				return;
+			}
+
+			// Buffer light attack (Attack button) and heavy attack (Special button)
 			if (_input.Attack.IsPressed)
-			{
 				_attackBufferTimer = GameConstants.Combat.AttackBufferWindow;
-			}
 			else
-			{
 				_attackBufferTimer -= Time.DeltaTime;
-			}
+
+			if (_input.Special.IsPressed)
+				_heavyBufferTimer = GameConstants.Combat.AttackBufferWindow;
+			else
+				_heavyBufferTimer -= Time.DeltaTime;
 
 			var isStunned = _hitstun != null && _hitstun.IsActive;
-			if (_attackBufferTimer > 0 && _cooldownTimer <= 0 && !isStunned)
+			if (_cooldownTimer <= 0 && !_attackAnimActive && !isStunned)
 			{
-				var attack = SelectAttack();
-				if (attack == null)
+				AttackDefinition attack = null;
+
+				// Heavy has priority; falls back to light
+				if (_heavyBufferTimer > 0)
+					attack = SelectHeavyAttack();
+
+				if (attack == null && _attackBufferTimer > 0)
+					attack = SelectAttack();
+
+				if (attack != null)
 				{
-					return;
-				}
+					_attackBufferTimer = 0;
+					_heavyBufferTimer = 0;
+					DestroyHitbox();
+					_lastSocketOffset = null;
+					_attackAnimActive = true;
+					AttackSequence++;
+					CurrentAttack = attack;
+					CurrentAnimSuffix = attack.AnimationSuffix;
+					IsLegacyAttack = string.IsNullOrEmpty(attack.AnimationSuffix);
 
-				_attackBufferTimer = 0;
-				DestroyHitbox();
-				_lastSocketOffset = null;
-				_attackAnimActive = true;
-				CurrentAttack = attack;
-				CurrentAnimSuffix = attack.AnimationSuffix;
-				IsLegacyAttack = string.IsNullOrEmpty(attack.AnimationSuffix);
+					if (IsLegacyAttack)
+						AttackIndex = (AttackIndex + 1) % 2;
 
-				// Toggle hand for legacy Jab animations
-				if (IsLegacyAttack)
-				{
-					AttackIndex = (AttackIndex + 1) % 2;
-				}
+					_cooldownTimer = attack.Cooldown;
 
-				_cooldownTimer = attack.Cooldown;
-
-				bool useFrameMode = attack.ActiveStartFrame >= 0 && _animator != null;
-				if (!useFrameMode)
-				{
-					SpawnHitbox(attack);
+					bool useFrameMode = attack.ActiveStartFrame >= 0 && _animator != null;
+					if (!useFrameMode)
+						SpawnHitbox(attack);
 				}
 			}
 
@@ -187,31 +221,33 @@ namespace GorelordsBrawler.Components
 
 		private AttackDefinition SelectAttack()
 		{
-			int dirX = _input.MoveX.Value;
-			int dirY = _input.MoveY.Value;
-
 			if (_body.Grounded)
 			{
-				// Ground attacks: prioritize vertical input over horizontal
-				if (dirY < 0) // up
-				{
-					return _moveSet.UpTilt ?? _moveSet.Jab;
-				}
-				if (dirY > 0) // down
-				{
-					return _moveSet.DownTilt ?? _moveSet.Jab;
-				}
-				if (dirX != 0) // side
-				{
-					return _moveSet.SideTilt ?? _moveSet.Jab;
-				}
-				return _moveSet.Jab; // neutral
+				IsAerialAttack = false;
+				if (_crouch != null && _crouch.IsCrouching && _moveSet.CrouchAttack != null)
+					return _moveSet.CrouchAttack;
+				return _moveSet.Jab;
 			}
 			else
 			{
-				// Single aerial attack — direction doesn't matter
+				// Aerial attack consumes the aerial action (shared with double jump)
+				if (!_body.HasAerialAction)
+				{
+					return null;
+				}
+
+				_body.HasAerialAction = false;
+				IsAerialAttack = true;
 				return _moveSet.NeutralAir ?? _moveSet.Jab;
 			}
+		}
+
+		private AttackDefinition SelectHeavyAttack()
+		{
+			if (_moveSet.Heavy == null || !_body.Grounded)
+				return null;
+			IsAerialAttack = false;
+			return _moveSet.Heavy;
 		}
 
 		private void SpawnHitbox(AttackDefinition attack)

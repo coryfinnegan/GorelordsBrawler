@@ -32,6 +32,7 @@ namespace GorelordsBrawler.Components
 
 		private void OnDeath()
 		{
+			Entity.GetComponent<Abilities.LedgeHangAbility>()?.ForceRelease();
 			SetCombatComponentsEnabled(false);
 
 			// Delegate to MatchManager if present; otherwise always respawn

@@ -44,8 +44,8 @@ namespace GorelordsBrawler.Components
 			_health.TakeDamage(attackData.Damage);
 
 			// Scale knockback by damage already taken — near-death characters go flying
-			var damageRatio = 1f - (float)_health.CurrentHp / _health.MaxHp;
-			var knockbackScale = 1f + damageRatio * GameConstants.Combat.KnockbackScaling;
+			var knockbackScale = GorelordsBrawler.Combat.CombatMath.KnockbackScale(
+				_health.CurrentHp, _health.MaxHp, GameConstants.Combat.KnockbackScaling);
 
 			var knockback = attackData.KnockbackAngle;
 			knockback.X *= attackData.FacingDirection;

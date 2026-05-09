@@ -41,13 +41,17 @@ namespace GorelordsBrawler.Constants
 		public static class Animations
 		{
 			// ── Locomotion ────────────────────────────────────────────────
-			public const string Idle         = nameof(Idle);
-			public const string IdleFaceLeft = nameof(IdleFaceLeft);
-			public const string Run          = nameof(Run);
-			public const string RunFaceLeft  = nameof(RunFaceLeft);
-			public const string Jump         = nameof(Jump);
-			public const string JumpFaceLeft = nameof(JumpFaceLeft);
-			public const string Select       = nameof(Select);
+			public const string Idle              = nameof(Idle);
+			public const string IdleFaceLeft      = nameof(IdleFaceLeft);
+			public const string Run               = nameof(Run);
+			public const string RunFaceLeft       = nameof(RunFaceLeft);
+			public const string Jump              = nameof(Jump);
+			public const string JumpFaceLeft      = nameof(JumpFaceLeft);
+			public const string Select            = nameof(Select);
+			public const string CrouchIdle        = nameof(CrouchIdle);
+			public const string CrouchIdleFaceLeft = nameof(CrouchIdleFaceLeft);
+			public const string CrouchRun         = nameof(CrouchRun);
+			public const string CrouchRunFaceLeft = nameof(CrouchRunFaceLeft);
 
 			// ── Attack — Legacy LeftHand (original) ───────────────────────
 			public const string AttackIdleLeftHand            = nameof(AttackIdleLeftHand);
@@ -62,18 +66,20 @@ namespace GorelordsBrawler.Constants
 			public const string AttackRunRightHandFaceLeft    = nameof(AttackRunRightHandFaceLeft);
 
 			// ── Attack — Dynamic suffixes (used by CombatController) ──────
-			// Ground normals
-			public const string Jab       = nameof(Jab);
-			public const string SideTilt  = nameof(SideTilt);
-			public const string UpTilt    = nameof(UpTilt);
-			public const string DownTilt  = nameof(DownTilt);
-
-			// Aerial (single aerial attack)
-			public const string NeutralAir = nameof(NeutralAir);
+			public const string Jab          = nameof(Jab);
+			public const string NeutralAir   = nameof(NeutralAir);
+			public const string Heavy        = nameof(Heavy);
+			public const string CrouchAttack = nameof(CrouchAttack);
 
 			// ── Hurt ──────────────────────────────────────────────────────
 			public const string Hurt         = nameof(Hurt);
 			public const string HurtFaceLeft = nameof(HurtFaceLeft);
+
+			// ── Ledge ─────────────────────────────────────────────────────
+			public const string LedgeIdle         = nameof(LedgeIdle);
+			public const string LedgeIdleFaceLeft = nameof(LedgeIdleFaceLeft);
+			public const string LedgeClimb         = nameof(LedgeClimb);
+			public const string LedgeClimbFaceLeft = nameof(LedgeClimbFaceLeft);
 		}
 
 		public static class SceneNames
@@ -249,6 +255,9 @@ namespace GorelordsBrawler.Constants
 			public const float FlashLifespan      = 0.08f;   // very brief
 			public const float FlashStartSize     = 6f;
 
+			// Soft push-back force between overlapping players (px/sec²)
+			public const float PlayerPushbackForce = 800f;
+
 			// Input buffer — forgiveness window for attack input before cooldown expires
 			public const float AttackBufferWindow = 0.10f;   // 100 ms
 		}
@@ -286,10 +295,71 @@ namespace GorelordsBrawler.Constants
 		{
 			public const string Arena1 = "Content/maps/arena1.tmx";
 			public const string CollisionLayerName = "collision";
+			public const string PlatformsLayerName = "platforms";
+		}
+
+		public static class Hazards
+		{
+			// Timing
+			public const float AcidStartDelay        = 30f;
+			public const float AcidRiseSpeed          = 0.0025f; // fraction of mapHeight/sec (~2px/sec at 800px)
+			public const float AcidDebugRiseMultiplier = 4f;     // DebugFastAcid multiplies speed by this
+			public const float AcidDamagePerSec       = 4f;
+			public const float PlatformSpawnInterval  = 20f;    // wait for ALL platforms to clear before next batch
+			public const float PlatformBurnDuration   = 18f;
+			public const float PlatformBurnDelay      = 10f;
+
+			// Spawn area — normalized [0, 1]
+			public const float PlatformSpawnMinX  = 0.1f;
+			public const float PlatformSpawnMaxX  = 0.9f;
+			public const float PlatformWidth      = 0.10f;
+			public const float PlatformHeight     = 32f;   // world units (1 tile)
+
+			// Acid start — normalized Y just below map bottom
+			public const float AcidStartNormalizedY = 1.02f;
+
+			// Platform fall-from-sky physics
+			public const float PlatformFallGravity  = 800f;   // px/s²
+			public const float PlatformFallMaxSpeed = 500f;   // terminal velocity cap, px/s
+			public const float PlatformFallSpawnY   = -48f;   // spawn above the map top edge
+			public const float PlatformImpactFactor = 0.5f;   // fraction of fall velocity transferred on platform-on-platform landing
+
+			// Platform float (spring) physics on acid surface
+			// ζ = Damping / (2 * sqrt(SpringK)) ≈ 0.5 → underdamped, 1-2 visible bounces
+			public const float SpringK          = 25f;
+			public const float Damping          = 5f;
+			public const float AngularSpringK   = 60f;
+			public const float AngularDamping   = 8f;
+			public const float LandingImpulse   = 120f;  // tilt kick when player lands on floating platform
+			public const float MaxTiltDegrees   = 15f;
+
+			// Platform positions — (centerX, centerY, width) all normalized [0, 1]
+			public static readonly (float cx, float cy, float w)[] Platforms = new[]
+			{
+				(0.500f, 0.500f, 0.250f),  // Top
+				(0.213f, 0.700f, 0.175f),  // MidLeft
+				(0.788f, 0.700f, 0.175f),  // MidRight
+				(0.313f, 0.820f, 0.125f),  // BotLeft
+				(0.688f, 0.820f, 0.125f),  // BotRight
+			};
+		}
+
+		public static class Ledge
+		{
+			public const float GrabRangeX = 24f;      // how close horizontally to edge
+			public const float GrabRangeY = 20f;      // how close vertically to platform top
+			public const float HangOffsetX = 6f;      // offset away from edge when hanging
+			public const float HangTimeout = 3f;      // seconds before auto-drop
+			public const float RegrabCooldown = 0.3f;  // seconds before can re-grab same edge
+			public const float HangGracePeriod = 0.15f; // seconds before directional climb input accepted
 		}
 
 		public static class Arena
 		{
+			// Inner liquid bounds: 1 wall tile (32 px) on each side of the 1280-wide map
+			public const float InnerLeft  = 32f;
+			public const float InnerRight = 1248f;
+
 			// Fallback spawn positions if map has no spawns object layer
 			public static readonly Vector2[] FallbackSpawnPositions = new[]
 			{

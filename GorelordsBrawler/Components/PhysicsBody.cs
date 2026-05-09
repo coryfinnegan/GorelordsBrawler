@@ -29,6 +29,18 @@ namespace GorelordsBrawler.Components
 		/// </summary>
 		public bool FastFalling;
 
+		/// <summary>
+		/// True while the character has an aerial action available (double jump OR aerial attack).
+		/// Set on initial jump, consumed by whichever comes first. Reset on landing.
+		/// </summary>
+		public bool HasAerialAction;
+
+		/// <summary>
+		/// When true, PhysicsBody skips all physics processing (gravity, movement, collision).
+		/// Used by LedgeHangAbility to freeze the character in place during ledge hang/climb.
+		/// </summary>
+		public bool SuspendPhysics;
+
 		private Mover _mover;
 		private MovementStats _movement;
 
@@ -41,6 +53,11 @@ namespace GorelordsBrawler.Components
 
 		public void Update()
 		{
+			if (SuspendPhysics)
+			{
+				return;
+			}
+
 			var dt = Math.Min(Time.DeltaTime, GameConstants.Physics.MaxDeltaTime);
 
 			// Track time since last grounded (for coyote time)
@@ -53,10 +70,11 @@ namespace GorelordsBrawler.Components
 				TimeSinceGrounded += dt;
 			}
 
-			// Reset fast fall on landing
+			// Reset aerial state on landing
 			if (Grounded)
 			{
 				FastFalling = false;
+				HasAerialAction = true;
 			}
 
 			// Gravity with variable multipliers for game feel:

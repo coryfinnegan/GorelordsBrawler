@@ -13,6 +13,7 @@ namespace GorelordsBrawler.Components.Abilities
 		private LocomotionAnimator _locomotion;
 		private Hitstun _hitstun;
 		private CombatController _combat;
+		private LedgeHangAbility _ledge;
 
 		public WalkAbility(InputProfile input)
 		{
@@ -29,10 +30,20 @@ namespace GorelordsBrawler.Components.Abilities
 
 		public void Update()
 		{
-			// Lazy resolve: CombatController may be added after WalkAbility
+			// Lazy resolve: components may be added after WalkAbility
 			if (_combat == null)
 			{
 				_combat = Entity.GetComponent<CombatController>();
+			}
+			if (_ledge == null)
+			{
+				_ledge = Entity.GetComponent<LedgeHangAbility>();
+			}
+
+			// Suppress movement while on a ledge
+			if (_ledge != null && _ledge.IsOnLedge)
+			{
+				return;
 			}
 
 			// During hitstun: preserve knockback velocity, apply ground friction to decelerate
@@ -45,11 +56,21 @@ namespace GorelordsBrawler.Components.Abilities
 				return;
 			}
 
-			// During attacks: aerials allow full air control, ground attacks use MovementMultiplier
-			if (_locomotion != null && _locomotion.IsPlayingAttack && _combat != null && _combat.CurrentAttack != null)
+			// During attacks: restrict horizontal movement
+			bool inAttackAnim = _locomotion != null && _locomotion.IsPlayingAttack && _combat != null && _combat.CurrentAttack != null;
+			bool inAttackCooldown = _combat != null && _combat.IsAttacking && !_body.Grounded;
+			if (inAttackAnim || inAttackCooldown)
 			{
-				if (_body.Grounded)
+				if (_body.Grounded && inAttackAnim)
 				{
+					// Aerial attacks that land on ground: kill momentum, don't allow sliding
+					if (_combat.IsAerialAttack)
+					{
+						_body.Velocity.X = Mathf.Approach(
+							_body.Velocity.X, 0f, _movement.GroundFriction * Time.DeltaTime);
+						return;
+					}
+
 					float mult = _combat.CurrentAttack.MovementMultiplier;
 					if (mult <= 0f)
 					{
@@ -71,7 +92,18 @@ namespace GorelordsBrawler.Components.Abilities
 					}
 					return;
 				}
-				// Airborne attacks: fall through to normal air movement (full control)
+				// Airborne during attack animation: allow air control if attack permits
+				if (inAttackAnim && _combat.CurrentAttack != null && _combat.CurrentAttack.MovementMultiplier >= 1.0f)
+				{
+					// Fall through to normal movement code below
+				}
+				else
+				{
+					// Airborne attacks: kill horizontal momentum through entire cooldown
+					_body.Velocity.X = Mathf.Approach(
+						_body.Velocity.X, 0f, _movement.AirFriction * 3f * Time.DeltaTime);
+					return;
+				}
 			}
 			else if (_locomotion != null && _locomotion.IsPlayingAttack)
 			{

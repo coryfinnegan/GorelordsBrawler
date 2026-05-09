@@ -7,4 +7,8 @@
   </Folder>
   <Project Path="GorelordsBrawler/GorelordsBrawler.csproj" />
   <Project Path="Nez/Nez.Portable/Nez.MG38.csproj" />
+  <Project Path="tests/WaveSimulation.Tests/WaveSimulation.Tests.csproj" />
+  <Project Path="tests/GorelordsBrawler.Unit.Tests/GorelordsBrawler.Unit.Tests.csproj" />
+  <Project Path="tests/GorelordsBrawler.Integration.Tests/GorelordsBrawler.Integration.Tests.csproj" />
+  <Project Path="tests/GorelordsBrawler.E2E.Tests/GorelordsBrawler.E2E.Tests.csproj" />
 </Solution>

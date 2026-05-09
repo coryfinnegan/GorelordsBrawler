@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework;
 using Nez;
 using Nez.Tiled;
 using GorelordsBrawler.Components;
+using GorelordsBrawler.Components.Hazards;
 using GorelordsBrawler.Constants;
 using GorelordsBrawler.Input;
 using GorelordsBrawler.Systems;
@@ -46,9 +47,26 @@ namespace GorelordsBrawler.Scenes
 				playerManager.AddPlayer(selection.SlotIndex, input, selection.CharacterType, spawn);
 			}
 
+			// Hazard system
+			int mw = tiledMap.WorldWidth, mh = tiledMap.WorldHeight;
+			var acidEntity = CreateEntity("acid");
+			var acidSurface = acidEntity.AddComponent(new AcidSurface(mw, mh, tiledMap));
+			var contactHazard = acidEntity.AddComponent(new ContactHazard());
+			contactHazard.DamagePerSecond = GameConstants.Hazards.AcidDamagePerSec;
+			contactHazard.GetBounds = acidSurface.GetDamageBounds;
+			acidEntity.AddComponent(new CascadeRenderer(acidSurface, mw, mh));
+			var spawner = AddSceneComponent(new PlatformSpawner(mw, mh));
+			AddSceneComponent(new AcidPhaseManager(acidSurface, spawner, mw, mh));
+
+#if DEBUG
+			if (AppSettings.DebugServer)
+				AddSceneComponent(new GorelordsBrawler.DevTools.DebugStateExporter(acidSurface, playerManager));
+#endif
+
 			var cameraEntity = CreateEntity(GameConstants.EntityNames.Camera);
 			var brawlerCam = cameraEntity.AddComponent(new BrawlerCamera());
 			brawlerCam.SetMapBounds(tiledMap.WorldWidth, tiledMap.WorldHeight);
+			brawlerCam.SetAcidSurface(acidSurface);
 			foreach (var player in playerManager.GetActivePlayers())
 			{
 				brawlerCam.AddTarget(player);

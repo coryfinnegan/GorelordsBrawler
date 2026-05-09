@@ -1,4 +1,6 @@
+using System.IO;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using Nez;
 using GorelordsBrawler.Systems;
 
@@ -32,15 +34,57 @@ namespace GorelordsBrawler
 
 			RegisterGlobalManager(new MatchSetupManager());
 
+			AppSettings.Load();
 			SettingsManager.Initialize();
 			SettingsManager.Apply();
 
 #if DEBUG
 			DevTools.DebugCommands.RegisterKeybindings();
+			if (AppSettings.DebugServer)
+				DevTools.GameDebugServer.Start();
 #endif
 
+#if DEBUG
+			if (AppSettings.DebugDirectArena)
+			{
+				var setup = GetGlobalManager<Systems.MatchSetupManager>();
+				setup.Selections.Add(new Systems.PlayerSelection
+					{ SlotIndex = 0, Device = Systems.InputDeviceType.KeyboardWASD,   CharacterType = Constants.GameConstants.Characters.FutureAxe });
+				setup.Selections.Add(new Systems.PlayerSelection
+					{ SlotIndex = 1, Device = Systems.InputDeviceType.KeyboardArrows, CharacterType = Constants.GameConstants.Characters.FutureAxe });
+				Scene = new Scenes.ArenaScene();
+				return;
+			}
+#endif
 			Scene = new Scenes.MainMenuScene();
 		}
+
+		protected override void Draw(GameTime gameTime)
+		{
+			base.Draw(gameTime);
+#if DEBUG
+			if (AppSettings.DebugServer && DevTools.GameDebugServer.HasPendingScreenshot)
+				CaptureScreenshot();
+#endif
+		}
+
+#if DEBUG
+		private void CaptureScreenshot()
+		{
+			var gd = GraphicsDevice;
+			int w = gd.PresentationParameters.BackBufferWidth;
+			int h = gd.PresentationParameters.BackBufferHeight;
+
+			var colors = new Color[w * h];
+			gd.GetBackBufferData(colors);
+
+			using var tex = new Texture2D(gd, w, h);
+			tex.SetData(colors);
+			using var ms = new MemoryStream();
+			tex.SaveAsPng(ms, w, h);
+			DevTools.GameDebugServer.CompleteScreenshot(ms.ToArray());
+		}
+#endif
 
 		public static void TransitionToScene<T>() where T : Scene, new()
 		{

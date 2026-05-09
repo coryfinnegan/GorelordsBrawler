@@ -1,6 +1,7 @@
 using System;
 using Nez;
 using Nez.Sprites;
+using GorelordsBrawler.Components.Abilities;
 using GorelordsBrawler.Components.Stats;
 using GorelordsBrawler.Constants;
 
@@ -13,6 +14,7 @@ namespace GorelordsBrawler.Components
 	///   attack  — plays to completion; supports both legacy (LeftHand/RightHand) and
 	///             new dynamic animations via CombatController.CurrentAnimSuffix
 	///   hurt    — during hitstun
+	///   ledge   — LedgeIdle (hanging) or LedgeClimb (pulling up)
 	///   jump    — airborne; speed driven by |Velocity.Y| / JumpSpeed
 	///   landing — brief Pause() on last jump frame after touching ground
 	///   run     — grounded and moving; speed driven by |Velocity.X| / MoveSpeed
@@ -29,6 +31,8 @@ namespace GorelordsBrawler.Components
 		private SpriteData _spriteData;
 		private CombatController _combat;
 		private Hitstun _hitstun;
+		private LedgeHangAbility _ledge;
+		private CrouchAbility _crouch;
 
 		private AnimationKeyBuilder _keys;
 
@@ -52,16 +56,32 @@ namespace GorelordsBrawler.Components
 		private bool _hasHurtAnim;
 		private bool _hasHurtFaceLeftAnim;
 
+		// Crouch existence flags
+		private bool _hasCrouchIdleAnim;
+		private bool _hasCrouchIdleFaceLeftAnim;
+		private bool _hasCrouchRunAnim;
+		private bool _hasCrouchRunFaceLeftAnim;
+
+		// Ledge existence flags
+		private bool _hasLedgeIdleAnim;
+		private bool _hasLedgeIdleFaceLeftAnim;
+		private bool _hasLedgeClimbAnim;
+		private bool _hasLedgeClimbFaceLeftAnim;
+
 		private bool _wasGrounded;
 		private float _landingTimer;
 
 		// Attack lifecycle
 		private float _defaultScale;
 		private bool _isPlayingAttack;
-		private bool _prevIsAttacking;
+		private int _lastAttackSequence;
 
 		// The animation name currently playing for an attack (used for completion detection)
 		private string _currentAttackAnim;
+
+		// Ledge climb lifecycle
+		private bool _isPlayingClimb;
+		private string _currentClimbAnim;
 
 		/// <summary>True while an attack animation is playing.</summary>
 		public bool IsPlayingAttack => _isPlayingAttack;
@@ -94,6 +114,16 @@ namespace GorelordsBrawler.Components
 			_hasHurtAnim         = _animator.Animations.ContainsKey(_keys.Hurt);
 			_hasHurtFaceLeftAnim = _animator.Animations.ContainsKey(_keys.HurtFaceLeft);
 
+			_hasCrouchIdleAnim         = _animator.Animations.ContainsKey(_keys.CrouchIdle);
+			_hasCrouchIdleFaceLeftAnim = _animator.Animations.ContainsKey(_keys.CrouchIdleFaceLeft);
+			_hasCrouchRunAnim          = _animator.Animations.ContainsKey(_keys.CrouchRun);
+			_hasCrouchRunFaceLeftAnim  = _animator.Animations.ContainsKey(_keys.CrouchRunFaceLeft);
+
+			_hasLedgeIdleAnim         = _animator.Animations.ContainsKey(_keys.LedgeIdle);
+			_hasLedgeIdleFaceLeftAnim = _animator.Animations.ContainsKey(_keys.LedgeIdleFaceLeft);
+			_hasLedgeClimbAnim         = _animator.Animations.ContainsKey(_keys.LedgeClimb);
+			_hasLedgeClimbFaceLeftAnim = _animator.Animations.ContainsKey(_keys.LedgeClimbFaceLeft);
+
 			UpdateOrder = GameConstants.Physics.LocomotionAnimatorUpdateOrder;
 			_wasGrounded = _body.Grounded;
 			_defaultScale = Entity.Transform.Scale.X;
@@ -115,87 +145,72 @@ namespace GorelordsBrawler.Components
 				Entity.Transform.SetScale(_defaultScale);
 				_combat?.OnAttackAnimationCompleted();
 			}
+
+			if (_isPlayingClimb && animationName == _currentClimbAnim)
+			{
+				_isPlayingClimb = false;
+				_currentClimbAnim = null;
+				_ledge?.OnClimbAnimationCompleted();
+			}
 		}
 
 		public void Update()
 		{
-			// Lazy resolve: CombatController may be added after LocomotionAnimator
+			// Lazy resolve: components may be added after LocomotionAnimator
 			if (_combat == null)
-			{
 				_combat = Entity.GetComponent<CombatController>();
+			if (_ledge == null)
+				_ledge = Entity.GetComponent<LedgeHangAbility>();
+			if (_crouch == null)
+				_crouch = Entity.GetComponent<CrouchAbility>();
+
+			// ── Attack (highest priority) ─────────────────────────────────────────
+			if (_combat != null && _combat.AttackSequence != _lastAttackSequence)
+			{
+				// New attack detected — interrupt any playing animation and start fresh
+				_lastAttackSequence = _combat.AttackSequence;
+				_isPlayingAttack = false;
+				_currentAttackAnim = null;
+				Entity.Transform.SetScale(_defaultScale);
+
+				_animator.FlipX = _body.FacingDirection < 0;
+
+				string animName = null;
+
+				if (_combat.IsLegacyAttack)
+				{
+					animName = SelectLegacyAttackAnim();
+				}
+				else if (_combat.CurrentAnimSuffix != null)
+				{
+					animName = SelectDynamicAttackAnim(_combat.CurrentAnimSuffix);
+				}
+
+				if (animName != null)
+				{
+					_animator.Speed = _spriteData != null && _spriteData.AttackAnimSpeed > 0
+						? _spriteData.AttackAnimSpeed
+						: 1.0f;
+
+					if (_spriteData != null && _spriteData.AttackSpriteScale > 0f)
+					{
+						Entity.Transform.SetScale(_spriteData.AttackSpriteScale);
+					}
+
+					_animator.Play(animName, SpriteAnimator.LoopMode.ClampForever);
+					_isPlayingAttack = true;
+					_currentAttackAnim = animName;
+				}
 			}
 
 			if (_isPlayingAttack)
 			{
 				_wasGrounded = _body.Grounded;
-				if (_combat != null)
-				{
-					var isAttackingNow = _combat.IsAttacking;
-					if (isAttackingNow && !_prevIsAttacking)
-					{
-						// New attack triggered mid-animation — break out and restart below
-						_isPlayingAttack = false;
-						_currentAttackAnim = null;
-						Entity.Transform.SetScale(_defaultScale);
-					}
-					else
-					{
-						_prevIsAttacking = isAttackingNow;
-						return;
-					}
-				}
-				else
-				{
-					return;
-				}
+				return;
 			}
 
 			// Flip sprite to face the correct direction
 			_animator.FlipX = _body.FacingDirection < 0;
-
-			// ── Attack (highest priority) ─────────────────────────────────────────
-			if (_combat != null)
-			{
-				var isAttacking = _combat.IsAttacking;
-				var attackJustStarted = isAttacking && !_prevIsAttacking;
-				_prevIsAttacking = isAttacking;
-
-				if (attackJustStarted)
-				{
-					string animName = null;
-
-					if (_combat.IsLegacyAttack)
-					{
-						animName = SelectLegacyAttackAnim();
-					}
-					else if (_combat.CurrentAnimSuffix != null)
-					{
-						animName = SelectDynamicAttackAnim(_combat.CurrentAnimSuffix);
-					}
-
-					if (animName != null)
-					{
-						_animator.Speed = _spriteData != null && _spriteData.AttackAnimSpeed > 0
-							? _spriteData.AttackAnimSpeed
-							: 1.0f;
-
-						if (_spriteData != null && _spriteData.AttackSpriteScale > 0f)
-						{
-							Entity.Transform.SetScale(_spriteData.AttackSpriteScale);
-						}
-
-						_animator.Play(animName, SpriteAnimator.LoopMode.ClampForever);
-						_isPlayingAttack = true;
-						_currentAttackAnim = animName;
-					}
-				}
-
-				if (_isPlayingAttack)
-				{
-					_wasGrounded = _body.Grounded;
-					return;
-				}
-			}
 
 			// ── Hurt (between attack and jump) ───────────────────────────────────
 			if (_hasHurtAnim && _hitstun != null && _hitstun.IsActive)
@@ -212,6 +227,127 @@ namespace GorelordsBrawler.Components
 				{
 					_animator.Speed = 1.0f;
 					_animator.Play(hurtAnim, SpriteAnimator.LoopMode.ClampForever);
+				}
+
+				_wasGrounded = _body.Grounded;
+				return;
+			}
+
+			// ── Ledge (between hurt and jump) ────────────────────────────────────
+			if (_ledge != null && _ledge.IsOnLedge)
+			{
+				if (_ledge.IsClimbing)
+				{
+					var useFaceLeft = _hasLedgeClimbFaceLeftAnim && _body.FacingDirection < 0;
+
+					// FaceLeft animations are separate sprites — keep FlipX=false every frame
+					// so the global FlipX=true set above doesn't mirror them each tick.
+					if (useFaceLeft)
+					{
+						_animator.FlipX = false;
+					}
+
+					if (!_isPlayingClimb)
+					{
+						string climbAnim;
+
+						if (_hasLedgeClimbAnim || _hasLedgeClimbFaceLeftAnim)
+						{
+							climbAnim = useFaceLeft ? _keys.LedgeClimbFaceLeft : _keys.LedgeClimb;
+						}
+						else
+						{
+							// Fallback: no climb animation — complete immediately
+							_ledge.OnClimbAnimationCompleted();
+							_wasGrounded = _body.Grounded;
+							return;
+						}
+
+						_animator.Speed = _spriteData != null && _spriteData.LedgeClimbAnimSpeed > 0f
+							? _spriteData.LedgeClimbAnimSpeed
+							: 1.0f;
+						_animator.Play(climbAnim, SpriteAnimator.LoopMode.ClampForever);
+						_isPlayingClimb = true;
+						_currentClimbAnim = climbAnim;
+					}
+				}
+				else
+				{
+					// Hanging — play LedgeIdle or fallback to frozen jump frame
+					_isPlayingClimb = false;
+					_currentClimbAnim = null;
+
+					var useFaceLeft = _hasLedgeIdleFaceLeftAnim && _body.FacingDirection < 0;
+
+					if (_hasLedgeIdleAnim || _hasLedgeIdleFaceLeftAnim)
+					{
+						var ledgeAnim = useFaceLeft ? _keys.LedgeIdleFaceLeft : _keys.LedgeIdle;
+						if (useFaceLeft)
+						{
+							_animator.FlipX = false;
+						}
+
+						if (!_animator.IsAnimationActive(ledgeAnim))
+						{
+							_animator.Speed = 1.0f;
+							_animator.Play(ledgeAnim, SpriteAnimator.LoopMode.ClampForever);
+						}
+					}
+					else if (_hasJumpAnim)
+					{
+						// Fallback: frozen jump frame as visual hang
+						var useJumpFaceLeft = _hasJumpFaceLeftAnim && _body.FacingDirection < 0;
+						var jumpAnim = useJumpFaceLeft ? _keys.JumpFaceLeft : _keys.Jump;
+						if (useJumpFaceLeft)
+						{
+							_animator.FlipX = false;
+						}
+
+						if (!_animator.IsAnimationActive(jumpAnim))
+						{
+							_animator.Play(jumpAnim, SpriteAnimator.LoopMode.ClampForever);
+						}
+						_animator.Speed = 0f;
+						_animator.Pause();
+					}
+				}
+
+				_wasGrounded = _body.Grounded;
+				return;
+			}
+
+			// Clear climb state when not on ledge
+			if (_isPlayingClimb)
+			{
+				_isPlayingClimb = false;
+				_currentClimbAnim = null;
+			}
+
+			// ── Crouch ────────────────────────────────────────────────────────────
+			if (_crouch != null && _crouch.IsCrouching && (_hasCrouchIdleAnim || _hasCrouchIdleFaceLeftAnim || _hasCrouchRunAnim || _hasCrouchRunFaceLeftAnim))
+			{
+				var isMoving = System.Math.Abs(_body.Velocity.X) > 0.1f;
+				var facingLeft = _body.FacingDirection < 0;
+
+				if (isMoving && (_hasCrouchRunAnim || _hasCrouchRunFaceLeftAnim))
+				{
+					var useFaceLeft = _hasCrouchRunFaceLeftAnim && facingLeft;
+					var anim = useFaceLeft ? _keys.CrouchRunFaceLeft : _keys.CrouchRun;
+					if (useFaceLeft) _animator.FlipX = false;
+
+					var normalizedSpeed = System.Math.Max(System.Math.Abs(_body.Velocity.X) / _movement.MoveSpeed, 0.3f);
+					_animator.Speed = normalizedSpeed * (_spriteData != null ? _spriteData.RunAnimSpeed : 1.0f);
+
+					PlayLooped(anim);
+				}
+				else
+				{
+					var useFaceLeft = _hasCrouchIdleFaceLeftAnim && facingLeft;
+					var anim = useFaceLeft ? _keys.CrouchIdleFaceLeft : _keys.CrouchIdle;
+					if (useFaceLeft) _animator.FlipX = false;
+
+					_animator.Speed = 1.0f;
+					PlayLooped(anim);
 				}
 
 				_wasGrounded = _body.Grounded;
@@ -273,17 +409,11 @@ namespace GorelordsBrawler.Components
 					if (useRunFaceLeft)
 					{
 						_animator.FlipX = false;
-						if (!_animator.IsAnimationActive(_keys.RunFaceLeft))
-						{
-							_animator.Play(_keys.RunFaceLeft);
-						}
+						PlayLooped(_keys.RunFaceLeft);
 					}
 					else
 					{
-						if (!_animator.IsAnimationActive(_keys.Run))
-						{
-							_animator.Play(_keys.Run);
-						}
+						PlayLooped(_keys.Run);
 					}
 				}
 				else
@@ -293,19 +423,36 @@ namespace GorelordsBrawler.Components
 					if (useIdleFaceLeft)
 					{
 						_animator.FlipX = false;
-						if (!_animator.IsAnimationActive(_keys.IdleFaceLeft))
-						{
-							_animator.Play(_keys.IdleFaceLeft);
-						}
+						PlayLooped(_keys.IdleFaceLeft);
 					}
 					else
 					{
-						if (!_animator.IsAnimationActive(_keys.Idle))
-						{
-							_animator.Play(_keys.Idle);
-						}
+						PlayLooped(_keys.Idle);
 					}
 				}
+			}
+		}
+
+		/// <summary>
+		/// Plays a looping animation while preserving the normalized frame position of
+		/// the outgoing animation. Switching from Run to CrouchRun (or any locomotion
+		/// pair) picks up at the same point in the cycle rather than snapping to frame 0.
+		/// </summary>
+		private void PlayLooped(string animName)
+		{
+			if (_animator.IsAnimationActive(animName))
+				return;
+
+			float progress = _animator.FrameCount > 0
+				? (float)_animator.CurrentFrame / _animator.FrameCount
+				: 0f;
+
+			_animator.Play(animName);
+
+			if (progress > 0f && _animator.FrameCount > 1)
+			{
+				int frame = (int)(progress * _animator.FrameCount);
+				_animator.SetFrame(Math.Min(frame, _animator.FrameCount - 1));
 			}
 		}
 

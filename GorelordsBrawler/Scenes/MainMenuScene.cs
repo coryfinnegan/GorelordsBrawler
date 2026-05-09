@@ -1,8 +1,10 @@
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Input;
 using Nez;
 using Nez.BitmapFonts;
 using Nez.UI;
 using GorelordsBrawler.Constants;
+using GorelordsBrawler.Systems;
 
 namespace GorelordsBrawler.Scenes
 {
@@ -39,6 +41,30 @@ namespace GorelordsBrawler.Scenes
 			var settingsButton = new TextButton(GameConstants.UI.SettingsButtonText, buttonStyle);
 			settingsButton.OnClicked += x => GorelordsBrawlerGame.TransitionToScene<SettingsScene>();
 			table.Add(settingsButton);
+		}
+
+		public override void Update()
+		{
+			base.Update();
+
+			if (Nez.Input.IsKeyPressed(Keys.F4))
+			{
+				var setup = Core.GetGlobalManager<MatchSetupManager>();
+				setup.Clear();
+				setup.Selections.Add(new PlayerSelection
+				{
+					SlotIndex = 0,
+					Device = InputDeviceType.KeyboardWASD,
+					CharacterType = GameConstants.Characters.FutureAxe,
+				});
+				setup.Selections.Add(new PlayerSelection
+				{
+					SlotIndex = 1,
+					Device = InputDeviceType.KeyboardArrows,
+					CharacterType = GameConstants.Characters.FutureAxe,
+				});
+				GorelordsBrawlerGame.TransitionToScene<ArenaScene>();
+			}
 		}
 	}
 }

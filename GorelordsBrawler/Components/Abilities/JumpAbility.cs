@@ -10,6 +10,9 @@ namespace GorelordsBrawler.Components.Abilities
 		private PhysicsBody _body;
 		private MovementStats _movement;
 		private Hitstun _hitstun;
+		private LocomotionAnimator _locomotion;
+		private CombatController _combat;
+		private LedgeHangAbility _ledge;
 
 		public JumpAbility(InputProfile input)
 		{
@@ -21,24 +24,58 @@ namespace GorelordsBrawler.Components.Abilities
 			_body = Entity.GetComponent<PhysicsBody>();
 			_movement = Entity.GetComponent<MovementStats>();
 			_hitstun = Entity.GetComponent<Hitstun>();
+			_locomotion = Entity.GetComponent<LocomotionAnimator>();
 		}
 
 		public void Update()
 		{
+			// Lazy resolve: components may be added after JumpAbility
+			if (_combat == null)
+			{
+				_combat = Entity.GetComponent<CombatController>();
+			}
+			if (_ledge == null)
+			{
+				_ledge = Entity.GetComponent<LedgeHangAbility>();
+			}
+
+			// Suppress jumping while on a ledge (LedgeHangAbility handles jump-release)
+			if (_ledge != null && _ledge.IsOnLedge)
+			{
+				return;
+			}
+
 			if (_hitstun != null && _hitstun.IsActive)
 			{
 				return;
 			}
 
-			// Can jump if grounded OR within coyote time window
-			var canJump = _body.Grounded || _body.TimeSinceGrounded <= _movement.CoyoteTime;
+			// Block jumping during ground attacks (aerials are fine — already airborne)
+			if (_locomotion != null && _locomotion.IsPlayingAttack
+				&& _body.Grounded && _combat != null && _combat.CurrentAttack != null)
+			{
+				return;
+			}
 
-			if (canJump && _input.Jump.IsPressed)
+			// Can ground-jump if grounded OR within coyote time window
+			var canGroundJump = _body.Grounded || _body.TimeSinceGrounded <= _movement.CoyoteTime;
+
+			if (canGroundJump && _input.Jump.IsPressed)
 			{
 				_body.Velocity.Y = -_movement.JumpSpeed;
 				_body.Grounded = false;
 				_body.TimeSinceGrounded = _movement.CoyoteTime + 1f; // exhaust coyote time
 				_body.JumpHeld = true;
+				_body.HasAerialAction = true;
+				_input.Jump.ConsumeBuffer();
+			}
+			else if (!canGroundJump && _input.Jump.IsPressed && _body.HasAerialAction)
+			{
+				// Double jump — consumes the aerial action
+				_body.HasAerialAction = false;
+				_body.Velocity.Y = -_movement.JumpSpeed;
+				_body.JumpHeld = true;
+				_body.FastFalling = false;
 				_input.Jump.ConsumeBuffer();
 			}
 

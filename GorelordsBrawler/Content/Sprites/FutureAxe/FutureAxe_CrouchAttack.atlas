@@ -1,0 +1,106 @@
+FutureAxe_CrouchAttack_0000
+	0,0,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0001
+	258,0,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0002
+	516,0,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0003
+	0,258,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0004
+	258,258,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0005
+	0,516,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0006
+	258,516,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0007
+	516,258,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0008
+	516,516,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0009
+	774,0,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0010
+	774,258,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0011
+	1032,0,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0012
+	774,516,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0013
+	1032,258,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0014
+	1290,0,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0015
+	1290,258,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0016
+	1032,516,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0017
+	1290,516,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0018
+	0,774,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0019
+	258,774,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0020
+	0,1032,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0021
+	516,774,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0022
+	258,1032,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0023
+	0,1290,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0024
+	258,1290,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0025
+	774,774,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0026
+	516,1032,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0027
+	1032,774,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0028
+	774,1032,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0029
+	516,1290,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0030
+	1032,1032,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0031
+	774,1290,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0032
+	1290,774,256,256
+	0.5,1
+FutureAxe_CrouchAttack_0033
+	1290,1032,256,256
+	0.5,1
+
+FutureAxe_CrouchAttack
+	8
+	0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33
