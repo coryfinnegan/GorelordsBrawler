@@ -54,7 +54,6 @@ namespace GorelordsBrawler.Scenes
 			var contactHazard = acidEntity.AddComponent(new ContactHazard());
 			contactHazard.DamagePerSecond = GameConstants.Hazards.AcidDamagePerSec;
 			contactHazard.GetBounds = acidSurface.GetDamageBounds;
-			acidEntity.AddComponent(new CascadeRenderer(acidSurface, mw, mh));
 			var spawner = AddSceneComponent(new PlatformSpawner(mw, mh));
 			AddSceneComponent(new AcidPhaseManager(acidSurface, spawner, mw, mh));
 

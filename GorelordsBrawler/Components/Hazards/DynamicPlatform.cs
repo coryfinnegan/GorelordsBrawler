@@ -214,8 +214,8 @@ namespace GorelordsBrawler.Components.Hazards
 			else
 			{
 				equilibriumY = _acid.GetSurfaceLevelInRange(
-					pos.X - Width * 0.5f - AcidSurface.CellSize,
-					pos.X + Width * 0.5f + AcidSurface.CellSize) - Height * 0.5f;
+					pos.X - Width * 0.5f - Fluid.FluidConfig.SurfacePadding,
+					pos.X + Width * 0.5f + Fluid.FluidConfig.SurfacePadding) - Height * 0.5f;
 			}
 
 			float displacement = pos.Y - equilibriumY;
