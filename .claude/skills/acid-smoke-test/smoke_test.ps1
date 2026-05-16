@@ -103,17 +103,53 @@ if ($NoRecord) {
     Write-Host '[smoke] ffmpeg not on PATH — recording will be skipped. (winget install Gyan.FFmpeg)' -ForegroundColor Yellow
 }
 
-# Win32 GetWindowRect — used to clip the recording to the game window only.
+# Win32 surface used to clip the recording to the game window. SetForegroundWindow +
+# ShowWindow are essential — gdigrab captures whatever is at the desktop coords
+# (including overlapping windows like Claude Code or a terminal), so we MUST bring
+# the game to the foreground first or the video shows the wrong app entirely.
 if ($canRecord) {
     if (-not ('Win32GetRect' -as [type])) {
         Add-Type @"
 using System;
 using System.Runtime.InteropServices;
 public class Win32GetRect {
-    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+    public const int SW_RESTORE = 9;
+    public const int SW_SHOW    = 5;
+
     [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
+
+    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
+    // AttachThreadInput trick lets us SetForegroundWindow from a background thread
+    // (PowerShell often is, especially when invoked non-interactively from a script).
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+    [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+    [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
 }
 "@
+    }
+}
+
+function Bring-WindowToFront([IntPtr] $hWnd) {
+    # Restore if minimized, then use the AttachThreadInput trick to reliably steal
+    # foreground from a script context.
+    $null = [Win32GetRect]::ShowWindow($hWnd, [Win32GetRect]::SW_RESTORE)
+    $null = [Win32GetRect]::BringWindowToTop($hWnd)
+
+    $fg = [Win32GetRect]::GetForegroundWindow()
+    $tidCurrent = [Win32GetRect]::GetCurrentThreadId()
+    $procId = [uint32]0
+    $tidFg = [Win32GetRect]::GetWindowThreadProcessId($fg, [ref] $procId)
+
+    [void][Win32GetRect]::AttachThreadInput($tidCurrent, $tidFg, $true)
+    try {
+        $null = [Win32GetRect]::SetForegroundWindow($hWnd)
+        $null = [Win32GetRect]::BringWindowToTop($hWnd)
+    } finally {
+        [void][Win32GetRect]::AttachThreadInput($tidCurrent, $tidFg, $false)
     }
 }
 
@@ -212,6 +248,12 @@ try {
             Write-Warning '[smoke] Could not resolve game window handle after 5 s — recording disabled.'
             $canRecord = $false
         } else {
+            # CRITICAL: bring the game to the foreground before reading its rect
+            # AND before starting ffmpeg. gdigrab captures the desktop pixels at
+            # those coords, so any overlapping window (Claude Code, the terminal
+            # running this script) would end up in the video instead of the game.
+            Bring-WindowToFront $hWnd
+            Start-Sleep -Milliseconds 400  # let the WM finish raising the window
             $rect = New-Object Win32GetRect+RECT
             $null = [Win32GetRect]::GetWindowRect($hWnd, [ref]$rect)
             $w = $rect.Right  - $rect.Left
