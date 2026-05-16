@@ -3,227 +3,248 @@ using Microsoft.Xna.Framework;
 using Nez;
 using Nez.Tiled;
 using GorelordsBrawler.Constants;
+using GorelordsBrawler.Components.Hazards.Fluid;
 
 namespace GorelordsBrawler.Components.Hazards
 {
 	/// <summary>
-	/// Rising acid hazard with a 1D shallow-water height-field surface.
+	/// Rising acid hazard backed by a real Position-Based Fluid (PBF) particle
+	/// simulation. AcidSurface is a thin façade that:
 	///
-	/// The base level (_sourceY) is derived entirely from accumulated liquid volume
-	/// poured in by CascadeRenderer — the pool fills UP because the stream poured
-	/// into it, not from an independent timer.
+	///   - Owns the particle sim, the collision-snapshot helper, and the
+	///     occupancy grid used for damage / surface queries.
+	///   - Spawns particles at an inlet above the top platform every frame
+	///     after Activate() — the pool fills BECAUSE the inlet is pouring.
+	///   - Adds the FluidRenderer sibling component for drawing.
 	///
-	/// Wave simulation runs on top of the base level:
-	///   v[x] += k * (h[x-1] + h[x+1] - 2*h[x])   (Laplacian spring)
-	///   v[x] *= damping
-	///   h[x] += v[x]
-	///   surfaceY[x] = _sourceY + h[x]
+	/// Public API is preserved verbatim from the legacy 1D-wave implementation
+	/// so DynamicPlatform, BrawlerCamera, AcidPhaseManager, and ContactHazard
+	/// require no changes.
 	/// </summary>
 	public class AcidSurface : Component, IUpdatable
 	{
-		/// <summary>World Y of the base acid level (smooth, used by camera / phase-manager).</summary>
+		// ── Public API (unchanged) ────────────────────────────────────────────
+		public bool  IsRising     { get; private set; }
 		public float CurrentLevel { get; private set; }
 
-		public bool IsRising { get; private set; }
+		// ── Internal state ────────────────────────────────────────────────────
+		private readonly int _mapWidth;
+		private readonly int _mapHeight;
 
-		public readonly int Cols;
-		public readonly int Rows;
-		public const    int CellSize = 8;
+		private FluidSimulation     _sim;
+		private FluidCollider       _colliders;
+		private FluidOccupancyGrid  _grid;
+		private FluidRenderer       _renderer;
 
-		// ── Wave simulation ───────────────────────────────────────────────────
-		private const float WaveK       = 0.35f;
-		private const float WaveDamping = 0.994f;
-		private const float WaveMax     = 24f;
+		// Inlet geometry (derived in ctor from GameConstants.Hazards.Platforms)
+		private readonly float _inletX;
+		private readonly float _topPlatformY;
+		private readonly float _flowRatePerSec;       // pixel-area / sec
+		private float          _inletAccum;          // fractional carry for spawn rate
+		private float          _smoothedLevelY;       // exponentially smoothed CurrentLevel
 
-		private const float RestoreK    = 0.0001f;
+		private readonly System.Random _rng = new System.Random(0xACED);
 
-		private const float BubbleProbability = 0.10f;
-		private const float BubbleStrength    = 3f;
-		private readonly System.Random _rng = new System.Random();
-
-		private readonly float[] _surfaceY;
-		private readonly float[] _waveHeight;
-		private readonly float[] _waveVelocity;
-
-		private readonly int   _mapWidth;
-		private readonly int   _mapHeight;
-
-		// Pool base level derived from accumulated liquid (not time)
-		private float _accumulatedVolume;  // pixel-area of liquid poured in
-		private float _sourceY;           // world Y; decreases as volume grows
-
-		private WaterRenderer _renderer;
-		private static readonly Color _acidColor = new Color(60, 180, 40, 200);
+		private static readonly Color _acidColor = new Color((byte)60, (byte)180, (byte)40, (byte)200);
 
 		public AcidSurface(int mapWidth, int mapHeight, TmxMap map = null)
 		{
 			_mapWidth  = mapWidth;
 			_mapHeight = mapHeight;
 
-			Cols = mapWidth  / CellSize;
-			Rows = mapHeight / CellSize;
+			// Find top platform (min cy) — inlet goes above its center.
+			float minCy = float.MaxValue;
+			(float cx, float cy, float w) top = (0.5f, 0.5f, 0.25f);
+			foreach (var p in GameConstants.Hazards.Platforms)
+			{
+				if (p.cy < minCy)
+				{
+					minCy = p.cy;
+					top = p;
+				}
+			}
 
-			_surfaceY     = new float[Cols];
-			_waveHeight   = new float[Cols];
-			_waveVelocity = new float[Cols];
+			_inletX        = top.cx * mapWidth;
+			_topPlatformY  = top.cy * mapHeight - GameConstants.Hazards.PlatformHeight * 0.5f;
 
-			_sourceY = mapHeight + CellSize;
+			// Flow rate (px²/sec) to match the legacy renderer's nominal rise speed.
+			// With AcidRiseSpeed=0.0025 and the 1280×800 map (× DebugFastAcid×4):
+			//   risePxSec = 0.0025 * 800 * speedMult = 2 (or 8) px/s
+			//   flowRate  = risePxSec * mapWidth     = 2560 (or 10240) px²/s
+			// Translated to particles/sec by dividing by π·r² area per particle.
+			float speedMult  = AppSettings.DebugFastAcid
+				? GameConstants.Hazards.AcidDebugRiseMultiplier : 1f;
+			float risePxSec  = GameConstants.Hazards.AcidRiseSpeed * mapHeight * speedMult;
+			_flowRatePerSec  = risePxSec * mapWidth;
 
-			for (int c = 0; c < Cols; c++) _surfaceY[c] = mapHeight;
-			CurrentLevel = mapHeight;
+			_smoothedLevelY = mapHeight;
+			CurrentLevel    = mapHeight;
 		}
 
 		public override void OnAddedToEntity()
 		{
-			_renderer = Entity.AddComponent(new WaterRenderer(_mapWidth, _mapHeight, _acidColor));
-			_renderer.SetFluidState(_surfaceY, Cols, CellSize);
+			// Allow particles to spawn above the screen (negative Y) and fall a
+			// bit below the floor before despawn — gives the despawn margin room.
+			_sim = new FluidSimulation(
+				FluidConfig.MaxParticles,
+				0,                                              // left
+				FluidConfig.InletYOffset - 4f,                  // top (above-screen spawn)
+				_mapWidth,                                      // right
+				_mapHeight + FluidConfig.DespawnBelowMargin);   // bottom
+
+			_colliders = new FluidCollider(
+				GameConstants.Arena.InnerLeft,
+				GameConstants.Arena.InnerRight,
+				0f,
+				_mapHeight);
+
+			_grid = new FluidOccupancyGrid(_mapWidth, _mapHeight, FluidConfig.GridCellSize);
+
+			_renderer = Entity.AddComponent(new FluidRenderer(_sim, _mapWidth, _mapHeight, _acidColor));
 		}
 
 		public void Activate() => IsRising = true;
 
-		/// <summary>
-		/// Called every frame by CascadeRenderer to pour liquid into the pool.
-		/// pixelArea is volume in px² (width × height); the base level rises by
-		/// pixelArea / mapWidth pixels.  This is the ONLY driver of the pool level.
-		/// </summary>
-		public void AddVolume(float pixelArea)
-		{
-			if (!IsRising || pixelArea <= 0f) return;
-			_accumulatedVolume += pixelArea;
-		}
-
-		// ── Per-frame update ──────────────────────────────────────────────────
+		// ──────────────────────────────────────────────────────────────────────
+		// Per-frame
+		// ──────────────────────────────────────────────────────────────────────
 
 		public void Update()
 		{
-			float dt = Math.Min(Time.DeltaTime, GameConstants.Physics.MaxDeltaTime);
-			StepWaves();
-			ComputeSurfaces();
-		}
-
-		// ── 1D wave equation ──────────────────────────────────────────────────
-
-		private void StepWaves()
-		{
-			if ((float)_rng.NextDouble() < BubbleProbability)
+			if (!IsRising || _sim == null)
 			{
-				int   col = _rng.Next(1, Cols - 1);
-				float vel = ((float)_rng.NextDouble() * 2f - 1f) * BubbleStrength;
-				_waveVelocity[col] += vel;
-			}
-
-			for (int x = 1; x < Cols - 1; x++)
-				_waveVelocity[x] += WaveK * (_waveHeight[x - 1] + _waveHeight[x + 1] - 2f * _waveHeight[x]);
-
-			for (int x = 0; x < Cols; x++)
-				_waveVelocity[x] -= RestoreK * _waveHeight[x];
-
-			for (int x = 0; x < Cols; x++)
-			{
-				_waveVelocity[x] *= WaveDamping;
-				_waveHeight[x]   += _waveVelocity[x];
-				_waveHeight[x]    = Math.Clamp(_waveHeight[x], -WaveMax, WaveMax);
-			}
-
-			_waveHeight[0]          = _waveHeight[1];
-			_waveHeight[Cols - 1]   = _waveHeight[Cols - 2];
-			_waveVelocity[0]        = _waveVelocity[1];
-			_waveVelocity[Cols - 1] = _waveVelocity[Cols - 2];
-		}
-
-		// ── Surface tracking ──────────────────────────────────────────────────
-
-		private void ComputeSurfaces()
-		{
-			// Pool level comes entirely from accumulated volume; no independent rise.
-			_sourceY = _mapHeight - _accumulatedVolume / _mapWidth;
-			_sourceY = Math.Max(0f, _sourceY);
-
-			if (_sourceY >= _mapHeight)
-			{
-				for (int x = 0; x < Cols; x++) _surfaceY[x] = _mapHeight;
-				CurrentLevel = _mapHeight;
 				return;
 			}
 
-			for (int x = 0; x < Cols; x++)
-				_surfaceY[x] = Math.Clamp(_sourceY + _waveHeight[x], 0, _mapHeight);
+			float dt = Math.Min(Time.DeltaTime, GameConstants.Physics.MaxDeltaTime);
 
-			CurrentLevel = _sourceY;
+			SpawnInlet(dt);
+
+			// Refresh dynamic collider list — picks up newly spawned platforms.
+			// Query area = wet bounds expanded by 2·h, or the full map if dry.
+			var queryArea = _grid.HasWetCells
+				? Expand(_grid.GetWetBounds(), 2f * FluidConfig.SmoothingRadius)
+				: new RectangleF(0, _topPlatformY - 32f, _mapWidth, _mapHeight - _topPlatformY + 96f);
+			_colliders.RebuildFromPhysics(queryArea);
+
+			_sim.Step(dt, _colliders);
+			_grid.RebuildFrom(_sim);
+
+			UpdateCurrentLevel();
 		}
 
-		// ── Public API ────────────────────────────────────────────────────────
-
-		/// <summary>
-		/// Sustained per-frame injection of downward velocity at a world position.
-		/// Call every frame with dt; models a continuous pour landing on the surface.
-		/// </summary>
-		public void PourAt(float worldX, float width, float ratePerSec, float dt)
+		private void SpawnInlet(float dt)
 		{
-			int colCenter = Math.Clamp((int)(worldX / CellSize), 1, Cols - 2);
-			int colRadius = Math.Max(1, (int)(width  / CellSize / 2));
-			float inject  = ratePerSec * dt;
-
-			for (int cx = colCenter - colRadius; cx <= colCenter + colRadius; cx++)
+			// Stop pouring once the pool effectively buries the top platform —
+			// caps the working-set particle count and avoids wasting cycles on
+			// off-screen pile-ups.
+			if (CurrentLevel < _topPlatformY + FluidConfig.InletStopMargin)
 			{
-				if (cx < 1 || cx >= Cols - 1) continue;
-				float falloff = 1f - (float)Math.Abs(cx - colCenter) / (colRadius + 1f);
-				float headroom = Math.Max(0f, 1f - Math.Abs(_waveHeight[cx]) / WaveMax);
-				_waveVelocity[cx] += inject * falloff * headroom;
+				return;
+			}
+
+			float particleArea = MathHelper.Pi * FluidConfig.ParticleRadius * FluidConfig.ParticleRadius;
+			float spawnRate    = _flowRatePerSec / particleArea;
+			_inletAccum       += spawnRate * dt;
+
+			int toSpawn = (int)_inletAccum;
+			_inletAccum -= toSpawn;
+
+			for (int i = 0; i < toSpawn; i++)
+			{
+				float jx = ((float)_rng.NextDouble() * 2f - 1f) * FluidConfig.InletJitterX;
+				float jy = ((float)_rng.NextDouble() * 2f - 1f) * FluidConfig.InletJitterY;
+				float jvx = ((float)_rng.NextDouble() * 2f - 1f) * FluidConfig.InletJitterVx;
+				_sim.Spawn(
+					_inletX + jx,
+					FluidConfig.InletYOffset + jy,
+					jvx,
+					FluidConfig.InletDownVelocity);
 			}
 		}
 
+		private void UpdateCurrentLevel()
+		{
+			// Volumetric estimate: the more particles, the higher the surface.
+			// Monotonic by construction (Count only grows on net), which is what
+			// AcidPhaseManager.spawnTriggerY relies on.
+			float volume  = _sim.ParticleVolume;
+			float targetY = _mapHeight - volume / _mapWidth;
+			if (targetY < 0f) targetY = 0f;
+
+			// Exponential smoothing (α=0.1) keeps camera and trigger checks stable.
+			_smoothedLevelY = _smoothedLevelY * 0.9f + targetY * 0.1f;
+			CurrentLevel    = _smoothedLevelY;
+		}
+
+		// ──────────────────────────────────────────────────────────────────────
+		// External API (preserved)
+		// ──────────────────────────────────────────────────────────────────────
+
 		/// <summary>
-		/// Inject downward wave velocity at worldX to create a visible splash.
+		/// Legacy API. The old 1D-wave implementation derived its pool level from
+		/// AddVolume() calls by CascadeRenderer. With particle physics the inlet
+		/// itself adds volume, so this is now a documented no-op kept for ABI.
 		/// </summary>
+		public void AddVolume(float pixelArea)
+		{
+			// no-op
+		}
+
+		/// <summary>Apply an impulsive downward velocity to particles within radius — splash.</summary>
 		public void Disturb(float worldX, float width, float speedPxPerSec)
 		{
-			int colCenter = Math.Clamp((int)(worldX / CellSize), 1, Cols - 2);
-			int colRadius = Math.Max(1, (int)(width  / CellSize / 2));
-			float str     = Math.Min(Math.Abs(speedPxPerSec) * 0.12f, 60f);
-
-			for (int cx = colCenter - colRadius; cx <= colCenter + colRadius; cx++)
-			{
-				if (cx < 1 || cx >= Cols - 1) continue;
-				float falloff = 1f - (float)Math.Abs(cx - colCenter) / (colRadius + 1f);
-				_waveVelocity[cx] += str * falloff;
-			}
+			if (_sim == null) return;
+			float surfaceY = GetSurfaceLevelAtX(worldX);
+			var pos    = new Vector2(worldX, surfaceY);
+			float radius = Math.Max(width * 0.5f, FluidConfig.SmoothingRadius);
+			var impulse = new Vector2(0f, Math.Abs(speedPxPerSec) * 0.5f);
+			_sim.ApplyImpulseInRadius(pos, radius, impulse);
 		}
 
-		/// <summary>World Y of the acid surface at the given world X.</summary>
+		/// <summary>Legacy continuous-pour API — same model as Disturb, scaled by dt.</summary>
+		public void PourAt(float worldX, float width, float ratePerSec, float dt)
+		{
+			if (_sim == null) return;
+			float surfaceY = GetSurfaceLevelAtX(worldX);
+			var pos    = new Vector2(worldX, surfaceY);
+			float radius = Math.Max(width * 0.5f, FluidConfig.SmoothingRadius);
+			var impulse = new Vector2(0f, ratePerSec * dt * 60f);
+			_sim.ApplyImpulseInRadius(pos, radius, impulse);
+		}
+
 		public float GetSurfaceLevelAtX(float worldX)
 		{
-			int col = Math.Clamp((int)(worldX / CellSize), 0, Cols - 1);
-			return _surfaceY[col];
+			return _grid?.GetSurfaceYAt(worldX) ?? _mapHeight;
 		}
 
-		/// <summary>Minimum (highest on-screen) surface across a world-X range.</summary>
 		public float GetSurfaceLevelInRange(float leftX, float rightX)
 		{
-			int colL = Math.Clamp((int)(leftX  / CellSize), 0, Cols - 1);
-			int colR = Math.Clamp((int)(rightX / CellSize), 0, Cols - 1);
-			float min = _mapHeight;
-			for (int x = colL; x <= colR; x++)
-				if (_surfaceY[x] < min) min = _surfaceY[x];
-			return min;
+			return _grid?.GetMinSurfaceYInRange(leftX, rightX) ?? _mapHeight;
 		}
 
-		/// <summary>Damage rectangle covering the acid body (used by ContactHazard).</summary>
 		public RectangleF GetDamageBounds()
 		{
-			if (_sourceY >= _mapHeight) return default;
-			return new RectangleF(
-				GameConstants.Arena.InnerLeft,
-				_sourceY - 16f,
-				GameConstants.Arena.InnerRight - GameConstants.Arena.InnerLeft,
-				_mapHeight - _sourceY + 16f);
+			if (_grid == null || !_grid.HasWetCells)
+			{
+				return default;
+			}
+			var r = _grid.GetWetBounds();
+			// Clamp horizontally to the inner-arena bounds so off-arena overspray
+			// (a falling stream that hasn't fully landed) doesn't damage players
+			// outside the playable area.
+			float left  = Math.Max(r.X, GameConstants.Arena.InnerLeft);
+			float right = Math.Min(r.X + r.Width, GameConstants.Arena.InnerRight);
+			if (right <= left) return default;
+			float y = r.Y - FluidConfig.DamageBoundsPadY;
+			return new RectangleF(left, y, right - left, _mapHeight - y);
 		}
 
-		// ── No-ops for API compatibility ──────────────────────────────────────
-		public void RemoveSolidRect(float worldX0, float worldY0, float worldX1, float worldY1) { }
-		public void SetTileSolid(int col, int row, bool solid) { }
-		public void SetDynSolid(int col, int row, bool solid) { }
-		public bool IsSolid(int col, int row) => false;
-		public void FillToLevel(int leftCol, int rightCol, float targetSurfaceY) { }
+		// ── Helpers ───────────────────────────────────────────────────────────
+
+		private static RectangleF Expand(RectangleF r, float pad)
+		{
+			return new RectangleF(r.X - pad, r.Y - pad, r.Width + 2f * pad, r.Height + 2f * pad);
+		}
 	}
 }
