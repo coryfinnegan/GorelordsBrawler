@@ -1,0 +1,369 @@
+<#
+.SYNOPSIS
+    Feature-level smoke test + visual quality gate for GorelordsBrawler.
+
+.DESCRIPTION
+    Generic end-to-end harness:
+        1. Build the game (Debug).
+        2. Launch with DebugServer + DebugDirectArena + per-feature appsettings.
+        3. Bring the game window to the foreground.
+        4. Start an ffmpeg gdigrab recording of the game window.
+        5. Run the chosen feature's check sequence against http://localhost:7777/state.
+        6. Wait for the recording to finish (self-stops via -t).
+        7. Fetch /screenshot.
+        8. Upload the MP4 to catbox.moe (free, no expiration).
+        9. Print the URL — paste it into the PR as the visual quality gate.
+
+    Each feature lives in features/<name>.ps1 as a hashtable describing its
+    appsettings overrides, record length, and Invoke scriptblock. The Invoke
+    block receives a [SmokeCtx] with Check / GetState / WaitFor helpers.
+
+    See features/acid.ps1 for the reference implementation.
+
+    Exit codes:
+        0 = all checks passed
+        1 = build failure / missing feature module / bad descriptor
+        2 = game failed to start / debug server never came up
+        3 = a feature check failed
+        4 = HTTP / upload / unhandled error
+#>
+
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory)] [string] $Feature,
+    [string] $RepoRoot,
+    [string] $ScreenshotPath,
+    [string] $RecordingPath,
+    [switch] $NoBuild,
+    [switch] $NoRecord,
+    [int]    $RecordSeconds = 0   # 0 = use feature default
+)
+
+$ErrorActionPreference = 'Stop'
+
+# ── Locate repo root ────────────────────────────────────────────────────────
+
+if (-not $RepoRoot) {
+    $dir = $PSScriptRoot
+    while ($dir -and -not (Test-Path (Join-Path $dir 'GorelordsBrawler.slnx'))) {
+        $parent = Split-Path $dir -Parent
+        if ($parent -eq $dir) { break }
+        $dir = $parent
+    }
+    if (-not (Test-Path (Join-Path $dir 'GorelordsBrawler.slnx'))) {
+        Write-Error 'Could not locate GorelordsBrawler.slnx — pass -RepoRoot explicitly.'
+        exit 1
+    }
+    $RepoRoot = $dir
+}
+
+# ── Load feature module ────────────────────────────────────────────────────
+
+$FeaturePath = Join-Path $PSScriptRoot "features/$Feature.ps1"
+if (-not (Test-Path $FeaturePath)) {
+    $available = Get-ChildItem -Path (Join-Path $PSScriptRoot 'features') -Filter '*.ps1' -ErrorAction SilentlyContinue
+    $names = if ($available) { ($available | ForEach-Object { $_.BaseName }) -join ', ' } else { '(none)' }
+    Write-Error "Feature module not found: $FeaturePath`nAvailable features: $names"
+    exit 1
+}
+$Feat = & $FeaturePath
+if ($null -eq $Feat -or -not $Feat.Name -or -not $Feat.Invoke) {
+    Write-Error "Feature module $FeaturePath did not return a valid descriptor (need Name + Invoke)."
+    exit 1
+}
+
+Write-Host "[smoke] Feature: $($Feat.Name)" -ForegroundColor Magenta
+if ($Feat.Description) { Write-Host "        $($Feat.Description)" -ForegroundColor Gray }
+
+# ── Paths ──────────────────────────────────────────────────────────────────
+
+$ExePath = Join-Path $RepoRoot 'GorelordsBrawler\bin\Debug\net8.0\GorelordsBrawler.exe'
+$ExeDir  = Split-Path $ExePath -Parent
+if (-not $ScreenshotPath) {
+    $ScreenshotPath = Join-Path $RepoRoot ".smoke-test-screenshot.$($Feat.Name).png"
+}
+if (-not $RecordingPath) {
+    $RecordingPath = Join-Path $RepoRoot ".smoke-test-recording.$($Feat.Name).mp4"
+}
+$RecordingUrlPath = Join-Path $RepoRoot ".smoke-test-recording-url.$($Feat.Name).txt"
+
+if ($RecordSeconds -le 0) {
+    $RecordSeconds = if ($Feat.RecordSeconds) { [int]$Feat.RecordSeconds } else { 20 }
+}
+
+# ── Build ───────────────────────────────────────────────────────────────────
+
+if (-not $NoBuild) {
+    Write-Host '[smoke] Building GorelordsBrawler (Debug)...' -ForegroundColor Cyan
+    & dotnet build (Join-Path $RepoRoot 'GorelordsBrawler\GorelordsBrawler.csproj') -c Debug | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error '[smoke] Build failed.'
+        exit 1
+    }
+}
+
+if (-not (Test-Path $ExePath)) {
+    Write-Error "[smoke] Game exe not found at $ExePath"
+    exit 1
+}
+
+# ── Recording capability ────────────────────────────────────────────────────
+# We capture frames by polling the game's own /screenshot endpoint — which
+# returns the live back buffer — rather than gdigrab'ing the desktop. Two
+# reasons this matters:
+#   1. MonoGame stops compositing visible frames to DWM when its window
+#      thinks it's unfocused (Game.IsActive=false), even though it keeps
+#      rendering at hundreds of fps internally. gdigrab then shows a black
+#      client area despite the title bar saying the game name. The game's
+#      own screenshot endpoint always reflects what's actually being drawn.
+#   2. No Win32 foregrounding hacks, no AttachThreadInput, no fighting Windows.
+# We still need ffmpeg afterwards — it stitches the PNG frames into one MP4.
+
+$ffmpegCmd = if (-not $NoRecord) { Get-Command ffmpeg -ErrorAction SilentlyContinue } else { $null }
+$canRecord = $null -ne $ffmpegCmd
+if ($NoRecord) {
+    Write-Host '[smoke] Recording disabled by -NoRecord.' -ForegroundColor Yellow
+} elseif (-not $canRecord) {
+    Write-Host '[smoke] ffmpeg not on PATH — recording will be skipped. (winget install Gyan.FFmpeg)' -ForegroundColor Yellow
+}
+
+# ── Compose appsettings.json (back up any existing) ────────────────────────
+# Baseline: DebugServer + DebugDirectArena. Feature can add/override anything.
+
+$Settings = @{
+    DebugServer      = $true
+    DebugDirectArena = $true
+}
+if ($Feat.AppSettings) {
+    foreach ($k in $Feat.AppSettings.Keys) { $Settings[$k] = $Feat.AppSettings[$k] }
+}
+
+$SettingsPath = Join-Path $ExeDir 'appsettings.json'
+$BackupPath   = "$SettingsPath.smoke-backup"
+$BackupMade   = $false
+if (Test-Path $SettingsPath) {
+    Copy-Item $SettingsPath $BackupPath -Force
+    $BackupMade = $true
+}
+$Settings | ConvertTo-Json | Set-Content -Path $SettingsPath -Encoding UTF8
+
+# ── Smoke context: passed to feature's Invoke block ────────────────────────
+
+class SmokeCtx {
+    [string] $ServerUrl
+    [int]    $ChecksPassed
+    [string] $LastCheckName
+
+    SmokeCtx([string] $url) {
+        $this.ServerUrl    = $url
+        $this.ChecksPassed = 0
+    }
+
+    [object] GetState() {
+        return Invoke-RestMethod -Uri "$($this.ServerUrl)/state" -TimeoutSec 2
+    }
+
+    [object] WaitFor([scriptblock] $Cond, [int] $TimeoutMs, [string] $Description) {
+        $end = (Get-Date).AddMilliseconds($TimeoutMs)
+        while ((Get-Date) -lt $end) {
+            $s = $this.GetState()
+            if (& $Cond $s) { return $s }
+            Start-Sleep -Milliseconds 250
+        }
+        throw "Timed out waiting for: $Description"
+    }
+
+    [void] Check([string] $Name, [scriptblock] $Body) {
+        $this.LastCheckName = $Name
+        Write-Host "[smoke] Check $($this.ChecksPassed + 1): $Name" -ForegroundColor Cyan
+        $result = & $Body $this
+        if ($result) {
+            Write-Host "        OK ($result)" -ForegroundColor Green
+        } else {
+            Write-Host "        OK" -ForegroundColor Green
+        }
+        $this.ChecksPassed++
+    }
+}
+
+# ── Launch + cleanup wrapper ───────────────────────────────────────────────
+
+$Game        = $null
+$CaptureJob  = $null
+$FrameDir    = $null
+$Failed      = $false
+$FailCode    = 0
+$UploadedUrl = $null
+
+function Stop-All {
+    if ($script:CaptureJob) {
+        try { Stop-Job   $script:CaptureJob -ErrorAction SilentlyContinue } catch {}
+        try { Remove-Job $script:CaptureJob -Force -ErrorAction SilentlyContinue } catch {}
+    }
+    if ($script:FrameDir -and (Test-Path $script:FrameDir)) {
+        Remove-Item $script:FrameDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    if ($script:Game -and -not $script:Game.HasExited) {
+        try { $script:Game.Kill($true) } catch {}
+    }
+    if ($script:BackupMade) {
+        Move-Item $script:BackupPath $script:SettingsPath -Force
+    } else {
+        Remove-Item $script:SettingsPath -ErrorAction SilentlyContinue
+    }
+}
+
+try {
+    Write-Host '[smoke] Launching game...' -ForegroundColor Cyan
+    $psi = [System.Diagnostics.ProcessStartInfo]::new($ExePath)
+    $psi.UseShellExecute  = $false
+    $psi.WorkingDirectory = $ExeDir
+    $Game = [System.Diagnostics.Process]::Start($psi)
+
+    # ── Wait for debug server ──────────────────────────────────────────────
+    Write-Host '[smoke] Waiting for debug server on :7777...' -ForegroundColor Cyan
+    $deadline = (Get-Date).AddSeconds(20)
+    $serverUp = $false
+    while ((Get-Date) -lt $deadline) {
+        try {
+            $r = Invoke-WebRequest -Uri 'http://localhost:7777/state' -UseBasicParsing -TimeoutSec 1 -ErrorAction Stop
+            if ($r.StatusCode -eq 200) { $serverUp = $true; break }
+        } catch { Start-Sleep -Milliseconds 250 }
+    }
+    if (-not $serverUp) {
+        Write-Error '[smoke] Debug server did not come up within 20s.'
+        $Failed = $true; $FailCode = 2
+        return
+    }
+
+    # ── Start screen recording via /screenshot polling job ────────────────
+    $FrameDir = $null
+    $CaptureJob = $null
+    if ($canRecord) {
+        $FrameDir = Join-Path $RepoRoot ".smoke-frames-$($Feat.Name)"
+        Remove-Item $FrameDir -Recurse -Force -ErrorAction SilentlyContinue
+        $null = New-Item -Path $FrameDir -ItemType Directory
+        Write-Host "[smoke] Recording via /screenshot polling for $RecordSeconds s..." -ForegroundColor Cyan
+        $CaptureJob = Start-Job -ScriptBlock {
+            param($url, $dir, $maxSec)
+            $deadline = (Get-Date).AddSeconds($maxSec)
+            $i = 0
+            while ((Get-Date) -lt $deadline) {
+                try {
+                    $path = Join-Path $dir ("frame_{0:D5}.png" -f $i)
+                    Invoke-WebRequest -Uri "$url/screenshot" -OutFile $path `
+                        -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+                    $i++
+                } catch {
+                    Start-Sleep -Milliseconds 100
+                }
+            }
+            return $i
+        } -ArgumentList 'http://localhost:7777', $FrameDir, $RecordSeconds
+    }
+
+    # ── Run feature checks ─────────────────────────────────────────────────
+    $Ctx = [SmokeCtx]::new('http://localhost:7777')
+    try {
+        & $Feat.Invoke $Ctx
+    } catch {
+        Write-Error "[smoke] FAIL at check '$($Ctx.LastCheckName)': $_"
+        $Failed = $true
+        $FailCode = 3
+    }
+
+    # ── Wait for capture job, then stitch PNGs into MP4 with ffmpeg ───────
+    if ($CaptureJob -ne $null) {
+        Write-Host '[smoke] Waiting for capture job to finish...' -ForegroundColor Cyan
+        $null = Wait-Job $CaptureJob -Timeout ($RecordSeconds + 10)
+        $frameCount = Receive-Job $CaptureJob -ErrorAction SilentlyContinue
+        Remove-Job $CaptureJob -Force -ErrorAction SilentlyContinue
+        $CaptureJob = $null
+
+        $frames = Get-ChildItem -Path $FrameDir -Filter 'frame_*.png' -ErrorAction SilentlyContinue
+        if (-not $frames -or $frames.Count -lt 2) {
+            Write-Warning "[smoke] Capture job produced only $($frames.Count) frame(s) — recording skipped."
+        } else {
+            $actualSec = [math]::Max(1, $RecordSeconds)
+            $framerate = [int][math]::Round($frames.Count / $actualSec)
+            if ($framerate -lt 1) { $framerate = 1 }
+            Write-Host "        captured $($frames.Count) frames; stitching at $framerate fps..." -ForegroundColor Gray
+            Remove-Item $RecordingPath -ErrorAction SilentlyContinue
+            $ffmpegArgs = @(
+                '-y', '-hide_banner', '-loglevel', 'error',
+                '-framerate', $framerate,
+                '-i', (Join-Path $FrameDir 'frame_%05d.png'),
+                '-c:v', 'libx264',
+                '-pix_fmt', 'yuv420p',
+                '-preset', 'ultrafast',
+                '-crf', '23',
+                $RecordingPath
+            )
+            & $ffmpegCmd.Source @ffmpegArgs
+            if (Test-Path $RecordingPath) {
+                $mb = [math]::Round((Get-Item $RecordingPath).Length / 1MB, 2)
+                Write-Host "        OK ($mb MB at $RecordingPath)" -ForegroundColor Green
+            } else {
+                Write-Warning '[smoke] ffmpeg stitching produced no output.'
+            }
+        }
+        # Clean up the frame staging dir regardless
+        Remove-Item $FrameDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    # ── Screenshot ─────────────────────────────────────────────────────────
+    Write-Host '[smoke] Fetching screenshot...' -ForegroundColor Cyan
+    try {
+        Invoke-WebRequest -Uri 'http://localhost:7777/screenshot' -OutFile $ScreenshotPath -TimeoutSec 10
+        Write-Host "        OK ($ScreenshotPath)" -ForegroundColor Green
+    } catch {
+        Write-Warning "[smoke] Screenshot fetch failed: $_"
+    }
+
+    # ── Upload (only on success — don't pollute catbox with failure clips) ─
+    if (-not $Failed -and $canRecord -and (Test-Path $RecordingPath)) {
+        Write-Host '[smoke] Uploading recording to catbox.moe...' -ForegroundColor Cyan
+        try {
+            $form = @{
+                reqtype      = 'fileupload'
+                fileToUpload = Get-Item $RecordingPath
+            }
+            $resp = Invoke-RestMethod -Uri 'https://catbox.moe/user/api.php' `
+                -Method POST -Form $form -TimeoutSec 120
+            $resp = ($resp | Out-String).Trim()
+            if ($resp -match '^https?://\S+$') {
+                $UploadedUrl = $resp
+                Write-Host "        $UploadedUrl" -ForegroundColor Green
+                Set-Content -Path $RecordingUrlPath -Value $UploadedUrl -NoNewline
+            } else {
+                Write-Warning "[smoke] Unexpected catbox response: $resp"
+            }
+        } catch {
+            Write-Warning "[smoke] Upload failed: $_"
+        }
+    }
+
+    if (-not $Failed) {
+        $n = $Ctx.ChecksPassed
+        Write-Host ''
+        Write-Host "[smoke] $($Feat.Name.ToUpper()) — $n/$n CHECKS PASSED ✓" -ForegroundColor Green
+        if ($UploadedUrl) {
+            Write-Host "[smoke] Recording: $UploadedUrl" -ForegroundColor Green
+        }
+    }
+}
+catch {
+    Write-Error "[smoke] Unhandled error: $_"
+    $Failed = $true
+    if ($FailCode -eq 0) { $FailCode = 4 }
+}
+finally {
+    Stop-All
+}
+
+if ($Failed) {
+    Write-Host ''
+    Write-Host "[smoke] FAILED (exit $FailCode)" -ForegroundColor Red
+    exit $FailCode
+}
+exit 0

@@ -1,42 +1,95 @@
 #if DEBUG
 using System;
-using System.Text.Json;
 using System.Collections.Generic;
+using System.Text.Json;
 using Nez;
 using GorelordsBrawler.Components;
-using GorelordsBrawler.Components.Hazards;
 using GorelordsBrawler.Systems;
 
 namespace GorelordsBrawler.DevTools
 {
 	/// <summary>
-	/// SceneComponent added to ArenaScene in DEBUG builds.
-	/// Serializes acid + player state into JSON every frame and pushes it to GameDebugServer.
+	/// SceneComponent added to scenes in DEBUG builds. Pushes a JSON snapshot
+	/// of game state to GameDebugServer every frame so smoke tests / external
+	/// drivers can poll the live game over HTTP at <c>/state</c>.
+	///
+	/// Generic + extensible: <c>time</c> and <c>players</c> are always emitted
+	/// (every feature wants those). Feature-specific state — acid level, combat
+	/// round, whatever — is contributed by callers via <see cref="RegisterProvider"/>:
+	///
+	/// <code>
+	/// var exporter = AddSceneComponent(new DebugStateExporter(playerManager));
+	/// exporter.RegisterProvider("acidActive", () =&gt; acidSurface.IsRising);
+	/// exporter.RegisterProvider("acidLevel",  () =&gt; (int)acidSurface.CurrentLevel);
+	/// </code>
+	///
+	/// Provider exceptions are swallowed (one broken contributor doesn't kill
+	/// the whole snapshot) and surface as <c>"_error": "..."</c> in the JSON.
 	/// </summary>
 	public class DebugStateExporter : SceneComponent
 	{
-		private readonly AcidSurface    _acid;
-		private readonly PlayerManager  _players;
-		private float                   _time;
+		private readonly PlayerManager _players;
+		private readonly Dictionary<string, Func<object>> _providers = new();
+		private float _time;
 
-		public DebugStateExporter(AcidSurface acid, PlayerManager players)
+		public DebugStateExporter(PlayerManager players)
 		{
-			_acid    = acid;
 			_players = players;
+		}
+
+		/// <summary>
+		/// Register a state key that will be serialized into the per-frame JSON
+		/// snapshot under <c>/state</c>. Last registration wins for a given key.
+		/// </summary>
+		public void RegisterProvider(string key, Func<object> getter)
+		{
+			if (string.IsNullOrEmpty(key) || getter == null)
+			{
+				return;
+			}
+			_providers[key] = getter;
 		}
 
 		public override void Update()
 		{
 			_time += Time.DeltaTime;
 
-			var playerList = new List<object>();
+			var state = new Dictionary<string, object>
+			{
+				["time"]    = Math.Round(_time, 1),
+				["players"] = BuildPlayerSnapshots(),
+			};
+
+			foreach (var kvp in _providers)
+			{
+				try
+				{
+					state[kvp.Key] = kvp.Value();
+				}
+				catch (Exception e)
+				{
+					state[kvp.Key] = new { _error = e.Message };
+				}
+			}
+
+			GameDebugServer.UpdateState(JsonSerializer.Serialize(state));
+		}
+
+		private List<object> BuildPlayerSnapshots()
+		{
+			var list = new List<object>();
+			if (_players == null)
+			{
+				return list;
+			}
+
 			int id = 0;
 			foreach (var p in _players.GetActivePlayers())
 			{
 				var health = p.GetComponent<Health>();
 				var body   = p.GetComponent<PhysicsBody>();
 				var pos    = p.Transform.Position;
-				playerList.Add(new
+				list.Add(new
 				{
 					id,
 					x        = (int)pos.X,
@@ -49,17 +102,7 @@ namespace GorelordsBrawler.DevTools
 				});
 				id++;
 			}
-
-			var state = new
-			{
-				time        = Math.Round(_time, 1),
-				acidActive  = _acid.IsRising,
-				acidLevel   = (int)_acid.CurrentLevel,
-				acidSpeed   = _acid.IsRising ? 1 : 0,
-				players     = playerList,
-			};
-
-			GameDebugServer.UpdateState(JsonSerializer.Serialize(state));
+			return list;
 		}
 	}
 }

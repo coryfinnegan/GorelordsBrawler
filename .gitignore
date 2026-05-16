@@ -494,7 +494,10 @@ reference/
 
 assets/
 
-# The smoke-test screenshot dropped at the repo root
-.smoke-test-screenshot.png
+# Smoke-test artifacts dropped at the repo root (one set per feature)
+.smoke-test-screenshot*.png
+.smoke-test-recording*.mp4
+.smoke-test-recording-url*.txt
+.smoke-test-recording-frame*.png
 # Trace log written by FluidRenderer when diagnostics are enabled
 fluid-render-trace.log
