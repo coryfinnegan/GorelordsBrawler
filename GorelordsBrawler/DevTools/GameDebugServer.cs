@@ -124,7 +124,10 @@ namespace GorelordsBrawler.DevTools
 						return;
 					}
 
-					resp.ContentType = "image/png";
+					// GorelordsBrawlerGame.CaptureScreenshot encodes as JPEG —
+					// ~5× faster than PNG on the GPU thread so smoke-test
+					// recording polling can hit ~30 fps for a smooth clip.
+					resp.ContentType = "image/jpeg";
 					resp.ContentLength64 = bytes.Length;
 					await resp.OutputStream.WriteAsync(bytes);
 				}

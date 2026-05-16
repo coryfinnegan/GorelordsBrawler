@@ -108,16 +108,19 @@ if (-not (Test-Path $ExePath)) {
 }
 
 # ── Recording capability ────────────────────────────────────────────────────
-# We capture frames by polling the game's own /screenshot endpoint — which
-# returns the live back buffer — rather than gdigrab'ing the desktop. Two
-# reasons this matters:
-#   1. MonoGame stops compositing visible frames to DWM when its window
-#      thinks it's unfocused (Game.IsActive=false), even though it keeps
-#      rendering at hundreds of fps internally. gdigrab then shows a black
-#      client area despite the title bar saying the game name. The game's
-#      own screenshot endpoint always reflects what's actually being drawn.
-#   2. No Win32 foregrounding hacks, no AttachThreadInput, no fighting Windows.
-# We still need ffmpeg afterwards — it stitches the PNG frames into one MP4.
+# Capture by polling the game's own /screenshot endpoint (which returns the
+# live back-buffer encoded as JPEG) into a temp dir, then stitch into MP4
+# with ffmpeg. We tried ffmpeg gdigrab against the game window's rect — the
+# captured client area was always black because MonoGame disables vsync
+# when its window thinks it's not focused, and Windows hides the rendered
+# frames from DWM even when the window is HWND_TOPMOST. SetForegroundWindow
+# from a script context is unreliable.  Polling the game's own screenshot
+# endpoint sidesteps all of it: we always get the live frame, regardless of
+# what app is foreground or what DWM is doing.
+#
+# The /screenshot endpoint now returns JPEG (was PNG) which is ~5× faster
+# to encode and 5–10× smaller per frame, getting the polling rate up to
+# ~30 fps. Still needs ffmpeg to stitch the JPEGs into one MP4.
 
 $ffmpegCmd = if (-not $NoRecord) { Get-Command ffmpeg -ErrorAction SilentlyContinue } else { $null }
 $canRecord = $null -ne $ffmpegCmd
@@ -237,27 +240,31 @@ try {
     }
 
     # ── Start screen recording via /screenshot polling job ────────────────
-    $FrameDir = $null
-    $CaptureJob = $null
     if ($canRecord) {
         $FrameDir = Join-Path $RepoRoot ".smoke-frames-$($Feat.Name)"
         Remove-Item $FrameDir -Recurse -Force -ErrorAction SilentlyContinue
         $null = New-Item -Path $FrameDir -ItemType Directory
         Write-Host "[smoke] Recording via /screenshot polling for $RecordSeconds s..." -ForegroundColor Cyan
+        # Inline System.Net.Http.HttpClient keeps a single keep-alive connection
+        # open for the whole job (vs Invoke-WebRequest, which opens fresh
+        # WebRequests each iteration). Combined with the JPEG screenshot
+        # encoding on the game side, the polling rate gets ~3× higher.
         $CaptureJob = Start-Job -ScriptBlock {
             param($url, $dir, $maxSec)
+            Add-Type -AssemblyName System.Net.Http
+            $http = [System.Net.Http.HttpClient]::new()
+            $http.Timeout = [TimeSpan]::FromSeconds(5)
             $deadline = (Get-Date).AddSeconds($maxSec)
             $i = 0
             while ((Get-Date) -lt $deadline) {
                 try {
-                    $path = Join-Path $dir ("frame_{0:D5}.png" -f $i)
-                    Invoke-WebRequest -Uri "$url/screenshot" -OutFile $path `
-                        -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+                    $bytes = $http.GetByteArrayAsync("$url/screenshot").GetAwaiter().GetResult()
+                    $path  = Join-Path $dir ("frame_{0:D5}.jpg" -f $i)
+                    [System.IO.File]::WriteAllBytes($path, $bytes)
                     $i++
-                } catch {
-                    Start-Sleep -Milliseconds 100
-                }
+                } catch { }
             }
+            $http.Dispose()
             return $i
         } -ArgumentList 'http://localhost:7777', $FrameDir, $RecordSeconds
     }
@@ -272,7 +279,7 @@ try {
         $FailCode = 3
     }
 
-    # ── Wait for capture job, then stitch PNGs into MP4 with ffmpeg ───────
+    # ── Wait for capture job, then stitch JPEGs into one MP4 with ffmpeg ──
     if ($CaptureJob -ne $null) {
         Write-Host '[smoke] Waiting for capture job to finish...' -ForegroundColor Cyan
         $null = Wait-Job $CaptureJob -Timeout ($RecordSeconds + 10)
@@ -280,19 +287,19 @@ try {
         Remove-Job $CaptureJob -Force -ErrorAction SilentlyContinue
         $CaptureJob = $null
 
-        $frames = Get-ChildItem -Path $FrameDir -Filter 'frame_*.png' -ErrorAction SilentlyContinue
+        $frames = Get-ChildItem -Path $FrameDir -Filter 'frame_*.jpg' -ErrorAction SilentlyContinue
         if (-not $frames -or $frames.Count -lt 2) {
             Write-Warning "[smoke] Capture job produced only $($frames.Count) frame(s) — recording skipped."
         } else {
-            $actualSec = [math]::Max(1, $RecordSeconds)
-            $framerate = [int][math]::Round($frames.Count / $actualSec)
+            # Output at the rate we actually captured so playback matches wall-clock.
+            $framerate = [int][math]::Round($frames.Count / [math]::Max(1, $RecordSeconds))
             if ($framerate -lt 1) { $framerate = 1 }
             Write-Host "        captured $($frames.Count) frames; stitching at $framerate fps..." -ForegroundColor Gray
             Remove-Item $RecordingPath -ErrorAction SilentlyContinue
             $ffmpegArgs = @(
                 '-y', '-hide_banner', '-loglevel', 'error',
                 '-framerate', $framerate,
-                '-i', (Join-Path $FrameDir 'frame_%05d.png'),
+                '-i', (Join-Path $FrameDir 'frame_%05d.jpg'),
                 '-c:v', 'libx264',
                 '-pix_fmt', 'yuv420p',
                 '-preset', 'ultrafast',
@@ -307,7 +314,6 @@ try {
                 Write-Warning '[smoke] ffmpeg stitching produced no output.'
             }
         }
-        # Clean up the frame staging dir regardless
         Remove-Item $FrameDir -Recurse -Force -ErrorAction SilentlyContinue
     }
 
