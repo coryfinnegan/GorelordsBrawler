@@ -8,7 +8,9 @@
     lifecycle: starts inactive, activates after the start delay, level rises
     monotonically, and players eventually take damage.
 
-    Also fetches a screenshot at peak so you can eyeball the rendering.
+    Also fetches a screenshot at peak so you can eyeball the rendering, and —
+    if ffmpeg is on PATH — records a short MP4 of the gameplay, uploads it to
+    catbox.moe (free, no expiration), and prints the URL.
 
     Exit codes:
         0 = all checks passed
@@ -23,15 +25,28 @@
 .PARAMETER ScreenshotPath
     Where to write the captured PNG (default: $RepoRoot/.smoke-test-screenshot.png).
 
+.PARAMETER RecordingPath
+    Where to write the captured MP4 (default: $RepoRoot/.smoke-test-recording.mp4).
+
 .PARAMETER NoBuild
     Skip dotnet build (assumes Debug binaries are already current).
+
+.PARAMETER NoRecord
+    Skip video recording + upload, even if ffmpeg is available.
+
+.PARAMETER RecordSeconds
+    How long to record. Defaults to 20s — long enough to catch acid activation
+    (~3s in) plus a healthy stretch of pouring/pooling.
 #>
 
 [CmdletBinding()]
 param(
     [string] $RepoRoot,
     [string] $ScreenshotPath,
-    [switch] $NoBuild
+    [string] $RecordingPath,
+    [switch] $NoBuild,
+    [switch] $NoRecord,
+    [int]    $RecordSeconds = 20
 )
 
 $ErrorActionPreference = 'Stop'
@@ -57,6 +72,10 @@ $ExeDir  = Split-Path $ExePath -Parent
 if (-not $ScreenshotPath) {
     $ScreenshotPath = Join-Path $RepoRoot '.smoke-test-screenshot.png'
 }
+if (-not $RecordingPath) {
+    $RecordingPath = Join-Path $RepoRoot '.smoke-test-recording.mp4'
+}
+$RecordingUrlPath = Join-Path $RepoRoot '.smoke-test-recording-url.txt'
 
 # ── Build ───────────────────────────────────────────────────────────────────
 
@@ -72,6 +91,30 @@ if (-not $NoBuild) {
 if (-not (Test-Path $ExePath)) {
     Write-Error "[smoke] Game exe not found at $ExePath"
     exit 1
+}
+
+# ── Recording capability check ──────────────────────────────────────────────
+
+$ffmpegCmd = if (-not $NoRecord) { Get-Command ffmpeg -ErrorAction SilentlyContinue } else { $null }
+$canRecord = $null -ne $ffmpegCmd
+if ($NoRecord) {
+    Write-Host '[smoke] Recording disabled by -NoRecord.' -ForegroundColor Yellow
+} elseif (-not $canRecord) {
+    Write-Host '[smoke] ffmpeg not on PATH — recording will be skipped. (winget install Gyan.FFmpeg)' -ForegroundColor Yellow
+}
+
+# Win32 GetWindowRect — used to clip the recording to the game window only.
+if ($canRecord) {
+    if (-not ('Win32GetRect' -as [type])) {
+        Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class Win32GetRect {
+    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+    [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
+}
+"@
+    }
 }
 
 # ── Write smoke-test appsettings.json (backup existing) ─────────────────────
@@ -93,19 +136,23 @@ if (Test-Path $SettingsPath) {
 
 # ── Launch game and ensure cleanup ──────────────────────────────────────────
 
-$Game = $null
-$Failed = $false
-$FailCode = 0
+$Game        = $null
+$RecordProc  = $null
+$Failed      = $false
+$FailCode    = 0
+$UploadedUrl = $null
 
-function Stop-Game {
-    if ($Game -and -not $Game.HasExited) {
-        try { $Game.Kill($true) } catch {}
+function Stop-All {
+    if ($script:RecordProc -and -not $script:RecordProc.HasExited) {
+        try { $script:RecordProc.Kill() } catch {}
     }
-    if ($BackupMade) {
-        Move-Item $BackupPath $SettingsPath -Force
+    if ($script:Game -and -not $script:Game.HasExited) {
+        try { $script:Game.Kill($true) } catch {}
     }
-    else {
-        Remove-Item $SettingsPath -ErrorAction SilentlyContinue
+    if ($script:BackupMade) {
+        Move-Item $script:BackupPath $script:SettingsPath -Force
+    } else {
+        Remove-Item $script:SettingsPath -ErrorAction SilentlyContinue
     }
 }
 
@@ -148,6 +195,54 @@ try {
         throw "Timed out waiting for: $Description"
     }
 
+    # ── Start screen recording (Nez rewrites its window title every frame,
+    #    so capture by window-rect instead of title=match) ─────────────────
+    if ($canRecord) {
+        # Poll for the window handle — Nez/MonoGame may take a moment to
+        # finish creating the OS window even after the HTTP server is up.
+        $hWnd = [IntPtr]::Zero
+        $handleDeadline = (Get-Date).AddSeconds(5)
+        while ((Get-Date) -lt $handleDeadline) {
+            $Game.Refresh()
+            $hWnd = $Game.MainWindowHandle
+            if ($hWnd -ne [IntPtr]::Zero) { break }
+            Start-Sleep -Milliseconds 200
+        }
+        if ($hWnd -eq [IntPtr]::Zero) {
+            Write-Warning '[smoke] Could not resolve game window handle after 5 s — recording disabled.'
+            $canRecord = $false
+        } else {
+            $rect = New-Object Win32GetRect+RECT
+            $null = [Win32GetRect]::GetWindowRect($hWnd, [ref]$rect)
+            $w = $rect.Right  - $rect.Left
+            $h = $rect.Bottom - $rect.Top
+            # gdigrab needs even dimensions for libx264 yuv420p
+            if ($w % 2 -ne 0) { $w -= 1 }
+            if ($h % 2 -ne 0) { $h -= 1 }
+            Remove-Item $RecordingPath -ErrorAction SilentlyContinue
+            Write-Host "[smoke] Recording $($w)x$($h) at ($($rect.Left),$($rect.Top)) for $RecordSeconds s..." -ForegroundColor Cyan
+            $ffmpegArgs = @(
+                '-y', '-hide_banner', '-loglevel', 'error',
+                '-f',  'gdigrab',
+                '-framerate', '30',
+                '-offset_x',  $rect.Left,
+                '-offset_y',  $rect.Top,
+                '-video_size', "$($w)x$($h)",
+                '-i', 'desktop',
+                '-t', $RecordSeconds,
+                '-c:v', 'libx264',
+                '-pix_fmt', 'yuv420p',
+                '-preset', 'ultrafast',
+                '-crf', '23',
+                '-an',
+                $RecordingPath
+            )
+            $RecordProc = Start-Process -FilePath $ffmpegCmd.Source `
+                -ArgumentList $ffmpegArgs -NoNewWindow -PassThru `
+                -RedirectStandardError ([System.IO.Path]::GetTempFileName())
+        }
+    }
+
     # ── Assertion 1: acid inactive at start ────────────────────────────────
     Write-Host '[smoke] Check 1: acid inactive at game start' -ForegroundColor Cyan
     $s0 = Get-State
@@ -186,13 +281,21 @@ try {
     $hits = ($sDmg.players | Where-Object { $_.hp -lt $_.maxHp }).Count
     Write-Host "        OK (time=$($sDmg.time), $hits player(s) damaged)" -ForegroundColor Green
 
-    # ── Soak: let the pool fill noticeably before snapping ─────────────────
-    Write-Host '[smoke] Soak: letting acid rise for 10 s before screenshot...' -ForegroundColor Cyan
-    Start-Sleep -Seconds 10
-    $sShot = Get-State
-    Write-Host "        Pool level at snapshot: y=$($sShot.acidLevel) (time=$($sShot.time))" -ForegroundColor Gray
+    # ── Wait for the recording to finish (it self-stops via -t) ───────────
+    if ($RecordProc -ne $null) {
+        Write-Host '[smoke] Waiting for recording to finish...' -ForegroundColor Cyan
+        if (-not $RecordProc.HasExited) {
+            $null = $RecordProc.WaitForExit(($RecordSeconds + 5) * 1000)
+        }
+        if (Test-Path $RecordingPath) {
+            $mb = [math]::Round((Get-Item $RecordingPath).Length / 1MB, 2)
+            Write-Host "        OK ($mb MB at $RecordingPath)" -ForegroundColor Green
+        } else {
+            Write-Warning '[smoke] Recording finished but file is missing.'
+        }
+    }
 
-    # ── Screenshot for visual eyeballing ───────────────────────────────────
+    # ── Screenshot for the still-frame quality check ───────────────────────
     Write-Host '[smoke] Fetching screenshot...' -ForegroundColor Cyan
     try {
         Invoke-WebRequest -Uri 'http://localhost:7777/screenshot' -OutFile $ScreenshotPath -TimeoutSec 10
@@ -201,8 +304,34 @@ try {
         Write-Warning "[smoke] Screenshot fetch failed: $_"
     }
 
+    # ── Upload recording to catbox.moe (free, no expiration) ───────────────
+    if ($RecordProc -ne $null -and (Test-Path $RecordingPath)) {
+        Write-Host '[smoke] Uploading recording to catbox.moe...' -ForegroundColor Cyan
+        try {
+            $form = @{
+                reqtype      = 'fileupload'
+                fileToUpload = Get-Item $RecordingPath
+            }
+            $resp = Invoke-RestMethod -Uri 'https://catbox.moe/user/api.php' `
+                -Method POST -Form $form -TimeoutSec 120
+            $resp = ($resp | Out-String).Trim()
+            if ($resp -match '^https?://\S+$') {
+                $UploadedUrl = $resp
+                Write-Host "        $UploadedUrl" -ForegroundColor Green
+                Set-Content -Path $RecordingUrlPath -Value $UploadedUrl -NoNewline
+            } else {
+                Write-Warning "[smoke] Unexpected catbox response: $resp"
+            }
+        } catch {
+            Write-Warning "[smoke] Upload failed: $_"
+        }
+    }
+
     Write-Host ''
     Write-Host '[smoke] ALL CHECKS PASSED ✓' -ForegroundColor Green
+    if ($UploadedUrl) {
+        Write-Host "[smoke] Recording: $UploadedUrl" -ForegroundColor Green
+    }
 }
 catch {
     Write-Error "[smoke] Unhandled error: $_"
@@ -210,7 +339,7 @@ catch {
     if ($FailCode -eq 0) { $FailCode = 4 }
 }
 finally {
-    Stop-Game
+    Stop-All
 }
 
 if ($Failed) {
