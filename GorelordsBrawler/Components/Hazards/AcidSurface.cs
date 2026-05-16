@@ -100,7 +100,7 @@ namespace GorelordsBrawler.Components.Hazards
 
 			_grid = new FluidOccupancyGrid(_mapWidth, _mapHeight, FluidConfig.GridCellSize);
 
-			_renderer = Entity.AddComponent(new FluidRenderer(_sim, _mapWidth, _mapHeight, _acidColor));
+			_renderer = Entity.AddComponent(new FluidRenderer(_sim, this, _mapWidth, _mapHeight, _acidColor));
 		}
 
 		public void Activate() => IsRising = true;

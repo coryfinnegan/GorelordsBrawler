@@ -56,6 +56,7 @@ namespace GorelordsBrawler.Scenes
 			contactHazard.GetBounds = acidSurface.GetDamageBounds;
 			var spawner = AddSceneComponent(new PlatformSpawner(mw, mh));
 			AddSceneComponent(new AcidPhaseManager(acidSurface, spawner, mw, mh));
+			AddSceneComponent(new AcidEffectsManager(acidSurface, contactHazard, mw, mh));
 
 #if DEBUG
 			if (AppSettings.DebugServer)

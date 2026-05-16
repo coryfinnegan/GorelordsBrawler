@@ -13,6 +13,18 @@ namespace GorelordsBrawler.Components.Hazards
 		public Vector2 KnockbackDirection = new Vector2(0, -1);
 		public Func<RectangleF> GetBounds;
 
+		/// <summary>
+		/// Fired once per damage application (which may happen at most once
+		/// per frame, when the accumulated buffer exceeds 1 HP). Arguments:
+		///   victim          : the entity that took damage
+		///   contactPoint    : a world position roughly where the hazard met
+		///                     the victim — currently the victim's transform
+		///                     position. Effect emitters use this to place
+		///                     burn/smoke particles.
+		///   damage          : integer HP dealt this tick.
+		/// </summary>
+		public Action<Entity, Vector2, int> OnDamageApplied;
+
 		private float _damageBuffer;
 		private static readonly Collider[] _overlapBuffer = new Collider[16];
 
@@ -43,6 +55,8 @@ namespace GorelordsBrawler.Components.Hazards
 					var body = entity.GetComponent<PhysicsBody>();
 					if (body != null) body.Velocity += KnockbackDirection * KnockbackForce;
 				}
+
+				OnDamageApplied?.Invoke(entity, entity.Transform.Position, dmg);
 			}
 		}
 	}

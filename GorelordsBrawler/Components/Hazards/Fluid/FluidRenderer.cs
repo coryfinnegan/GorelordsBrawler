@@ -1,3 +1,4 @@
+using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Nez;
@@ -6,40 +7,60 @@ using GorelordsBrawler.Constants;
 namespace GorelordsBrawler.Components.Hazards.Fluid
 {
 	/// <summary>
-	/// Renders each fluid particle as a small colored quad via PrimitiveBatch
-	/// (same path as the legacy WaterRenderer — a proven route through Nez's
-	/// rendering pipeline that draws geometry independent of any Sprite cache).
+	/// Renders each fluid particle as a soft-alpha disc through Nez's Batcher.
+	/// Overlapping discs naturally fuse into smooth, blobby "metaball-ish"
+	/// shapes instead of the chunky-square look that flat quads gave us.
 	///
-	/// Two passes:
-	///   - Outer (full DiscSpriteRadius, tint color) gives the body of each blob.
-	///   - Inner (half radius, brighter) hints at depth/highlight.
+	/// Two passes per particle, both sharing one generated disc texture so the
+	/// whole liquid body batches into one draw call per pass:
 	///
-	/// 6 vertices per particle × 2 passes = 12N. At 4000 particles that's ≤ 48k
-	/// vertices per frame — well within PrimitiveBatch's per-batch budget.
+	///   1. Body            — saturated green disc at full DiscSpriteRadius
+	///                        with alpha blend. With ~3× physics-radius discs,
+	///                        neighbouring particles overlap heavily and merge
+	///                        into a smooth blob.
+	///   2. Surface sparkle — additive hot-green highlight, ONLY drawn on
+	///                        particles within ±SurfaceBandHalfHeight of the
+	///                        pool's current surface. Sells "this is glowing
+	///                        acid, do not touch." Critically NOT applied to
+	///                        the falling stream — additive on the densely-
+	///                        packed stream would blow out to white.
 	/// </summary>
 	public sealed class FluidRenderer : RenderableComponent
 	{
+		// 32-px texture: more source pixels means the bilinear filter has a
+		// nicer falloff to work with when we scale up to ~24-px world rendering.
+		private const int   DiscTexSize           = 32;
+		private const float SurfaceBandHalfHeight = 12f; // px on either side of CurrentLevel that counts as surface
+
 		private readonly FluidSimulation _sim;
+		private readonly AcidSurface     _surface;
 		private readonly int _mapWidth;
 		private readonly int _mapHeight;
-		private readonly Color _outer;
-		private readonly Color _inner;
+		private readonly Color _body;
+		private readonly Color _sparkle;
 
-		private PrimitiveBatch _primBatch;
+		private Texture2D _discTex;
+		private Vector2   _discOrigin;
+		private float     _bodyScale;
+		private float     _sparkleScale;
 
 		public override RectangleF Bounds => new RectangleF(0, 0, _mapWidth, _mapHeight);
 
-		public FluidRenderer(FluidSimulation sim, int mapWidth, int mapHeight, Color tint)
+		public FluidRenderer(FluidSimulation sim, AcidSurface surface,
+			int mapWidth, int mapHeight, Color tint)
 		{
 			_sim       = sim;
+			_surface   = surface;
 			_mapWidth  = mapWidth;
 			_mapHeight = mapHeight;
-			_outer     = tint;
-			_inner     = new Color(
-				(int)System.Math.Min(255, tint.R + 60),
-				(int)System.Math.Min(255, tint.G + 50),
-				(int)System.Math.Min(255, tint.B + 40),
-				(int)255);
+
+			// Body: more opaque than the source tint so overlapping discs fill
+			// in to a solid look instead of leaving the under-surface visible.
+			_body = new Color(tint.R, tint.G, tint.B, (byte)230);
+
+			// Sparkle: hot acid-green, low alpha so a handful of overlapping
+			// surface particles brighten the surface without nuking to white.
+			_sparkle = new Color((byte)120, (byte)255, (byte)80, (byte)80);
 
 			RenderLayer = GameConstants.Rendering.DefaultRenderLayer;
 			LayerDepth  = 0f; // after the TiledMap, before characters
@@ -47,8 +68,11 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 
 		public override void OnAddedToEntity()
 		{
-			// 12 vertices per particle × MaxParticles → up to 60k for 5000 particles.
-			_primBatch = new PrimitiveBatch(65536);
+			_discTex      = CreateSoftDiscTexture(DiscTexSize);
+			_discOrigin   = new Vector2(DiscTexSize * 0.5f, DiscTexSize * 0.5f);
+			_bodyScale    = (FluidConfig.DiscSpriteRadius * 2f) / DiscTexSize;
+			// Sparkle is smaller — a highlight, not a body.
+			_sparkleScale = _bodyScale * 0.6f;
 		}
 
 		public override void Render(Batcher batcher, Camera camera)
@@ -58,55 +82,75 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 				return;
 			}
 
+			int count    = _sim.Count;
+			var px       = _sim.Px;
+			var py       = _sim.Py;
+			float surfY  = _surface != null ? _surface.CurrentLevel : float.MaxValue;
+			float bandLo = surfY - SurfaceBandHalfHeight;
+			float bandHi = surfY + SurfaceBandHalfHeight;
+
+			// ─ Pass 1: body (alpha blend, all particles) ───────────────────
+			// Batcher.Begin was already called for us by the renderer with the
+			// default state of AlphaBlend, so no switch needed.
+			for (int i = 0; i < count; i++)
+			{
+				batcher.Draw(_discTex, new Vector2(px[i], py[i]), null,
+					_body, 0f, _discOrigin, _bodyScale,
+					SpriteEffects.None, 0f);
+			}
+
+			// ─ Pass 2: surface sparkle (additive, surface band only) ───────
+			// Flush the AlphaBlend batch, switch to additive, then restore.
 			batcher.FlushBatch();
-
 			var gd = Core.GraphicsDevice;
-			gd.BlendState        = BlendState.AlphaBlend;
-			gd.DepthStencilState = DepthStencilState.None;
-			gd.RasterizerState   = RasterizerState.CullNone;
+			var prev = gd.BlendState;
+			gd.BlendState = BlendState.Additive;
 
-			Matrix proj = camera.ProjectionMatrix;
-			Matrix view = camera.TransformMatrix;
-			_primBatch.Begin(ref proj, ref view);
-
-			float rOuter = FluidConfig.DiscSpriteRadius;
-			float rInner = rOuter * 0.55f;
-
-			int count = _sim.Count;
-			var px = _sim.Px;
-			var py = _sim.Py;
-
-			// Outer halo pass
 			for (int i = 0; i < count; i++)
 			{
-				AddQuad(px[i], py[i], rOuter, _outer);
+				float y = py[i];
+				if (y < bandLo || y > bandHi) continue;
+				batcher.Draw(_discTex, new Vector2(px[i], y), null,
+					_sparkle, 0f, _discOrigin, _sparkleScale,
+					SpriteEffects.None, 0f);
 			}
 
-			// Inner core pass
-			for (int i = 0; i < count; i++)
-			{
-				AddQuad(px[i], py[i], rInner, _inner);
-			}
-
-			_primBatch.End();
-		}
-
-		private void AddQuad(float cx, float cy, float r, Color c)
-		{
-			float x0 = cx - r, x1 = cx + r;
-			float y0 = cy - r, y1 = cy + r;
-			_primBatch.AddVertex(new Vector2(x0, y0), c, PrimitiveType.TriangleList);
-			_primBatch.AddVertex(new Vector2(x1, y0), c, PrimitiveType.TriangleList);
-			_primBatch.AddVertex(new Vector2(x0, y1), c, PrimitiveType.TriangleList);
-			_primBatch.AddVertex(new Vector2(x1, y0), c, PrimitiveType.TriangleList);
-			_primBatch.AddVertex(new Vector2(x1, y1), c, PrimitiveType.TriangleList);
-			_primBatch.AddVertex(new Vector2(x0, y1), c, PrimitiveType.TriangleList);
+			batcher.FlushBatch();
+			gd.BlendState = prev;
 		}
 
 		public override void OnRemovedFromEntity()
 		{
-			_primBatch?.Dispose();
-			_primBatch = null;
+			_discTex?.Dispose();
+			_discTex = null;
+		}
+
+		// ──────────────────────────────────────────────────────────────────
+		// Procedural soft-disc texture: 1 at center, smooth quadratic falloff
+		// to 0 at radius. White texel + per-draw tint = colored blob. Public
+		// so AcidEffectsManager can reuse it for particle emitter sprites.
+		// ──────────────────────────────────────────────────────────────────
+		internal static Texture2D CreateSoftDiscTexture(int size)
+		{
+			var tex = new Texture2D(Core.GraphicsDevice, size, size);
+			var data = new Color[size * size];
+			float half = size * 0.5f;
+
+			for (int y = 0; y < size; y++)
+			{
+				for (int x = 0; x < size; x++)
+				{
+					float dx = (x + 0.5f) - half;
+					float dy = (y + 0.5f) - half;
+					float d  = MathF.Sqrt(dx * dx + dy * dy) / half;
+					float a  = MathHelper.Clamp(1f - d * d, 0f, 1f);
+					a = MathF.Pow(a, 1.5f);
+					byte alpha = (byte)(a * 255f);
+					data[y * size + x] = new Color((byte)255, (byte)255, (byte)255, alpha);
+				}
+			}
+			tex.SetData(data);
+			return tex;
 		}
 	}
 }

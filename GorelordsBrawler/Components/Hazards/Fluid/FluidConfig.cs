@@ -55,7 +55,10 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 		public const float DamageBoundsPadY   = 4f;
 
 		// ── Rendering ─────────────────────────────────────────────────────────
-		public const float DiscSpriteRadius   = 8f;     // half-extent of disc texture in px (≈ 2× physics)
+		// Disc is rendered ~3× the physics radius so neighbouring particles
+		// overlap heavily — that's what makes them blur together into a smooth
+		// "blob of liquid" rather than reading as individual circles.
+		public const float DiscSpriteRadius   = 12f;
 		public const bool  UseMetaballPass    = false;  // optional polish flag
 
 		// ── Compatibility ─────────────────────────────────────────────────────
