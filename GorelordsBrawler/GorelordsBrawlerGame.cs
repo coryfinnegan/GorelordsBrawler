@@ -81,7 +81,10 @@ namespace GorelordsBrawler
 			using var tex = new Texture2D(gd, w, h);
 			tex.SetData(colors);
 			using var ms = new MemoryStream();
-			tex.SaveAsPng(ms, w, h);
+			// JPEG is ~5× faster to encode than PNG on the GPU thread and yields
+			// 5–10× smaller files — keeps the smoke-test recording loop's HTTP
+			// polling rate high enough for a smooth ~30 fps gameplay clip.
+			tex.SaveAsJpeg(ms, w, h);
 			DevTools.GameDebugServer.CompleteScreenshot(ms.ToArray());
 		}
 #endif

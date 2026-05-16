@@ -40,7 +40,10 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 		public const float PlatformRestitution = 0.05f;
 
 		// ── Inlet ─────────────────────────────────────────────────────────────
-		public const float InletYOffset       = -40f;   // above map top
+		// Spawn BELOW the arena's top wall row (collision tiles fill y=0..32),
+		// otherwise the wall projection pushes every fresh particle back up
+		// and they pile up off-screen at y≈-4 forever.
+		public const float InletYOffset       = 50f;    // just below the ceiling wall
 		public const float InletJitterX       = 6f;     // ±px lateral randomization
 		public const float InletJitterY       = 2f;     // ±px vertical randomization
 		public const float InletDownVelocity  = 250f;   // px/s initial downward velocity

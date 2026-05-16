@@ -76,6 +76,10 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 		/// <summary>
 		/// Push a particle of given radius out of any overlapping wall or AABB
 		/// along the minimum-penetration axis. Called inside each solver iteration.
+		///
+		/// No ceiling: the inlet spawns particles ABOVE the map (negative Y),
+		/// so any ceiling clamp would bounce fresh particles back up into a
+		/// chaotic mass at the top instead of letting them fall in cleanly.
 		/// </summary>
 		public void Project(ref float x, ref float y, float radius)
 		{
@@ -83,7 +87,6 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 			if (x < WallLeft  + radius) x = WallLeft  + radius;
 			if (x > WallRight - radius) x = WallRight - radius;
 			if (y > Floor     - radius) y = Floor     - radius;
-			if (y < Ceiling   + radius) y = Ceiling   + radius;
 
 			for (int i = 0; i < Count; i++)
 			{
@@ -128,9 +131,8 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 		/// </summary>
 		public int ContactSide(float x, float y, float radius)
 		{
-			// Wall contacts
+			// Wall contacts — no ceiling (see Project)
 			if (y >= Floor     - radius - 0.1f) return 1; // resting on floor — top face contact
-			if (y <= Ceiling   + radius + 0.1f) return 2;
 			if (x <= WallLeft  + radius + 0.1f) return 3;
 			if (x >= WallRight - radius - 0.1f) return 4;
 

@@ -59,7 +59,14 @@ namespace GorelordsBrawler.Scenes
 
 #if DEBUG
 			if (AppSettings.DebugServer)
-				AddSceneComponent(new GorelordsBrawler.DevTools.DebugStateExporter(acidSurface, playerManager));
+			{
+				var exporter = AddSceneComponent(new GorelordsBrawler.DevTools.DebugStateExporter(playerManager));
+				// Acid-specific state — other features should register their own
+				// keys the same way so /state stays a union of whatever is on screen.
+				exporter.RegisterProvider("acidActive", () => acidSurface.IsRising);
+				exporter.RegisterProvider("acidLevel",  () => (int)acidSurface.CurrentLevel);
+				exporter.RegisterProvider("acidSpeed",  () => acidSurface.IsRising ? 1 : 0);
+			}
 #endif
 
 			var cameraEntity = CreateEntity(GameConstants.EntityNames.Camera);
