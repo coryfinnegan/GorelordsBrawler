@@ -481,11 +481,20 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 
-# Claude
-.claude/
+# Claude — ignore everything under .claude/ EXCEPT shared project skills
+# (git can't un-ignore a child if its parent is ignored, so use .claude/*
+# instead of .claude/ to keep the dir tracked but exclude its contents).
+.claude/*
+!.claude/skills/
+!.claude/skills/**
 
 nul
 
 reference/
 
 assets/
+
+# The smoke-test screenshot dropped at the repo root
+.smoke-test-screenshot.png
+# Trace log written by FluidRenderer when diagnostics are enabled
+fluid-render-trace.log

@@ -1,4 +1,3 @@
-using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Nez;
@@ -7,28 +6,26 @@ using GorelordsBrawler.Constants;
 namespace GorelordsBrawler.Components.Hazards.Fluid
 {
 	/// <summary>
-	/// Draws each fluid particle as a soft-alpha disc sprite through Nez's
-	/// Batcher (SpriteBatch path). One texture → one draw call regardless of
-	/// particle count.
+	/// Renders each fluid particle as a small colored quad via PrimitiveBatch
+	/// (same path as the legacy WaterRenderer — a proven route through Nez's
+	/// rendering pipeline that draws geometry independent of any Sprite cache).
 	///
-	/// Alpha convention: NON-premultiplied. We rely on the default
-	/// BlendState.AlphaBlend that Batcher uses; do NOT switch to premultiplied
-	/// without updating the texture-generation step.
+	/// Two passes:
+	///   - Outer (full DiscSpriteRadius, tint color) gives the body of each blob.
+	///   - Inner (half radius, brighter) hints at depth/highlight.
 	///
-	/// Soft additive overlap of adjacent discs is the metaball-ish look. A
-	/// dedicated render-target threshold pass (UseMetaballPass) is reserved for
-	/// future polish but disabled in this initial implementation.
+	/// 6 vertices per particle × 2 passes = 12N. At 4000 particles that's ≤ 48k
+	/// vertices per frame — well within PrimitiveBatch's per-batch budget.
 	/// </summary>
 	public sealed class FluidRenderer : RenderableComponent
 	{
 		private readonly FluidSimulation _sim;
 		private readonly int _mapWidth;
 		private readonly int _mapHeight;
-		private readonly Color _tint;
+		private readonly Color _outer;
+		private readonly Color _inner;
 
-		private Texture2D _discTexture;
-		private Vector2 _origin;
-		private float _spriteScale;
+		private PrimitiveBatch _primBatch;
 
 		public override RectangleF Bounds => new RectangleF(0, 0, _mapWidth, _mapHeight);
 
@@ -37,36 +34,21 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 			_sim       = sim;
 			_mapWidth  = mapWidth;
 			_mapHeight = mapHeight;
-			_tint      = tint;
+			_outer     = tint;
+			_inner     = new Color(
+				(int)System.Math.Min(255, tint.R + 60),
+				(int)System.Math.Min(255, tint.G + 50),
+				(int)System.Math.Min(255, tint.B + 40),
+				(int)255);
 
 			RenderLayer = GameConstants.Rendering.DefaultRenderLayer;
-			LayerDepth  = 0f; // draw after the tile map, before characters
+			LayerDepth  = 0f; // after the TiledMap, before characters
 		}
 
 		public override void OnAddedToEntity()
 		{
-			const int Size = 16;
-			_discTexture = new Texture2D(Core.GraphicsDevice, Size, Size);
-			var data = new Color[Size * Size];
-			const float half = Size * 0.5f;
-
-			for (int y = 0; y < Size; y++)
-			{
-				for (int x = 0; x < Size; x++)
-				{
-					float dx = (x + 0.5f) - half;
-					float dy = (y + 0.5f) - half;
-					float d  = MathF.Sqrt(dx * dx + dy * dy) / half;
-					float a  = MathHelper.Clamp(1f - d * d, 0f, 1f);
-					a = MathF.Pow(a, 1.5f); // smooth falloff
-					byte alpha = (byte)(a * 255f);
-					data[y * Size + x] = new Color((byte)255, (byte)255, (byte)255, alpha);
-				}
-			}
-			_discTexture.SetData(data);
-
-			_origin       = new Vector2(half, half);
-			_spriteScale  = (FluidConfig.DiscSpriteRadius * 2f) / Size;
+			// 12 vertices per particle × MaxParticles → up to 60k for 5000 particles.
+			_primBatch = new PrimitiveBatch(65536);
 		}
 
 		public override void Render(Batcher batcher, Camera camera)
@@ -76,31 +58,55 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 				return;
 			}
 
+			batcher.FlushBatch();
+
+			var gd = Core.GraphicsDevice;
+			gd.BlendState        = BlendState.AlphaBlend;
+			gd.DepthStencilState = DepthStencilState.None;
+			gd.RasterizerState   = RasterizerState.CullNone;
+
+			Matrix proj = camera.ProjectionMatrix;
+			Matrix view = camera.TransformMatrix;
+			_primBatch.Begin(ref proj, ref view);
+
+			float rOuter = FluidConfig.DiscSpriteRadius;
+			float rInner = rOuter * 0.55f;
+
 			int count = _sim.Count;
 			var px = _sim.Px;
 			var py = _sim.Py;
-			Vector2 pos;
+
+			// Outer halo pass
 			for (int i = 0; i < count; i++)
 			{
-				pos.X = px[i];
-				pos.Y = py[i];
-				batcher.Draw(
-					_discTexture,
-					pos,
-					null,
-					_tint,
-					0f,
-					_origin,
-					_spriteScale,
-					SpriteEffects.None,
-					0f);
+				AddQuad(px[i], py[i], rOuter, _outer);
 			}
+
+			// Inner core pass
+			for (int i = 0; i < count; i++)
+			{
+				AddQuad(px[i], py[i], rInner, _inner);
+			}
+
+			_primBatch.End();
+		}
+
+		private void AddQuad(float cx, float cy, float r, Color c)
+		{
+			float x0 = cx - r, x1 = cx + r;
+			float y0 = cy - r, y1 = cy + r;
+			_primBatch.AddVertex(new Vector2(x0, y0), c, PrimitiveType.TriangleList);
+			_primBatch.AddVertex(new Vector2(x1, y0), c, PrimitiveType.TriangleList);
+			_primBatch.AddVertex(new Vector2(x0, y1), c, PrimitiveType.TriangleList);
+			_primBatch.AddVertex(new Vector2(x1, y0), c, PrimitiveType.TriangleList);
+			_primBatch.AddVertex(new Vector2(x1, y1), c, PrimitiveType.TriangleList);
+			_primBatch.AddVertex(new Vector2(x0, y1), c, PrimitiveType.TriangleList);
 		}
 
 		public override void OnRemovedFromEntity()
 		{
-			_discTexture?.Dispose();
-			_discTexture = null;
+			_primBatch?.Dispose();
+			_primBatch = null;
 		}
 	}
 }
