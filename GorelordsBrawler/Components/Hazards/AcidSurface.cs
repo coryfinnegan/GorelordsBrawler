@@ -218,6 +218,18 @@ namespace GorelordsBrawler.Components.Hazards
 			return _grid?.GetSurfaceYAt(worldX) ?? _mapHeight;
 		}
 
+		/// <summary>
+		/// Topmost wet cell at <paramref name="worldX"/> at or below
+		/// <paramref name="ceilingWorldY"/>. Use this for "the acid surface
+		/// near this point" queries (e.g. where a wading player meets the
+		/// air-acid boundary) — splashes on higher platforms sharing the same
+		/// column are ignored. Returns mapHeight if no qualifying wet cell.
+		/// </summary>
+		public float GetLocalSurfaceLevelAtX(float worldX, float ceilingWorldY)
+		{
+			return _grid?.GetSurfaceYAtBelow(worldX, ceilingWorldY) ?? _mapHeight;
+		}
+
 		public float GetSurfaceLevelInRange(float leftX, float rightX)
 		{
 			return _grid?.GetMinSurfaceYInRange(leftX, rightX) ?? _mapHeight;

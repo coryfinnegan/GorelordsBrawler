@@ -62,7 +62,6 @@ namespace GorelordsBrawler.Systems
 		// ── Refs / state ──────────────────────────────────────────────────────
 		private readonly AcidSurface   _acid;
 		private readonly ContactHazard _hazard;
-		private readonly int           _mapHeight;
 
 		private Entity[]                 _poolEntities;
 		private ParticleEmitter[]        _emitters;
@@ -71,11 +70,10 @@ namespace GorelordsBrawler.Systems
 		private int                      _nextSlot;
 		private bool                     _subscribed;
 
-		public AcidSizzleManager(AcidSurface acid, ContactHazard hazard, int mapHeight)
+		public AcidSizzleManager(AcidSurface acid, ContactHazard hazard)
 		{
-			_acid      = acid;
-			_hazard    = hazard;
-			_mapHeight = mapHeight;
+			_acid   = acid;
+			_hazard = hazard;
 		}
 
 		public override void OnAddedToEntity()
@@ -141,27 +139,38 @@ namespace GorelordsBrawler.Systems
 		{
 			if (player == null) return;
 
-			// Place the puff at the player's contact point.
+			// Place the puff at the LOCAL acid surface near the player —
+			// where the body actually meets the air-acid boundary.
 			//
-			// Naive approach (GetSurfaceLevelAtX → use that Y) is wrong: the
-			// occupancy grid returns the TOPMOST wet cell in the column, so
-			// if any acid has splashed on a higher platform sharing the
-			// player's x-column the puff appears way above the player —
-			// reads as "burning a ghost up there" instead of "burning this
-			// player here."
+			// Earlier cuts:
+			//   - Transform.Position.Y → reads as "smoke from the crotch"
+			//     for a centered sprite.
+			//   - Bounds.Bottom (feet)  → correct contact point but gets
+			//     buried in the pool when the player wades deeper than
+			//     their ankles; puffs spawn underwater and rarely surface
+			//     before their lifespan expires.
+			//   - GetSurfaceLevelAtX    → returns the topmost wet cell in
+			//     the column, so a splash on a platform overhead misled the
+			//     puff way above the player.
 			//
-			// Right rule: never place the puff above the player. Clamp to
-			// max(player.Y, surfaceY) so the puff is either at the acid
-			// surface (if it's at/below the player's body — normal wading
-			// case) or right at the player (if the topmost wet cell is on
-			// some unrelated splash overhead, or no wet cells exist yet).
-			float x        = player.Transform.Position.X;
-			float puffY    = player.Transform.Position.Y;
-			float surfaceY = _acid.GetSurfaceLevelAtX(x);
-			if (surfaceY < _mapHeight && surfaceY > puffY)
-			{
-				puffY = surfaceY;
-			}
+			// GetLocalSurfaceLevelAtX scans from the player's HEAD downward
+			// and returns the first wet cell. That's the surface at the
+			// player's body. Ranges of behaviour:
+			//   - shallow wading: surface at knees/ankles → puff at knees
+			//   - deep wading:    surface at chest/head   → puff at chest
+			//   - fully submerged (head under): query returns surface at
+			//     head row (since head is itself wet); puff at head, rises
+			//     out of the pool quickly.
+			//   - no acid in column yet (corner case): fall back to feet.
+			var collider = player.GetComponent<Collider>();
+			float x       = player.Transform.Position.X;
+			float feetY   = collider != null ? collider.Bounds.Bottom : player.Transform.Position.Y;
+			float headY   = collider != null ? collider.Bounds.Top    : player.Transform.Position.Y;
+			float surface = _acid.GetLocalSurfaceLevelAtX(x, headY);
+			// min: if the local surface is above the feet (typical wading),
+			// puff at surface; else surface returned mapHeight (no wet cells
+			// in column under the head) → fall through to feet.
+			float puffY   = System.Math.Min(surface, feetY);
 
 			int slot = _nextSlot;
 			_nextSlot = (_nextSlot + 1) % PoolSize;

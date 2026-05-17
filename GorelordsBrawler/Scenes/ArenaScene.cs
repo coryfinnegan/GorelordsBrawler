@@ -98,7 +98,7 @@ namespace GorelordsBrawler.Scenes
 			// AcidBubbleEmitter) so the [Inspectable] tuning knobs appear in
 			// the Nez runtime inspector under this entity.
 			var sizzleEntity = CreateEntity("acid-sizzle");
-			sizzleEntity.AddComponent(new AcidSizzleManager(acidSurface, contactHazard, mh));
+			sizzleEntity.AddComponent(new AcidSizzleManager(acidSurface, contactHazard));
 
 #if DEBUG
 			if (AppSettings.DebugServer)

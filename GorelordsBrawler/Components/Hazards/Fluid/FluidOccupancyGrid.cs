@@ -97,6 +97,37 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 			return row * CellSize;
 		}
 
+		/// <summary>
+		/// World Y of the topmost wet cell in the column at worldX whose row
+		/// is at or below the row containing ceilingWorldY. Returns MapHeight
+		/// if no wet cell qualifies.
+		///
+		/// Use this when you need the surface of the acid mass NEAR a specific
+		/// reference point (e.g. a player wading in the pool) instead of the
+		/// absolute topmost wet cell — splashes on higher platforms in the
+		/// same column would otherwise mislead the caller.
+		/// </summary>
+		public float GetSurfaceYAtBelow(float worldX, float ceilingWorldY)
+		{
+			int cx = (int)(worldX / CellSize);
+			if (cx < 0) cx = 0;
+			if (cx >= Cols) cx = Cols - 1;
+
+			int startRow = (int)(ceilingWorldY / CellSize);
+			if (startRow < 0)     startRow = 0;
+			if (startRow >= Rows) return MapHeight;
+
+			int wetThreshold = FluidConfig.WetThreshold;
+			for (int r = startRow; r < Rows; r++)
+			{
+				if (_counts[r * Cols + cx] >= wetThreshold)
+				{
+					return r * CellSize;
+				}
+			}
+			return MapHeight;
+		}
+
 		/// <summary>Minimum (highest on-screen) surface across the column range covering [leftX, rightX].</summary>
 		public float GetMinSurfaceYInRange(float leftX, float rightX)
 		{
