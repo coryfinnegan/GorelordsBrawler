@@ -112,6 +112,20 @@ If all checks pass and the upload succeeded: tell the user "{feature} smoke test
 
 If a check fails: report the failing check name verbatim (from the `FAIL at check '...'` line). Read `.smoke-test-screenshot.{feature}.png` to see the last frame before failure. The recording is NOT uploaded on failure (don't pollute catbox with broken clips).
 
+## Preparing the user for functional testing
+
+The smoke test is the FIRST gate — it proves the feature didn't crash and meets its assertions. After that the user does manual functional testing on the running game. Two things make that easier and the agent should do both as part of the feature-dev workflow:
+
+1. **Pass `-OpenIde` on the smoke-test invocation that precedes PR creation.** When the test passes, the harness `Start-Process`es the worktree's `GorelordsBrawler.slnx`, opening Visual Studio against THIS branch's code. The user can hit F5 to run a normal (non-test-mode) game session immediately, or set breakpoints / inspect code while testing. No effect when checks fail (we don't yank focus on a broken run).
+
+2. **Write the PR description for a learning reader.** Per the user's role in `CLAUDE.md`, they want to learn game-development concepts as they review. PR bodies should:
+   - Lead with WHAT changed and WHY, not just the diff summary.
+   - Briefly explain any non-obvious technique or API used (with a one-line citation if it came from research — paper, Nez source, MonoGame docs, etc.).
+   - Call out the trade-offs or alternatives considered.
+   - Treat the PR as the durable record of the change — once merged, the user will reference it later instead of re-reading the conversation.
+
+If `-OpenIde` is wrong for the situation (user said they're away from their machine, you're iterating fast and don't want focus stealing), just don't pass it for that run.
+
 ## Options
 
 ```bash
@@ -129,6 +143,11 @@ pwsh .claude/skills/smoke-test/smoke_test.ps1 -Feature acid -ScreenshotPath C:\t
 
 # Specify repo root manually
 pwsh .claude/skills/smoke-test/smoke_test.ps1 -Feature acid -RepoRoot C:\path\to\GorelordsBrawler
+
+# Open Visual Studio after success so the user can F5 into a functional-test
+# session against this branch's code (no-op on failure). The standard feature-
+# dev agent workflow passes this on the run that precedes PR creation.
+pwsh .claude/skills/smoke-test/smoke_test.ps1 -Feature acid -OpenIde
 ```
 
 ## Artifacts (all gitignored)

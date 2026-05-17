@@ -36,7 +36,13 @@ param(
     [string] $RecordingPath,
     [switch] $NoBuild,
     [switch] $NoRecord,
-    [int]    $RecordSeconds = 0   # 0 = use feature default
+    [int]    $RecordSeconds = 0,  # 0 = use feature default
+    # When set, on success Start-Process the worktree's .slnx file so the
+    # user's registered IDE (Visual Studio) opens against THIS branch's code,
+    # ready for them to F5 into a normal session for manual functional
+    # testing. The smoke-test still kills its own debug-mode game instance
+    # in the finally block; this is a separate handoff to the IDE.
+    [switch] $OpenIde
 )
 
 $ErrorActionPreference = 'Stop'
@@ -355,6 +361,27 @@ try {
         Write-Host "[smoke] $($Feat.Name.ToUpper()) — $n/$n CHECKS PASSED ✓" -ForegroundColor Green
         if ($UploadedUrl) {
             Write-Host "[smoke] Recording: $UploadedUrl" -ForegroundColor Green
+        }
+
+        # ── Hand off to the IDE for manual functional testing ──────────────
+        # Only on -OpenIde and only after success — never want to flip the
+        # user's IDE open in the middle of an iteration loop that just
+        # failed. The .slnx opens via the OS handler (Visual Studio on
+        # Windows), pinned to the worktree so they're inspecting THIS
+        # branch's code. If no handler is registered (e.g. headless CI),
+        # warn and continue rather than failing the test.
+        if ($OpenIde) {
+            $SlnPath = Join-Path $RepoRoot 'GorelordsBrawler.slnx'
+            if (Test-Path $SlnPath) {
+                Write-Host "[smoke] Opening IDE: $SlnPath" -ForegroundColor Cyan
+                try {
+                    Start-Process -FilePath $SlnPath
+                } catch {
+                    Write-Warning "[smoke] Could not open .slnx (is Visual Studio installed and registered for .slnx files?): $_"
+                }
+            } else {
+                Write-Warning "[smoke] -OpenIde requested but no .slnx at $SlnPath"
+            }
         }
     }
 }
