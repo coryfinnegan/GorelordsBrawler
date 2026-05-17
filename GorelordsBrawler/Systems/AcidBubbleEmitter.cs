@@ -40,7 +40,11 @@ namespace GorelordsBrawler.Systems
 	public class AcidBubbleEmitter : Component, IUpdatable
 	{
 		// ── Live-tunable intensity knobs ──────────────────────────────────────
-		[Inspectable, Range(0f, 64f)]
+		// SpawnsPerSec slider runs to 256 (4× the previously-tuned 64) so
+		// future iterations have headroom to push intensity even higher
+		// without rebuilding to change the range. Hard particle cap in
+		// FluidConfig.BubbleMaxParticles bounds the actual on-screen count.
+		[Inspectable, Range(0f, 256f)]
 		public float SpawnsPerSec = FluidConfig.BubbleSpawnsPerSec;
 
 		[Inspectable, Range(0.5f, 24f)]

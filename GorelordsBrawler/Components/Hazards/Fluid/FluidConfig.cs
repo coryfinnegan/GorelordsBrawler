@@ -82,10 +82,11 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 		// ── Surface bubbles (Phase 1 of acid-deadly-polish-plan) ──────────────
 		// Single continuous-burst ParticleEmitter retargeted each spawn to a
 		// random x along the current surface line. Reads as "this thing is
-		// fizzing / corrosive".
-		public const float BubbleSpawnsPerSec  = 8f;
-		public const int   BubbleMaxParticles  = 96;
-		public const float BubbleLifespan      = 1.1f;
+		// fizzing / corrosive". Spawn rate + lifespan were tuned in-game via
+		// the AcidBubbleEmitter inspector sliders — see PR #5 review thread.
+		public const float BubbleSpawnsPerSec  = 64f;
+		public const int   BubbleMaxParticles  = 256;    // headroom for spawn-rate exploration
+		public const float BubbleLifespan      = 0.9f;
 		public const float BubbleLifespanVar   = 0.25f;
 		public const float BubbleRiseSpeed     = 22f;    // px/sec upward
 		public const float BubbleRiseSpeedVar  = 10f;
