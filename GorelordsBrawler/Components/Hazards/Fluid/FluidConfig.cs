@@ -55,10 +55,13 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 		public const float DamageBoundsPadY   = 4f;
 
 		// ── Rendering ─────────────────────────────────────────────────────────
-		// Disc is rendered ~3× the physics radius so neighbouring particles
-		// overlap heavily — that's what makes them blur together into a smooth
-		// "blob of liquid" rather than reading as individual circles.
-		public const float DiscSpriteRadius   = 12f;
+		// Two visual radii so we can draw the pool body and the airborne
+		// droplets differently — big opaque blobs underwater (so they fill
+		// into a solid liquid mass), small bright droplets in air (so the
+		// stream still reads as discrete drops, not giant ovals).
+		public const float PoolDiscRadius     = 18f;  // particle-in-pool render size
+		public const float DropletDiscRadius  = 7f;   // airborne particle render size
+		public const float DiscSpriteRadius   = 12f;  // legacy single-size knob (unused by new renderer)
 		public const bool  UseMetaballPass    = false;  // optional polish flag
 
 		// ── Compatibility ─────────────────────────────────────────────────────

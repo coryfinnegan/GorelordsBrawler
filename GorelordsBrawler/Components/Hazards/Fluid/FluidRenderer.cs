@@ -7,42 +7,67 @@ using GorelordsBrawler.Constants;
 namespace GorelordsBrawler.Components.Hazards.Fluid
 {
 	/// <summary>
-	/// Renders each fluid particle as a soft-alpha disc through Nez's Batcher.
-	/// Overlapping discs naturally fuse into smooth, blobby "metaball-ish"
-	/// shapes instead of the chunky-square look that flat quads gave us.
+	/// Renders the fluid as filled solid pools (no per-particle discs) +
+	/// airborne droplet sprites for the falling stream.
 	///
-	/// Two passes per particle, both sharing one generated disc texture so the
-	/// whole liquid body batches into one draw call per pass:
+	/// The "chunky soft-disc" look came from each particle drawing its own
+	/// blob. To get true LIQUID we instead:
 	///
-	///   1. Body            — saturated green disc at full DiscSpriteRadius
-	///                        with alpha blend. With ~3× physics-radius discs,
-	///                        neighbouring particles overlap heavily and merge
-	///                        into a smooth blob.
-	///   2. Surface sparkle — additive hot-green highlight, ONLY drawn on
-	///                        particles within ±SurfaceBandHalfHeight of the
-	///                        pool's current surface. Sells "this is glowing
-	///                        acid, do not touch." Critically NOT applied to
-	///                        the falling stream — additive on the densely-
-	///                        packed stream would blow out to white.
+	///   1. Bucket particles into fine vertical columns. For each column
+	///      record min/max Y of any particle in it AND the count.
+	///   2. Columns whose count exceeds <see cref="BodyDensityThreshold"/>
+	///      are POOLS — fill them with a solid rect from smoothed-min Y
+	///      to smoothed-max Y. This catches the floor pool AND any pool
+	///      sitting on top of a platform, without the body bleeding into
+	///      space below.
+	///   3. Columns with too few particles are TREATED AS AIRBORNE — those
+	///      particles render as small soft-disc droplets so the falling
+	///      stream still reads as discrete drops.
+	///   4. Bright thin highlight strip drawn ON the pool surface to give
+	///      the liquid a meniscus / sheen.
+	///
+	/// Everything goes through <see cref="Batcher"/> with default alpha-
+	/// blend material — no direct <c>GraphicsDevice</c> state changes
+	/// (previously corrupted batcher state and broke the player
+	/// SpriteAnimator render on the same layer).
 	/// </summary>
 	public sealed class FluidRenderer : RenderableComponent
 	{
-		// 32-px texture: more source pixels means the bilinear filter has a
-		// nicer falloff to work with when we scale up to ~24-px world rendering.
 		private const int   DiscTexSize           = 32;
-		private const float SurfaceBandHalfHeight = 12f; // px on either side of CurrentLevel that counts as surface
+		private const int   ColumnWidth           = 8;     // px per surface bucket
+		// A "pool" column needs both:
+		//   - enough particles to count as a body
+		//   - particles confined to a SHORT Y range — falling streams have
+		//     particles spread over hundreds of pixels and should stay
+		//     droplets, not become a tall green column.
+		private const int   BodyDensityThreshold  = 4;
+		// Allow deep pools (up to ~200 px) — falling streams typically span
+		// the whole 700+ px from inlet to floor so they're well above this.
+		private const float BodyMaxPoolHeight     = 200f;
+		private const float SurfaceBleed          = 2f;    // px the body extends past max Y
+		private const float SurfaceTopOffset      = 2f;    // px above min Y to start body
+		private const float SurfaceHighlightThickness = 3f;
 
 		private readonly FluidSimulation _sim;
 		private readonly AcidSurface     _surface;
 		private readonly int _mapWidth;
 		private readonly int _mapHeight;
-		private readonly Color _body;
-		private readonly Color _sparkle;
+		private readonly Color _bodyColor;
+		private readonly Color _surfaceHighlight;
+		private readonly Color _dropletColor;
 
+		// Per-column state, reused frame to frame.
+		private float[] _colMinY;
+		private float[] _colMaxY;
+		private int[]   _colCount;
+		private float[] _colSmoothMinY;
+		private float[] _colSmoothMaxY;
+		private int     _numCols;
+
+		// Disc texture for airborne droplets.
 		private Texture2D _discTex;
 		private Vector2   _discOrigin;
-		private float     _bodyScale;
-		private float     _sparkleScale;
+		private float     _dropletScale;
 
 		public override RectangleF Bounds => new RectangleF(0, 0, _mapWidth, _mapHeight);
 
@@ -54,25 +79,44 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 			_mapWidth  = mapWidth;
 			_mapHeight = mapHeight;
 
-			// Body: more opaque than the source tint so overlapping discs fill
-			// in to a solid look instead of leaving the under-surface visible.
-			_body = new Color(tint.R, tint.G, tint.B, (byte)230);
+			// Body: full alpha, slightly darker than tint for depth.
+			_bodyColor = new Color(
+				(byte)Math.Max(0, tint.R - 15),
+				(byte)Math.Max(0, tint.G - 10),
+				(byte)Math.Max(0, tint.B - 20),
+				(byte)255);
 
-			// Sparkle: hot acid-green, low alpha so a handful of overlapping
-			// surface particles brighten the surface without nuking to white.
-			_sparkle = new Color((byte)120, (byte)255, (byte)80, (byte)80);
+			// Surface highlight: a brighter version drawn as a thin strip
+			// at the surface. Looks like a wet sheen / meniscus.
+			_surfaceHighlight = new Color(
+				(byte)Math.Min(255, tint.R + 80),
+				(byte)Math.Min(255, tint.G + 50),
+				(byte)Math.Min(255, tint.B + 40),
+				(byte)255);
+
+			// Airborne droplets: brighter still, semi-transparent.
+			_dropletColor = new Color(
+				(byte)Math.Min(255, tint.R + 80),
+				(byte)Math.Min(255, tint.G + 40),
+				(byte)Math.Min(255, tint.B + 50),
+				(byte)220);
 
 			RenderLayer = GameConstants.Rendering.DefaultRenderLayer;
-			LayerDepth  = 0f; // after the TiledMap, before characters
+			LayerDepth  = 0f;
 		}
 
 		public override void OnAddedToEntity()
 		{
 			_discTex      = CreateSoftDiscTexture(DiscTexSize);
 			_discOrigin   = new Vector2(DiscTexSize * 0.5f, DiscTexSize * 0.5f);
-			_bodyScale    = (FluidConfig.DiscSpriteRadius * 2f) / DiscTexSize;
-			// Sparkle is smaller — a highlight, not a body.
-			_sparkleScale = _bodyScale * 0.6f;
+			_dropletScale = (FluidConfig.DropletDiscRadius * 2f) / DiscTexSize;
+
+			_numCols       = (_mapWidth + ColumnWidth - 1) / ColumnWidth;
+			_colMinY       = new float[_numCols];
+			_colMaxY       = new float[_numCols];
+			_colCount      = new int[_numCols];
+			_colSmoothMinY = new float[_numCols];
+			_colSmoothMaxY = new float[_numCols];
 		}
 
 		public override void Render(Batcher batcher, Camera camera)
@@ -82,41 +126,71 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 				return;
 			}
 
-			int count    = _sim.Count;
-			var px       = _sim.Px;
-			var py       = _sim.Py;
-			float surfY  = _surface != null ? _surface.CurrentLevel : float.MaxValue;
-			float bandLo = surfY - SurfaceBandHalfHeight;
-			float bandHi = surfY + SurfaceBandHalfHeight;
+			int count = _sim.Count;
+			var px    = _sim.Px;
+			var py    = _sim.Py;
 
-			// ─ Pass 1: body (alpha blend, all particles) ───────────────────
-			// Batcher.Begin was already called for us by the renderer with the
-			// default state of AlphaBlend, so no switch needed.
-			for (int i = 0; i < count; i++)
+			// 1. Bucket particles by column.
+			for (int c = 0; c < _numCols; c++)
 			{
-				batcher.Draw(_discTex, new Vector2(px[i], py[i]), null,
-					_body, 0f, _discOrigin, _bodyScale,
-					SpriteEffects.None, 0f);
+				_colMinY[c]  = _mapHeight;
+				_colMaxY[c]  = 0f;
+				_colCount[c] = 0;
 			}
-
-			// ─ Pass 2: surface sparkle (additive, surface band only) ───────
-			// Flush the AlphaBlend batch, switch to additive, then restore.
-			batcher.FlushBatch();
-			var gd = Core.GraphicsDevice;
-			var prev = gd.BlendState;
-			gd.BlendState = BlendState.Additive;
-
 			for (int i = 0; i < count; i++)
 			{
+				int col = (int)(px[i] / ColumnWidth);
+				if (col < 0 || col >= _numCols) continue;
+				_colCount[col]++;
 				float y = py[i];
-				if (y < bandLo || y > bandHi) continue;
-				batcher.Draw(_discTex, new Vector2(px[i], y), null,
-					_sparkle, 0f, _discOrigin, _sparkleScale,
-					SpriteEffects.None, 0f);
+				if (y < _colMinY[col]) _colMinY[col] = y;
+				if (y > _colMaxY[col]) _colMaxY[col] = y;
 			}
 
-			batcher.FlushBatch();
-			gd.BlendState = prev;
+			// 2. 5-tap box smooth min and max so the surface lerps between
+			//    adjacent columns instead of stair-stepping per particle.
+			for (int c = 0; c < _numCols; c++)
+			{
+				int c0 = Math.Max(0, c - 2);
+				int c1 = Math.Max(0, c - 1);
+				int c3 = Math.Min(_numCols - 1, c + 1);
+				int c4 = Math.Min(_numCols - 1, c + 2);
+				_colSmoothMinY[c] = (_colMinY[c0] + _colMinY[c1] + _colMinY[c]
+				                   + _colMinY[c3] + _colMinY[c4]) * 0.2f;
+				_colSmoothMaxY[c] = (_colMaxY[c0] + _colMaxY[c1] + _colMaxY[c]
+				                   + _colMaxY[c3] + _colMaxY[c4]) * 0.2f;
+			}
+
+			// 3. Body fill — columns that look like pools, not streams.
+			//    Both criteria must hold: enough particles, packed shallow.
+			for (int c = 0; c < _numCols; c++)
+			{
+				if (_colCount[c] < BodyDensityThreshold) continue;
+				float poolHeight = _colSmoothMaxY[c] - _colSmoothMinY[c];
+				if (poolHeight > BodyMaxPoolHeight) continue;   // falling stream — leave as droplets
+				float top = _colSmoothMinY[c] - SurfaceTopOffset;
+				float bot = _colSmoothMaxY[c] + SurfaceBleed;
+				if (bot <= top) continue;
+				float x = c * ColumnWidth;
+				batcher.DrawRect(x, top, ColumnWidth, bot - top, _bodyColor);
+				batcher.DrawRect(x, top, ColumnWidth, SurfaceHighlightThickness, _surfaceHighlight);
+			}
+
+			// 4. Droplets — every particle in a non-pool column (either too
+			//    sparse OR too tall a Y range) gets rendered as a soft drop.
+			for (int i = 0; i < count; i++)
+			{
+				int col = (int)(px[i] / ColumnWidth);
+				if (col < 0 || col >= _numCols) continue;
+				if (_colCount[col] >= BodyDensityThreshold &&
+				    (_colSmoothMaxY[col] - _colSmoothMinY[col]) <= BodyMaxPoolHeight)
+				{
+					continue;   // this column rendered as body — particle already covered
+				}
+				batcher.Draw(_discTex, new Vector2(px[i], py[i]), null,
+					_dropletColor, 0f, _discOrigin, _dropletScale,
+					SpriteEffects.None, 0f);
+			}
 		}
 
 		public override void OnRemovedFromEntity()
@@ -126,9 +200,8 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 		}
 
 		// ──────────────────────────────────────────────────────────────────
-		// Procedural soft-disc texture: 1 at center, smooth quadratic falloff
-		// to 0 at radius. White texel + per-draw tint = colored blob. Public
-		// so AcidEffectsManager can reuse it for particle emitter sprites.
+		// Procedural soft-disc texture for airborne droplets / particle FX.
+		// Public so AcidEffectsManager can reuse it.
 		// ──────────────────────────────────────────────────────────────────
 		internal static Texture2D CreateSoftDiscTexture(int size)
 		{

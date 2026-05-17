@@ -115,7 +115,11 @@ namespace GorelordsBrawler.Systems
 			_bubbleEntity = Scene.CreateEntity("acid-bubbles");
 			_bubbleConfig = BuildBubbleConfig();
 			_bubbleEmitter = new ParticleEmitter(_bubbleConfig, playOnAwake: false);
-			_bubbleEmitter.RenderLayer = GameConstants.Rendering.DefaultRenderLayer;
+			// Pull effects FORWARD of the player layer so the player can be
+			// seen under them — sprite RenderLayer is 0 (default), so we use
+			// HitboxRenderLayer (= -1, drawn in front) which is what
+			// HitParticleManager does for the same reason.
+			_bubbleEmitter.RenderLayer = GameConstants.Rendering.HitboxRenderLayer;
 			_bubbleEmitter.LayerDepth  = 0f;
 			_bubbleEntity.AddComponent(_bubbleEmitter);
 
@@ -138,7 +142,12 @@ namespace GorelordsBrawler.Systems
 		{
 			var entity = Scene.CreateEntity(name);
 			emitter = new ParticleEmitter(config, playOnAwake: false);
-			emitter.RenderLayer = GameConstants.Rendering.DefaultRenderLayer;
+			// HitboxRenderLayer (= -1) draws IN FRONT of the default sprite
+			// layer — same convention HitParticleManager uses. Putting
+			// effects on the same layer as players causes intermittent
+			// renderable-list ordering bugs where the player ends up under
+			// an empty-but-still-batched emitter.
+			emitter.RenderLayer = GameConstants.Rendering.HitboxRenderLayer;
 			emitter.LayerDepth  = 0f;
 			entity.AddComponent(emitter);
 			return entity;
@@ -241,7 +250,7 @@ namespace GorelordsBrawler.Systems
 				Gravity                  = new Vector2(0f, 1200f),
 				ParticleLifespan         = 0.6f,
 				ParticleLifespanVariance = 0.18f,
-				StartColor               = new Color((byte)200, (byte)255, (byte)140, (byte)220),
+				StartColor               = new Color((byte)200, (byte)255, (byte)140, (byte)230),
 				FinishColor              = new Color((byte)90,  (byte)200, (byte)40,  (byte)0),
 				StartParticleSize        = 8f,
 				FinishParticleSize       = 2f,
@@ -249,7 +258,7 @@ namespace GorelordsBrawler.Systems
 				Sprite                   = _discSprite,
 				SourcePositionVariance   = new Vector2(6f, 2f),
 				BlendFuncSource          = Blend.SourceAlpha,
-				BlendFuncDestination     = Blend.One,        // additive: visible above the bright pool
+				BlendFuncDestination     = Blend.InverseSourceAlpha,   // alpha blend (matches HitParticleManager pattern)
 			};
 		}
 
@@ -269,7 +278,7 @@ namespace GorelordsBrawler.Systems
 				Gravity                  = new Vector2(0f, -60f),
 				ParticleLifespan         = 1.4f,
 				ParticleLifespanVariance = 0.3f,
-				StartColor               = new Color((byte)220, (byte)255, (byte)160, (byte)200),
+				StartColor               = new Color((byte)220, (byte)255, (byte)160, (byte)230),
 				FinishColor              = new Color((byte)180, (byte)230, (byte)100, (byte)0),
 				StartParticleSize        = 6f,
 				FinishParticleSize       = 12f,
@@ -277,7 +286,7 @@ namespace GorelordsBrawler.Systems
 				Sprite                   = _discSprite,
 				SourcePositionVariance   = new Vector2(10f, 2f),
 				BlendFuncSource          = Blend.SourceAlpha,
-				BlendFuncDestination     = Blend.One,        // additive bubbles glow against the pool
+				BlendFuncDestination     = Blend.InverseSourceAlpha,   // alpha blend (matches HitParticleManager pattern)
 			};
 		}
 
