@@ -55,8 +55,22 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 		public const float DamageBoundsPadY   = 4f;
 
 		// ── Rendering ─────────────────────────────────────────────────────────
-		public const float DiscSpriteRadius   = 8f;     // half-extent of disc texture in px (≈ 2× physics)
-		public const bool  UseMetaballPass    = false;  // optional polish flag
+		// SplatRadius: each particle is drawn as a soft-alpha disc of this
+		// radius into the field RenderTexture in Pass 1 of the metaball
+		// pipeline. Must be substantially larger than the physics radius so
+		// neighbouring particles' fields overlap heavily — GameDev.net
+		// "Fluid Rendering with Box2D" recommends ~3× physics radius as a
+		// starting point.
+		public const float SplatRadius        = 12f;
+		public const float DiscSpriteRadius   = 8f;     // legacy / unused
+		public const bool  UseMetaballPass    = false;  // legacy / unused
+
+		// ── Liquid post-process shader tunables ───────────────────────────────
+		// Read by LiquidPostProcessor and forwarded to the liquid.fx shader
+		// every frame. Tune live by editing here + rebuilding.
+		public const float LiquidThresholdMin = 0.40f;  // bottom of the smooth edge in field-alpha space
+		public const float LiquidThresholdMax = 0.55f;  // top (fully solid above this)
+		public const float LiquidEdgeBandWidth = 0.04f; // ½-width of the bright meniscus highlight
 
 		// ── Compatibility ─────────────────────────────────────────────────────
 		/// <summary>

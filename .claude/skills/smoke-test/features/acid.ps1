@@ -65,5 +65,48 @@ return @{
             $hits = ($s.players | Where-Object { $_.hp -lt $_.maxHp }).Count
             "time=$($s.time), $hits player(s) damaged"
         })
+
+        # ──────────────────────────────────────────────────────────────────
+        # Regression test: player sprites are actually rendered.
+        # ──────────────────────────────────────────────────────────────────
+        # Previous PRs shipped regressions where new renderables on the wrong
+        # RenderLayer (or with mid-render device-state changes) silently
+        # disabled the player SpriteAnimator — health bars still showed, but
+        # the character sprites disappeared. This pixel check would have
+        # caught those PRs before they shipped.
+        #
+        # Runs AFTER the acid lifecycle so the whole rendering pipeline has
+        # been active for ~6 s. We count RED-DOMINANT pixels in the lower
+        # third of the screen — Future-Axe players wear red armour; floors
+        # are gray; the background is dark blue/black. Only a rendered
+        # player sprite can light those pixels up.
+        $Ctx.Check('player sprites are still rendered (regression for player invisibility)', {
+            param($c)
+            $repoRoot = (Get-Item $PSScriptRoot).Parent.Parent.Parent.Parent.FullName
+            $tmp = Join-Path $repoRoot '.smoke-test-spawn-screenshot.acid.jpg'
+            Invoke-WebRequest -Uri "$($c.ServerUrl)/screenshot" `
+                -OutFile $tmp -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+            Add-Type -AssemblyName System.Drawing
+            $img = [System.Drawing.Image]::FromFile($tmp)
+            $bmp = New-Object System.Drawing.Bitmap($img)
+            $img.Dispose()
+            $redCount = 0
+            $startY   = [int]($bmp.Height * 0.66)
+            for ($y = $startY; $y -lt $bmp.Height; $y += 2) {
+                for ($x = 0; $x -lt $bmp.Width; $x += 2) {
+                    $px = $bmp.GetPixel($x, $y)
+                    if ([int]$px.R -gt 70 -and
+                        [int]$px.R -gt [int]$px.G + 15 -and
+                        [int]$px.R -gt [int]$px.B + 15) {
+                        $redCount++
+                    }
+                }
+            }
+            $bmp.Dispose()
+            if ($redCount -lt 100) {
+                throw "only $redCount red-dominant pixels in the lower screen — player sprites likely not rendering. Screenshot saved at $tmp."
+            }
+            "red-dominant pixel count = $redCount (threshold >= 100)"
+        })
     }
 }
