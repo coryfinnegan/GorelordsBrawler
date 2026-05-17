@@ -91,6 +91,15 @@ namespace GorelordsBrawler.Scenes
 			var bubbleEntity = CreateEntity("acid-bubbles");
 			bubbleEntity.AddComponent(new AcidBubbleEmitter(acidSurface, mw, mh));
 
+			// Phase 2 deadly-polish: per-player burn feedback when standing in
+			// acid. Subscribes to ContactHazard.OnDamageApplied and fires a
+			// yellow smoke puff at the contact point + a HitFlash on the
+			// damaged player. Hosted on its own entity (same convention as
+			// AcidBubbleEmitter) so the [Inspectable] tuning knobs appear in
+			// the Nez runtime inspector under this entity.
+			var sizzleEntity = CreateEntity("acid-sizzle");
+			sizzleEntity.AddComponent(new AcidSizzleManager(acidSurface, contactHazard, mh));
+
 #if DEBUG
 			if (AppSettings.DebugServer)
 			{
