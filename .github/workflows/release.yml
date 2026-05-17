@@ -1,0 +1,69 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release-main
+  # Don't cancel an in-flight publish — uploading a release asset is not
+  # safe to interrupt.
+  cancel-in-progress: false
+
+permissions:
+  contents: write  # required to create the release and upload assets
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout (with Nez submodule)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0  # full history for generate_release_notes
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Restore dotnet tools (mgcb, t4)
+        run: dotnet tool restore
+        working-directory: GorelordsBrawler
+
+      - name: Publish single-file self-contained win-x64
+        run: >
+          dotnet publish GorelordsBrawler/GorelordsBrawler.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:DebugType=embedded
+          -o publish
+
+      - name: Package zip
+        shell: pwsh
+        run: |
+          $version = "0.0.${{ github.run_number }}"
+          $zipName = "GorelordsBrawler-v$version-win-x64.zip"
+          Compress-Archive -Path publish/* -DestinationPath $zipName
+          "ZIP_NAME=$zipName" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "VERSION=$version"  | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Create rolling pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: GorelordsBrawler v${{ env.VERSION }}
+          prerelease: true
+          generate_release_notes: true
+          files: ${{ env.ZIP_NAME }}
