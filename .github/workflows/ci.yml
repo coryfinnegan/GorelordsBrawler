@@ -22,9 +22,10 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          # 9.0.x is forward-compatible — still builds net8.0 projects, and
-          # is required so the SDK understands the .slnx solution format.
-          dotnet-version: '9.0.x'
+          # 10.0.x is the current LTS. The SDK is forward-compatible, so it
+          # still builds our net8.0 projects, and it understands the .slnx
+          # solution format (requires SDK >= 9.0.200).
+          dotnet-version: '10.0.x'
 
       - name: Cache NuGet packages
         uses: actions/cache@v4
