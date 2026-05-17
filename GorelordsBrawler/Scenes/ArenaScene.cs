@@ -85,7 +85,11 @@ namespace GorelordsBrawler.Scenes
 			var spawner = AddSceneComponent(new PlatformSpawner(mw, mh));
 			AddSceneComponent(new AcidPhaseManager(acidSurface, spawner, mw, mh));
 			// Phase 1 deadly-polish: ambient bubbles rising from the surface.
-			AddSceneComponent(new AcidBubbleEmitter(acidSurface, mw, mh));
+			// Hosted on its own entity (rather than as a SceneComponent) so
+			// the [Inspectable] tuning knobs (SpawnsPerSec, StartSize, etc.)
+			// appear in the Nez runtime inspector under this entity.
+			var bubbleEntity = CreateEntity("acid-bubbles");
+			bubbleEntity.AddComponent(new AcidBubbleEmitter(acidSurface, mw, mh));
 
 #if DEBUG
 			if (AppSettings.DebugServer)
