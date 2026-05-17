@@ -42,7 +42,17 @@ jobs:
         run: dotnet restore GorelordsBrawler.slnx
 
       - name: Build
-        run: dotnet build GorelordsBrawler.slnx -c Release --no-restore
+        # -m:1 disables MSBuild parallelism. The .NET SDK has a known race
+        # in the GenerateDepsFile task when multiple projects in a solution
+        # transitively depend on the same project: parallel workers all try
+        # to write the dependency's <Project>.deps.json simultaneously and
+        # one of them hits IOException "being used by another process."
+        # The race is intermittent and gets WORSE on the .NET 10 SDK we're
+        # pinned to. Solution build is small (~30 s), so the cost of going
+        # serial is negligible vs. having flaky CI on every other PR.
+        # See: https://github.com/dotnet/sdk/issues/2902,
+        #      https://github.com/dotnet/sdk/issues/52734
+        run: dotnet build GorelordsBrawler.slnx -c Release --no-restore -m:1
 
       - name: Test (Fluid)
         run: dotnet test tests/Fluid.Tests/Fluid.Tests.csproj -c Release --no-build --logger "console;verbosity=normal"
