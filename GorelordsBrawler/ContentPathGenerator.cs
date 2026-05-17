@@ -16,6 +16,11 @@ namespace Nez
 			public const string FutureAxe = @"Content\Characters\FutureAxe.json";
 		}
 
+		public static class Effects
+		{
+			public const string Liquid = @"Content\Effects\liquid.fx";
+		}
+
 		public static class Fonts
 		{
 			public const string GoreFont_0 = @"Content\Fonts\GoreFont_0.png";

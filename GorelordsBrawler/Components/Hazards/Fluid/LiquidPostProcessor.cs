@@ -41,6 +41,14 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 			Effect.Parameters["LiquidColor"]?.SetValue(_bodyColor.ToVector4());
 			Effect.Parameters["EdgeColor"]?.SetValue(_edgeColor.ToVector4());
 
+			// Pulse — sells "alive / corrosive / dangerous". Drives an
+			// in-shader modulation of the bright surface-highlight band only;
+			// the body shape is unaffected so geometry stays stable.
+			// Rate of 2.5 Hz reads as a slow breath. 0..1 range.
+			float pulse = (System.MathF.Sin(Time.TotalTime * FluidConfig.LiquidPulseSpeed) * 0.5f) + 0.5f;
+			Effect.Parameters["Pulse"]?.SetValue(pulse);
+			Effect.Parameters["PulseStrength"]?.SetValue(FluidConfig.LiquidPulseStrength);
+
 			DrawFullscreenQuad(source, destination, Effect);
 		}
 	}

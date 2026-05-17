@@ -84,6 +84,12 @@ namespace GorelordsBrawler.Scenes
 			contactHazard.GetBounds = acidSurface.GetDamageBounds;
 			var spawner = AddSceneComponent(new PlatformSpawner(mw, mh));
 			AddSceneComponent(new AcidPhaseManager(acidSurface, spawner, mw, mh));
+			// Phase 1 deadly-polish: ambient bubbles rising from the surface.
+			// Hosted on its own entity (rather than as a SceneComponent) so
+			// the [Inspectable] tuning knobs (SpawnsPerSec, StartSize, etc.)
+			// appear in the Nez runtime inspector under this entity.
+			var bubbleEntity = CreateEntity("acid-bubbles");
+			bubbleEntity.AddComponent(new AcidBubbleEmitter(acidSurface, mw, mh));
 
 #if DEBUG
 			if (AppSettings.DebugServer)
@@ -100,11 +106,15 @@ namespace GorelordsBrawler.Scenes
 			var cameraEntity = CreateEntity(GameConstants.EntityNames.Camera);
 			var brawlerCam = cameraEntity.AddComponent(new BrawlerCamera());
 			brawlerCam.SetMapBounds(tiledMap.WorldWidth, tiledMap.WorldHeight);
-			brawlerCam.SetAcidSurface(acidSurface);
-			foreach (var player in playerManager.GetActivePlayers())
-			{
-				brawlerCam.AddTarget(player);
-			}
+			// Static view: lock the camera to map center at fit-to-map zoom.
+			// The acid-rising-follow + player-zoom motion was reading as a
+			// "blip" tied to the acid surface (it tracked the volumetric
+			// CurrentLevel estimate, which jumps as soon as the inlet fires
+			// long before any particles are visually on screen). Shake from
+			// CombatEffectsManager etc. still applies on top of the locked
+			// position. Targets and acid-surface coupling are intentionally
+			// dropped so nothing pulls the view around.
+			brawlerCam.Static = true;
 
 			var ruleset = new StockRuleset();
 			AddSceneComponent(new MatchManager(ruleset));

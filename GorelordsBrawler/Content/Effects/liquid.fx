@@ -54,6 +54,13 @@ float  ThresholdMax;    // top of the soft edge (fully solid above); e.g. 0.55
 float4 LiquidColor;     // body color, e.g. acid green (0.18, 0.70, 0.16, 1)
 float4 EdgeColor;       // brighter edge highlight, e.g. (0.55, 1.0, 0.4, 1)
 float  EdgeBandWidth;   // half-width of the bright edge band; e.g. 0.04
+// Pulse: a 0..1 value the C# side animates with sin(Time) to drive a
+// surface-highlight breathing effect. 0 = full body brightness only, 1 =
+// edge highlight maxed. We modulate the highlight's intensity (not its
+// position) so the geometry stays stable while the surface "charges up"
+// and "dims" rhythmically — reads as "alive / corrosive / dangerous".
+float  Pulse;
+float  PulseStrength;   // 0..1 — how much of the edge highlight is pulsed away at Pulse=0
 
 float4 LiquidPS(float2 uv : TEXCOORD0) : COLOR
 {
@@ -71,6 +78,12 @@ float4 LiquidPS(float2 uv : TEXCOORD0) : COLOR
     float rise      = smoothstep(edgeStart, midPoint, fieldA);
     float fall      = smoothstep(midPoint,  edgeEnd,  fieldA);
     float edgeBand  = saturate(rise - fall);
+
+    // Pulse modulates the edge highlight intensity between
+    // (1 - PulseStrength) and 1.0. Body color is unaffected so the
+    // shape stays still while the "charge" breathes.
+    float edgeIntensity = lerp(1.0 - PulseStrength, 1.0, Pulse);
+    edgeBand = edgeBand * edgeIntensity;
 
     float3 liquidRgb = lerp(LiquidColor.rgb, EdgeColor.rgb, edgeBand);
 

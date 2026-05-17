@@ -62,6 +62,17 @@ namespace GorelordsBrawler.Components
         /// </summary>
         public float DesignHeight = 600f;
 
+        [Inspectable]
+        /// <summary>
+        /// When true the camera locks to map center at a zoom that fits the whole
+        /// map and skips all player-tracking + acid-following motion. Shake is
+        /// still applied. Set this before targets/acid are wired in so the
+        /// one-shot positioning runs in the first Update tick.
+        /// </summary>
+        public bool Static = false;
+
+        private bool _staticPlaced;
+
 		public void AddTarget(Entity target)
 		{
 			_targets.Add(target);
@@ -94,9 +105,38 @@ namespace GorelordsBrawler.Components
 
 		public void Update()
 		{
-			if (_targets.Count == 0 || _camera == null)
+			if (_camera == null)
 				return;
 
+			if (Static)
+			{
+				ApplyStaticPlacement();
+			}
+			else if (_targets.Count > 0)
+			{
+				ApplyDynamicTracking();
+			}
+
+			ApplyShake();
+		}
+
+		private void ApplyStaticPlacement()
+		{
+			// Place the camera once (centered on map, zoomed to fit) and never
+			// touch it again — keeps the play area locked while shake still
+			// modulates around the fixed position each frame.
+			if (_staticPlaced || !_hasMapBounds)
+				return;
+
+			float fitZoomX = DesignWidth  / _mapWidth;
+			float fitZoomY = DesignHeight / _mapHeight;
+			_camera.RawZoom  = MathHelper.Min(fitZoomX, fitZoomY);
+			_camera.Position = new Vector2(_mapWidth * 0.5f, _mapHeight * 0.5f);
+			_staticPlaced    = true;
+		}
+
+		private void ApplyDynamicTracking()
+		{
 			// Calculate bounding box of all targets
 			var min = _targets[0].Transform.Position;
 			var max = min;
@@ -114,26 +154,26 @@ namespace GorelordsBrawler.Components
 			var center = (min + max) * 0.5f;
 
 			// Calculate required view size with padding
-			var requiredWidth = (max.X - min.X) + Padding * 2;
+			var requiredWidth  = (max.X - min.X) + Padding * 2;
 			var requiredHeight = (max.Y - min.Y) + Padding * 2;
 
 			// Determine zoom based on which axis needs more room
-			var zoomX = DesignWidth / requiredWidth;
+			var zoomX = DesignWidth  / requiredWidth;
 			var zoomY = DesignHeight / requiredHeight;
 			var targetZoom = MathHelper.Min(zoomX, zoomY);
 			targetZoom = MathHelper.Clamp(targetZoom, MinZoom, MaxZoom);
 
 			// Smoothly interpolate camera position and zoom
 			_camera.Position = Vector2.Lerp(_camera.Position, center, FollowLerp);
-			_camera.RawZoom = MathHelper.Lerp(_camera.RawZoom, targetZoom, FollowLerp);
+			_camera.RawZoom  = MathHelper.Lerp(_camera.RawZoom, targetZoom, FollowLerp);
 
 			// Clamp camera to map bounds so it doesn't scroll past edges
 			if (_hasMapBounds)
 			{
-				var halfViewW = (DesignWidth / _camera.RawZoom) * 0.5f;
+				var halfViewW = (DesignWidth  / _camera.RawZoom) * 0.5f;
 				var halfViewH = (DesignHeight / _camera.RawZoom) * 0.5f;
 				_camera.Position = new Vector2(
-					MathHelper.Clamp(_camera.Position.X, halfViewW, _mapWidth - halfViewW),
+					MathHelper.Clamp(_camera.Position.X, halfViewW, _mapWidth  - halfViewW),
 					MathHelper.Clamp(_camera.Position.Y, halfViewH, _mapHeight - halfViewH));
 			}
 
@@ -147,19 +187,21 @@ namespace GorelordsBrawler.Components
 				if (_camera.Position.Y < minCamY)
 					_camera.Position = new Vector2(_camera.Position.X, minCamY);
 			}
+		}
 
-			// Apply trauma-based screen shake on top of the lerped position
-			if (_shakeTrauma > 0f)
+		private void ApplyShake()
+		{
+			if (_shakeTrauma <= 0f)
+				return;
+
+			var shakeMag = _shakeTrauma * _shakeTrauma * GameConstants.Combat.MaxShakeOffset;
+			_camera.Position += new Vector2(
+				(Nez.Random.NextFloat() * 2f - 1f) * shakeMag,
+				(Nez.Random.NextFloat() * 2f - 1f) * shakeMag);
+			_shakeTrauma -= GameConstants.Combat.ShakeDecay * Time.DeltaTime;
+			if (_shakeTrauma < 0f)
 			{
-				var shakeMag = _shakeTrauma * _shakeTrauma * GameConstants.Combat.MaxShakeOffset;
-				_camera.Position += new Vector2(
-					(Nez.Random.NextFloat() * 2f - 1f) * shakeMag,
-					(Nez.Random.NextFloat() * 2f - 1f) * shakeMag);
-				_shakeTrauma -= GameConstants.Combat.ShakeDecay * Time.DeltaTime;
-				if (_shakeTrauma < 0f)
-				{
-					_shakeTrauma = 0f;
-				}
+				_shakeTrauma = 0f;
 			}
 		}
 	}
