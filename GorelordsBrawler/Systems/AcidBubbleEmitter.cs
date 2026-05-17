@@ -84,9 +84,6 @@ namespace GorelordsBrawler.Systems
 		{
 			if (_acid == null || _emitter == null) return;
 
-			float surfaceY = _acid.CurrentLevel;
-			if (surfaceY >= _mapHeight) return;   // pool empty / off-screen
-
 			float dt = Time.DeltaTime;
 			_spawnAccum += dt * FluidConfig.BubbleSpawnsPerSec;
 			while (_spawnAccum >= 1f)
@@ -95,6 +92,17 @@ namespace GorelordsBrawler.Systems
 				float marginX = 20f;
 				float spanX   = GameConstants.Arena.InnerRight - GameConstants.Arena.InnerLeft - marginX * 2f;
 				float x       = GameConstants.Arena.InnerLeft + marginX + (float)_rng.NextDouble() * spanX;
+
+				// Use the per-column wet-cell query, not the volumetric
+				// CurrentLevel estimate. CurrentLevel drops below mapHeight the
+				// moment the inlet fires — long before any particles are
+				// visually settled at that column — which caused bubbles to
+				// appear rising out of the bare floor before the acid was even
+				// on screen. GetSurfaceLevelAtX returns mapHeight when the
+				// column has no wet cells, so we just skip those columns.
+				float surfaceY = _acid.GetSurfaceLevelAtX(x);
+				if (surfaceY >= _mapHeight) continue;
+
 				_entity.Transform.Position = new Vector2(x, surfaceY);
 				_emitter.Emit(1);
 			}
