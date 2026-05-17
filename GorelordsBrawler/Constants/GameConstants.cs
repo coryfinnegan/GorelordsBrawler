@@ -111,6 +111,13 @@ namespace GorelordsBrawler.Constants
 			public const int DefaultRenderLayer = 0;
 			public const int HitboxRenderLayer = -1;
 			public const int HealthBarRenderLayer = -2;
+			// Liquid particles' soft-disc splats. NOT included in the scene's
+			// default RenderLayerRenderer — picked up exclusively by the
+			// LiquidFieldRenderer which renders this layer into its own RT
+			// with BlendState.Additive (see nez-liquid-rendering skill).
+			public const int LiquidRenderLayer = 100;
+			public const int LiquidFieldRendererOrder = -10; // runs before the default scene Renderer
+			public const int LiquidPostProcessorOrder = 0;
 			public const float HitboxColorAlpha = 0.6f;
 		}
 

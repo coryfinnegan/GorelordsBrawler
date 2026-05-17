@@ -3,7 +3,7 @@
   "isRoot": true,
   "tools": {
     "dotnet-mgcb": {
-      "version": "3.8.4",
+      "version": "3.8.4.1",
       "commands": [
         "mgcb"
       ],
@@ -41,6 +41,13 @@
       "version": "3.0.0",
       "commands": [
         "t4"
+      ],
+      "rollForward": false
+    },
+    "dotnet-mgfxc": {
+      "version": "3.8.4.1",
+      "commands": [
+        "mgfxc"
       ],
       "rollForward": false
     }

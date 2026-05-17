@@ -1,9 +1,12 @@
 using System.Collections.Generic;
+using System.IO;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using Nez;
 using Nez.Tiled;
 using GorelordsBrawler.Components;
 using GorelordsBrawler.Components.Hazards;
+using GorelordsBrawler.Components.Hazards.Fluid;
 using GorelordsBrawler.Constants;
 using GorelordsBrawler.Input;
 using GorelordsBrawler.Systems;
@@ -19,6 +22,31 @@ namespace GorelordsBrawler.Scenes
 				GameConstants.Rendering.DefaultRenderLayer,
 				GameConstants.Rendering.HitboxRenderLayer,
 				GameConstants.Rendering.HealthBarRenderLayer));
+
+			// ── Liquid metaball pipeline ──────────────────────────────────
+			// Renderer that splats every particle (on LiquidRenderLayer) into
+			// its own RenderTexture with additive blend. Runs at order -10 so
+			// it goes BEFORE the default RenderLayerRenderer above, meaning
+			// by the time the PostProcessor runs we have a fully populated
+			// field RT. See .claude/skills/nez-liquid-rendering/SKILL.md.
+			var liquidFieldRenderer = new LiquidFieldRenderer(
+				GameConstants.Rendering.LiquidFieldRendererOrder);
+			AddRenderer(liquidFieldRenderer);
+
+			// Threshold post-process — composites the field RT over the scene
+			// via the liquid.fx shader. .mgfxo is the precompiled bytecode
+			// (mgfxc Content/Effects/liquid.fx ... /Profile:OpenGL); shipped
+			// in Content/ via the project's existing copy-to-output glob.
+			var effectPath = Path.Combine(
+				System.AppDomain.CurrentDomain.BaseDirectory,
+				"Content", "Effects", "liquid.mgfxo");
+			var liquidEffect = new Effect(Core.GraphicsDevice, File.ReadAllBytes(effectPath));
+			AddPostProcessor(new LiquidPostProcessor(
+				GameConstants.Rendering.LiquidPostProcessorOrder,
+				liquidEffect,
+				liquidFieldRenderer,
+				bodyColor: new Color((byte)45, (byte)180, (byte)40, (byte)255),
+				edgeColor: new Color((byte)150, (byte)255, (byte)90, (byte)255)));
 
 			AddSceneComponent(new PauseManager());
 			AddSceneComponent(new CombatEffectsManager());
