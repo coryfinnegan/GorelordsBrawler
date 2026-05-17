@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout (with Nez submodule)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          # 10.0.x is the current LTS. The SDK is forward-compatible, so it
+          # still builds our net8.0 projects, and it understands the .slnx
+          # solution format (requires SDK >= 9.0.200).
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Restore dotnet tools (mgcb, t4)
+        run: dotnet tool restore
+        working-directory: GorelordsBrawler
+
+      - name: Restore
+        run: dotnet restore GorelordsBrawler.slnx
+
+      - name: Build
+        run: dotnet build GorelordsBrawler.slnx -c Release --no-restore
+
+      - name: Test (Fluid)
+        run: dotnet test tests/Fluid.Tests/Fluid.Tests.csproj -c Release --no-build --logger "console;verbosity=normal"
+
+      - name: Test (Unit)
+        run: dotnet test tests/GorelordsBrawler.Unit.Tests/GorelordsBrawler.Unit.Tests.csproj -c Release --no-build --logger "console;verbosity=normal"
+
+      - name: Test (Integration)
+        run: dotnet test tests/GorelordsBrawler.Integration.Tests/GorelordsBrawler.Integration.Tests.csproj -c Release --no-build --logger "console;verbosity=normal"
+
+      # E2E tests intentionally excluded — they require a running game on
+      # port 7777 and self-skip without E2E_TESTS=1, so they provide no
+      # value in CI.
