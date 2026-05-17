@@ -84,6 +84,8 @@ namespace GorelordsBrawler.Scenes
 			contactHazard.GetBounds = acidSurface.GetDamageBounds;
 			var spawner = AddSceneComponent(new PlatformSpawner(mw, mh));
 			AddSceneComponent(new AcidPhaseManager(acidSurface, spawner, mw, mh));
+			// Phase 1 deadly-polish: ambient bubbles rising from the surface.
+			AddSceneComponent(new AcidBubbleEmitter(acidSurface, mw, mh));
 
 #if DEBUG
 			if (AppSettings.DebugServer)

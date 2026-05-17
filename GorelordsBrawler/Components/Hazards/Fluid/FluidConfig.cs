@@ -72,6 +72,26 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 		public const float LiquidThresholdMax = 0.55f;  // top (fully solid above this)
 		public const float LiquidEdgeBandWidth = 0.04f; // ½-width of the bright meniscus highlight
 
+		// ── Surface "alive" pulse (Phase 1 of acid-deadly-polish-plan) ────────
+		// Animates the brightness of the surface highlight in liquid.fx so the
+		// acid reads as charged/corrosive instead of inert. Body geometry is
+		// unaffected — only the highlight intensity breathes.
+		public const float LiquidPulseSpeed    = 2.5f;   // radians/sec → ~0.4 Hz breathing
+		public const float LiquidPulseStrength = 0.65f;  // 0..1: how much the highlight dims at trough
+
+		// ── Surface bubbles (Phase 1 of acid-deadly-polish-plan) ──────────────
+		// Single continuous-burst ParticleEmitter retargeted each spawn to a
+		// random x along the current surface line. Reads as "this thing is
+		// fizzing / corrosive".
+		public const float BubbleSpawnsPerSec  = 8f;
+		public const int   BubbleMaxParticles  = 96;
+		public const float BubbleLifespan      = 1.1f;
+		public const float BubbleLifespanVar   = 0.25f;
+		public const float BubbleRiseSpeed     = 22f;    // px/sec upward
+		public const float BubbleRiseSpeedVar  = 10f;
+		public const float BubbleStartSize     = 4f;     // px radius
+		public const float BubbleFinishSize    = 9f;
+
 		// ── Compatibility ─────────────────────────────────────────────────────
 		/// <summary>
 		/// Replaces the old `AcidSurface.CellSize` constant used by DynamicPlatform
