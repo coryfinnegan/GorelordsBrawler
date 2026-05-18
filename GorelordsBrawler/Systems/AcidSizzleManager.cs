@@ -48,35 +48,30 @@ namespace GorelordsBrawler.Systems
 		public int   ParticlesPerTick = 5;
 
 		[Inspectable, Range(1f, 24f)]
-		public float StartSize        = 7f;
+		public float StartSize        = 5f;
 
 		[Inspectable, Range(2f, 40f)]
-		public float FinishSize       = 14f;
+		public float FinishSize       = 10f;
 
-		// RiseSpeed bumped 55 → 80 + Lifespan bumped 0.55 → 0.75: review feedback
-		// asked for puffs to "climb a little higher." Max rise ≈ Speed * Lifespan;
-		// these together roughly double the peak plume height (~30 px → ~60 px)
-		// while keeping the fade soft.
+		// RiseSpeed kept at 80 (taller climb stays per the prior iteration).
+		// Lifespan trimmed 0.75 → 0.6: review feedback "live a little less."
+		// Peak plume ≈ Speed * Lifespan → ~48 px (vs ~60 before, ~30 original).
 		[Inspectable, Range(0f, 200f)]
 		public float RiseSpeed        = 80f;
 
 		[Inspectable, Range(0.1f, 2f)]
-		public float Lifespan         = 0.75f;
+		public float Lifespan         = 0.6f;
 
-		// AngleVariance widens the velocity cone — particles fan out as they
-		// rise. Bumped 35 → 55 for the requested "slightly more horizontally
-		// spread" look. Particles still aim straight up on average; only the
-		// per-particle deviation grows.
+		// Trimmed 55 → 45 ("spread a little less"). Still wider than the
+		// original 35; particles fan out on the way up, just less aggressively.
 		[Inspectable, Range(0f, 90f)]
-		public float AngleVariance    = 55f;
+		public float AngleVariance    = 45f;
 
-		// SpawnSpreadX widens the box of spawn positions (mirrored into
-		// ParticleEmitterConfig.SourcePositionVariance.X). Bumped 8 → 14 so
-		// the base of the puff is visibly wider at emission, not just at the
-		// top of the cone. Y kept tight (2 px) so the puff still hugs the
-		// contact line.
+		// Trimmed 14 → 10 (same "spread a little less" feedback). Base of the
+		// puff narrows but stays wider than the original 8 so the contact
+		// line still reads as a small cloud, not a point.
 		[Inspectable, Range(0f, 40f)]
-		public float SpawnSpreadX     = 14f;
+		public float SpawnSpreadX     = 10f;
 
 		// ── Refs / state ──────────────────────────────────────────────────────
 		private readonly AcidSurface   _acid;
