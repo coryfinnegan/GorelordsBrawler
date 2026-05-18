@@ -48,6 +48,26 @@ sampler2D FieldSampler = sampler_state
     MagFilter = LINEAR;
 };
 
+// ── Player silhouette mask (bound explicitly from C# every frame) ─────────
+// PlayerMaskRenderer renders every active player's current sprite frame
+// into its own RT with Color.White tint at full scene resolution. The RT's
+// alpha channel is a pixel-perfect silhouette of all players currently on
+// screen — sample it and use the alpha as the per-pixel "is player here?"
+// signal for reducing bodyMask and applying the underwater tint.
+//
+// POINT filtering: no interpolation, so the mask edge stays as crisp as
+// the source pixel art (otherwise smoothstep would soften a fringe of
+// half-mask pixels around every sprite edge).
+Texture2D PlayerMaskTexture;
+sampler2D PlayerMaskSampler = sampler_state
+{
+    Texture   = <PlayerMaskTexture>;
+    AddressU  = CLAMP;
+    AddressV  = CLAMP;
+    MinFilter = POINT;
+    MagFilter = POINT;
+};
+
 // ── Tunables (set from C# every frame) ────────────────────────────────────
 float  ThresholdMin;    // bottom of the soft edge; e.g. 0.40
 float  ThresholdMax;    // top of the soft edge (fully solid above); e.g. 0.55
@@ -62,6 +82,15 @@ float  EdgeBandWidth;   // half-width of the bright edge band; e.g. 0.04
 float  Pulse;
 float  PulseStrength;   // 0..1 — how much of the edge highlight is pulsed away at Pulse=0
 
+// ── Player presence tunables ──────────────────────────────────────────────
+// PlayerMaskTexture (above) sourced from PlayerMaskRenderer is the pixel-
+// perfect silhouette. We just read its alpha and apply an underwater
+// color filter to the scene where the player is.
+float  PlayerMaskStrength;        // 0..1, how much to reduce bodyMask where players are
+float  PlayerDesaturation;        // 0..1, fraction of the way toward luminance-grey in player regions
+float  PlayerCast;                // 0..1, strength of multiplicative green color tint in player regions
+float  PlayerDarken;              // 0..1 (used as floor), 1=unchanged, lower=more darkening from light absorption
+
 float4 LiquidPS(float2 uv : TEXCOORD0) : COLOR
 {
     float4 scene  = tex2D(SceneSampler, uv);
@@ -69,6 +98,36 @@ float4 LiquidPS(float2 uv : TEXCOORD0) : COLOR
 
     // Body mask: 0 outside the liquid, 1 inside, soft band between.
     float bodyMask = smoothstep(ThresholdMin, ThresholdMax, fieldA);
+
+    // ── Player presence mask (Phase 3) ────────────────────────────────────
+    // Pixel-perfect silhouette from PlayerMaskRenderer's RT. The mask RT's
+    // alpha channel is non-zero exactly where a player's sprite is drawn,
+    // including animation-frame shape (weapon swing, jump pose, etc.).
+    float playerMask = tex2D(PlayerMaskSampler, uv).a;
+
+    // Reduce bodyMask where playerMask > 0 → acid becomes partially
+    // transparent over the player → scene (player sprite) shows through.
+    float bodyMaskAfterPlayer = bodyMask * lerp(1.0, 1.0 - PlayerMaskStrength, playerMask);
+
+    // UNDERWATER color filter applied to the scene where the player is
+    // SUBMERGED — gated by `playerMask * bodyMask` so dry players (no acid
+    // above them) are not tinted green. Three composable steps modelled on
+    // real underwater photography:
+    //   1. Desaturate toward luminance grey (water bleeds colors uniform)
+    //   2. Multiplicative green CAST (acid's hue dyes everything green)
+    //   3. Darken (light is absorbed with depth)
+    float submerged = playerMask * bodyMask;
+    float lum = dot(scene.rgb, float3(0.299, 0.587, 0.114));
+    float3 desat = lerp(scene.rgb, float3(lum, lum, lum), submerged * PlayerDesaturation);
+    // Cast: scale toward a green-dominant multiplier (R↓, G↑ slightly, B↓).
+    // The 1.10 on green is gentle "lift" so the tint doesn't merely darken;
+    // pixels that survive the desat keep some pop.
+    float3 castMul = lerp(float3(1.0, 1.0, 1.0), float3(0.35, 1.10, 0.55), submerged * PlayerCast);
+    desat *= castMul;
+    // Darken: multiplicative brightness floor — closer to PlayerDarken the
+    // deeper the perceived "absorption." Only inside the submerged region.
+    desat *= lerp(1.0, PlayerDarken, submerged);
+    scene.rgb = desat;
 
     // Edge highlight: narrow ridge centred on the threshold midpoint.
     // Computed as (rise) - (fall) of two smoothsteps around the midpoint.
@@ -89,8 +148,9 @@ float4 LiquidPS(float2 uv : TEXCOORD0) : COLOR
 
     // Composite over scene by the body mask, respecting LiquidColor.a as a
     // global opacity scale (lets us partially see-through the liquid if we
-    // want, by lowering LiquidColor.a).
-    float3 outRgb = lerp(scene.rgb, liquidRgb, bodyMask * LiquidColor.a);
+    // want, by lowering LiquidColor.a). bodyMaskAfterPlayer is the
+    // player-region-reduced mask so submerged players show through.
+    float3 outRgb = lerp(scene.rgb, liquidRgb, bodyMaskAfterPlayer * LiquidColor.a);
     return float4(outRgb, 1.0);
 }
 

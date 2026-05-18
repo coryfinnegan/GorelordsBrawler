@@ -20,6 +20,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - During feature development you use the `/smoke-test` skill to prepare me for functional testing — that includes recording a video, opening the IDE on the worktree, and writing the PR with enough teaching context that I can review-and-learn (see [.claude/skills/smoke-test/SKILL.md](.claude/skills/smoke-test/SKILL.md), section "Preparing the user for functional testing").
 - PR descriptions are durable teaching documents. Lead with what changed and why, briefly explain any non-obvious technique or API with a one-line citation, and call out the trade-offs. I'll be reading these later instead of re-reading conversations.
 
+**No "MVP" shortcuts. This is not an MVP project.** The bar is "looks professional and is fun with a friend." If during planning or implementation you identify the correct way to do something but feel tempted to ship a simpler version and "park it for later," DO NOT. Two things give this away to me:
+1. Phrases like "MVP risk reasons," "park it for later," "good enough for now," "future iteration would be to..."
+2. Descriptions of a known cosmetic / behavioural artifact you chose to ship instead of fixing.
+
+If you catch yourself writing those phrases, that is the signal you are taking a shortcut. Stop, do the right way. The only acceptable reasons to defer the better approach are (a) it depends on something not yet in the codebase (then propose it as its own dedicated work, do not let it bleed into the current feature), or (b) you explicitly raise it to me and I approve the deferral. Self-rationalised deferrals are the failure mode — I have flagged this on PR #6 (Approach A vs B) and PR #10 (collider rect vs sprite mask) and I do not want to flag it a third time.
+
 ## Project Overview
 
 GorelordsBrawler is a 2D game built with **MonoGame 3.8 DesktopGL** on **.NET 8.0**. The **Nez framework** (included as a Git submodule in `Nez/`) provides an Entity-Component-System architecture and extensive 2D game utilities on top of MonoGame.

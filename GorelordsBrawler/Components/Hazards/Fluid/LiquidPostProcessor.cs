@@ -13,20 +13,30 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 	/// Tunables (read from <see cref="FluidConfig"/>) are pushed to the
 	/// shader every frame so live-editing the values rebuild-applies
 	/// without rebooting the game.
+	///
+	/// Phase 3 addition: also binds the <see cref="PlayerMaskRenderer"/>'s
+	/// pixel-perfect player silhouette RT as a texture sampler in the
+	/// shader (parameter <c>PlayerMaskTexture</c>), so the shader can
+	/// reduce the body mask + tint the scene exactly under each player's
+	/// sprite outline. Makes the player visible THROUGH the acid when
+	/// submerged, following the actual sprite shape (not a rectangle).
 	/// </summary>
 	public class LiquidPostProcessor : PostProcessor
 	{
 		private readonly LiquidFieldRenderer _fieldRenderer;
+		private readonly PlayerMaskRenderer  _playerMaskRenderer;
 		private readonly Color _bodyColor;
 		private readonly Color _edgeColor;
 
 		public LiquidPostProcessor(int executionOrder, Effect liquidEffect,
-			LiquidFieldRenderer fieldRenderer, Color bodyColor, Color edgeColor)
+			LiquidFieldRenderer fieldRenderer, PlayerMaskRenderer playerMaskRenderer,
+			Color bodyColor, Color edgeColor)
 			: base(executionOrder, liquidEffect)
 		{
-			_fieldRenderer = fieldRenderer;
-			_bodyColor     = bodyColor;
-			_edgeColor     = edgeColor;
+			_fieldRenderer      = fieldRenderer;
+			_playerMaskRenderer = playerMaskRenderer;
+			_bodyColor          = bodyColor;
+			_edgeColor          = edgeColor;
 		}
 
 		public override void Process(RenderTarget2D source, RenderTarget2D destination)
@@ -48,6 +58,18 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 			float pulse = (System.MathF.Sin(Time.TotalTime * FluidConfig.LiquidPulseSpeed) * 0.5f) + 0.5f;
 			Effect.Parameters["Pulse"]?.SetValue(pulse);
 			Effect.Parameters["PulseStrength"]?.SetValue(FluidConfig.LiquidPulseStrength);
+
+			// Phase 3: bind the pixel-perfect player silhouette mask RT.
+			// PlayerMaskRenderer has already rendered all active players'
+			// current sprite frames into this RT by the time post-processors
+			// run (renderers complete before post-processors). The shader
+			// samples its alpha channel for the per-pixel "is this a player?"
+			// signal.
+			Effect.Parameters["PlayerMaskTexture"]?.SetValue(_playerMaskRenderer.MaskTexture.RenderTarget);
+			Effect.Parameters["PlayerMaskStrength"]?.SetValue(FluidConfig.LiquidPlayerMaskStrength);
+			Effect.Parameters["PlayerDesaturation"]?.SetValue(FluidConfig.LiquidPlayerDesaturation);
+			Effect.Parameters["PlayerCast"]?.SetValue(FluidConfig.LiquidPlayerCast);
+			Effect.Parameters["PlayerDarken"]?.SetValue(FluidConfig.LiquidPlayerDarken);
 
 			DrawFullscreenQuad(source, destination, Effect);
 		}

@@ -41,17 +41,31 @@ namespace GorelordsBrawler.Scenes
 				System.AppDomain.CurrentDomain.BaseDirectory,
 				"Content", "Effects", "liquid.mgfxo");
 			var liquidEffect = new Effect(Core.GraphicsDevice, File.ReadAllBytes(effectPath));
-			AddPostProcessor(new LiquidPostProcessor(
-				GameConstants.Rendering.LiquidPostProcessorOrder,
-				liquidEffect,
-				liquidFieldRenderer,
-				bodyColor: new Color((byte)45, (byte)180, (byte)40, (byte)255),
-				edgeColor: new Color((byte)150, (byte)255, (byte)90, (byte)255)));
-
 			AddSceneComponent(new PauseManager());
 			AddSceneComponent(new CombatEffectsManager());
 			AddSceneComponent(new HitParticleManager());
 			var playerManager = AddSceneComponent(new PlayerManager());
+
+			// Phase 3 see-through-acid: render every active player's CURRENT
+			// sprite frame to a dedicated RT with Color.White tint. The RT's
+			// alpha channel is a pixel-perfect silhouette consumed by liquid.fx
+			// for the "show player through the acid" effect — pixel-perfect
+			// instead of bounding-rect-approximated, so the see-through region
+			// follows the actual sprite shape and animation pose.
+			var playerMaskRenderer = new PlayerMaskRenderer(
+				GameConstants.Rendering.PlayerMaskRendererOrder, playerManager);
+			AddRenderer(playerMaskRenderer);
+
+			// Liquid post-process is wired AFTER PlayerMaskRenderer exists
+			// because it samples the mask RT every frame as the player-presence
+			// signal in the shader.
+			AddPostProcessor(new LiquidPostProcessor(
+				GameConstants.Rendering.LiquidPostProcessorOrder,
+				liquidEffect,
+				liquidFieldRenderer,
+				playerMaskRenderer,
+				bodyColor: new Color((byte)45, (byte)180, (byte)40, (byte)255),
+				edgeColor: new Color((byte)150, (byte)255, (byte)90, (byte)255)));
 			var setup = Core.GetGlobalManager<MatchSetupManager>();
 
 			// Load Tiled map
@@ -99,6 +113,19 @@ namespace GorelordsBrawler.Scenes
 			// the Nez runtime inspector under this entity.
 			var sizzleEntity = CreateEntity("acid-sizzle");
 			sizzleEntity.AddComponent(new AcidSizzleManager(acidSurface, contactHazard));
+
+			// Phase 3 deadly-polish: in-acid presence — give each player a
+			// SubmersionFeel component that flips their PhysicsBody to
+			// reduced-gravity + drag while submerged. Wired here (not in
+			// CharacterFactory) because the AcidSurface dependency only
+			// exists at the scene level; CharacterFactory stays hazard-
+			// agnostic. The visibility half of Phase 3 lives in liquid.fx
+			// and is driven by the LiquidPostProcessor above — nothing to
+			// wire per-player for that part.
+			foreach (var player in playerManager.GetActivePlayers())
+			{
+				player.AddComponent(new SubmersionFeel(acidSurface));
+			}
 
 #if DEBUG
 			if (AppSettings.DebugServer)
