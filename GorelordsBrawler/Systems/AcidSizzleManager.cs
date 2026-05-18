@@ -53,11 +53,30 @@ namespace GorelordsBrawler.Systems
 		[Inspectable, Range(2f, 40f)]
 		public float FinishSize       = 14f;
 
+		// RiseSpeed bumped 55 → 80 + Lifespan bumped 0.55 → 0.75: review feedback
+		// asked for puffs to "climb a little higher." Max rise ≈ Speed * Lifespan;
+		// these together roughly double the peak plume height (~30 px → ~60 px)
+		// while keeping the fade soft.
 		[Inspectable, Range(0f, 200f)]
-		public float RiseSpeed        = 55f;
+		public float RiseSpeed        = 80f;
 
 		[Inspectable, Range(0.1f, 2f)]
-		public float Lifespan         = 0.55f;
+		public float Lifespan         = 0.75f;
+
+		// AngleVariance widens the velocity cone — particles fan out as they
+		// rise. Bumped 35 → 55 for the requested "slightly more horizontally
+		// spread" look. Particles still aim straight up on average; only the
+		// per-particle deviation grows.
+		[Inspectable, Range(0f, 90f)]
+		public float AngleVariance    = 55f;
+
+		// SpawnSpreadX widens the box of spawn positions (mirrored into
+		// ParticleEmitterConfig.SourcePositionVariance.X). Bumped 8 → 14 so
+		// the base of the puff is visibly wider at emission, not just at the
+		// top of the cone. Y kept tight (2 px) so the puff still hugs the
+		// contact line.
+		[Inspectable, Range(0f, 40f)]
+		public float SpawnSpreadX     = 14f;
 
 		// ── Refs / state ──────────────────────────────────────────────────────
 		private readonly AcidSurface   _acid;
@@ -128,10 +147,14 @@ namespace GorelordsBrawler.Systems
 			for (int i = 0; i < _configs.Length; i++)
 			{
 				var cfg = _configs[i];
-				cfg.Speed              = RiseSpeed;
-				cfg.ParticleLifespan   = Lifespan;
-				cfg.StartParticleSize  = StartSize;
-				cfg.FinishParticleSize = FinishSize;
+				cfg.Speed                  = RiseSpeed;
+				cfg.ParticleLifespan       = Lifespan;
+				cfg.StartParticleSize      = StartSize;
+				cfg.FinishParticleSize     = FinishSize;
+				cfg.AngleVariance          = AngleVariance;
+				// Keep Y spread tight (2 px) — only widening the X axis
+				// matters for "wider plume at the contact line."
+				cfg.SourcePositionVariance = new Vector2(SpawnSpreadX, 2f);
 			}
 		}
 
@@ -193,7 +216,7 @@ namespace GorelordsBrawler.Systems
 				Speed                    = RiseSpeed,
 				SpeedVariance            = 22f,
 				Angle                    = -90f,                  // straight up
-				AngleVariance            = 35f,                   // wide puff cone
+				AngleVariance            = AngleVariance,
 				Gravity                  = new Vector2(0f, -25f), // slight upward push (rising smoke)
 				ParticleLifespan         = Lifespan,
 				ParticleLifespanVariance = 0.15f,
@@ -203,7 +226,7 @@ namespace GorelordsBrawler.Systems
 				FinishParticleSize       = FinishSize,
 				SimulateInWorldSpace     = true,
 				Sprite                   = _puffSprite,
-				SourcePositionVariance   = new Vector2(8f, 2f),
+				SourcePositionVariance   = new Vector2(SpawnSpreadX, 2f),
 				BlendFuncSource          = Blend.SourceAlpha,
 				BlendFuncDestination     = Blend.InverseSourceAlpha,
 			};
