@@ -84,11 +84,12 @@ float  PulseStrength;   // 0..1 — how much of the edge highlight is pulsed awa
 
 // ── Player presence tunables ──────────────────────────────────────────────
 // PlayerMaskTexture (above) sourced from PlayerMaskRenderer is the pixel-
-// perfect silhouette. We just read its alpha and modulate bodyMask + scene
-// tint with these strengths. No per-pixel rect tests — the mask texture
-// already encodes the shape.
-float  PlayerMaskStrength;        // 0..1, how much to reduce bodyMask where players are (0.7 → 30% opacity acid over player)
-float  PlayerTintStrength;        // 0..1, how much green tint to apply to scene where players are
+// perfect silhouette. We just read its alpha and apply an underwater
+// color filter to the scene where the player is.
+float  PlayerMaskStrength;        // 0..1, how much to reduce bodyMask where players are
+float  PlayerDesaturation;        // 0..1, fraction of the way toward luminance-grey in player regions
+float  PlayerCast;                // 0..1, strength of multiplicative green color tint in player regions
+float  PlayerDarken;              // 0..1 (used as floor), 1=unchanged, lower=more darkening from light absorption
 
 float4 LiquidPS(float2 uv : TEXCOORD0) : COLOR
 {
@@ -107,11 +108,26 @@ float4 LiquidPS(float2 uv : TEXCOORD0) : COLOR
     // Reduce bodyMask where playerMask > 0 → acid becomes partially
     // transparent over the player → scene (player sprite) shows through.
     float bodyMaskAfterPlayer = bodyMask * lerp(1.0, 1.0 - PlayerMaskStrength, playerMask);
-    // Subtle green tint on the scene inside player regions sells "stained
-    // by the acid" without obscuring the sprite. Tint is multiplicative so
-    // bright pixels (red HitFlash) stay bright, just shifted green.
-    float3 underwaterTint = lerp(float3(1.0, 1.0, 1.0), float3(0.55, 1.0, 0.7), playerMask * PlayerTintStrength);
-    scene.rgb *= underwaterTint;
+
+    // UNDERWATER color filter applied to the scene where the player is
+    // SUBMERGED — gated by `playerMask * bodyMask` so dry players (no acid
+    // above them) are not tinted green. Three composable steps modelled on
+    // real underwater photography:
+    //   1. Desaturate toward luminance grey (water bleeds colors uniform)
+    //   2. Multiplicative green CAST (acid's hue dyes everything green)
+    //   3. Darken (light is absorbed with depth)
+    float submerged = playerMask * bodyMask;
+    float lum = dot(scene.rgb, float3(0.299, 0.587, 0.114));
+    float3 desat = lerp(scene.rgb, float3(lum, lum, lum), submerged * PlayerDesaturation);
+    // Cast: scale toward a green-dominant multiplier (R↓, G↑ slightly, B↓).
+    // The 1.10 on green is gentle "lift" so the tint doesn't merely darken;
+    // pixels that survive the desat keep some pop.
+    float3 castMul = lerp(float3(1.0, 1.0, 1.0), float3(0.35, 1.10, 0.55), submerged * PlayerCast);
+    desat *= castMul;
+    // Darken: multiplicative brightness floor — closer to PlayerDarken the
+    // deeper the perceived "absorption." Only inside the submerged region.
+    desat *= lerp(1.0, PlayerDarken, submerged);
+    scene.rgb = desat;
 
     // Edge highlight: narrow ridge centred on the threshold midpoint.
     // Computed as (rise) - (fall) of two smoothsteps around the midpoint.

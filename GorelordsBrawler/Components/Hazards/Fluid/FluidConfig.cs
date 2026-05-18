@@ -79,18 +79,34 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 		// as "stained by the acid" rather than fully clear glass.
 		//   0.0 → no see-through (acid stays fully opaque over players)
 		//   1.0 → fully see-through (acid completely transparent over players)
-		// 0.9: at 0.7 the 30%-opacity acid over players blurred the per-leg gap
-		// at low viewing resolutions (review feedback: "it's just a square,"
-		// even though the mask was already sprite-shaped — verified via shader
-		// magenta debug). 0.9 makes the gap sharply visible against the
-		// surrounding 100%-opacity acid — sprite shape unmistakable at any
-		// resolution. PlayerTintStrength carries the "stained" feel
-		// independently of opacity.
-		public const float LiquidPlayerMaskStrength = 0.9f;
-		// 0.0 → no green tint applied to scene inside player regions
-		// 1.0 → fully tinted (almost cartoony)
-		// 0.4 keeps the player sprite recognisable but visibly "in the acid".
-		public const float LiquidPlayerTintStrength = 0.4f;
+		// 0.85: was 0.9, dropped slightly so the metaball acid still has
+		// presence ABOVE the submerged player (sells "they are UNDER the
+		// liquid" rather than "they are RENDERED ON TOP of the liquid").
+		// Player sprite is still very visible — see PlayerDesaturation +
+		// PlayerCast + PlayerDarken below for the proper underwater filter
+		// applied to the scene where the player is.
+		public const float LiquidPlayerMaskStrength = 0.85f;
+
+		// Underwater color filter applied to the scene IN PLAYER REGIONS,
+		// modelled on real underwater photography (see Crest Ocean's
+		// underwater rendering docs, Cyanilux's 2D water shader breakdown):
+		//
+		//   1. DESATURATION — water bleeds colors toward each other so
+		//      submerged objects look more uniformly coloured than they
+		//      really are. 0 = no desat, 1 = fully grey.
+		//   2. CAST — multiplicative color tint toward the liquid's hue.
+		//      For our green acid this pulls everything strongly green.
+		//      A value of 1.0 means full multiplicative cast; 0 = none.
+		//   3. DARKEN — light absorption underwater. Multiplicative
+		//      brightness reduction. 1 = unchanged, 0 = fully black.
+		//
+		// These three replace the previous PlayerTintStrength single-knob,
+		// which only did a weak additive green tint and didn't actually read
+		// as "underwater" (review feedback: "looks like you are just
+		// rendering the sprite on top of the acid").
+		public const float LiquidPlayerDesaturation = 0.5f;  // 50% toward grey
+		public const float LiquidPlayerCast         = 0.9f;  // strong green pull
+		public const float LiquidPlayerDarken       = 0.75f; // 25% darker (depth absorption)
 
 		// ── Surface "alive" pulse (Phase 1 of acid-deadly-polish-plan) ────────
 		// Animates the brightness of the surface highlight in liquid.fx so the

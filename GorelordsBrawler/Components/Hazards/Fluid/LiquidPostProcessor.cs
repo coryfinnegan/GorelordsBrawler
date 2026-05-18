@@ -67,7 +67,9 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 			// signal.
 			Effect.Parameters["PlayerMaskTexture"]?.SetValue(_playerMaskRenderer.MaskTexture.RenderTarget);
 			Effect.Parameters["PlayerMaskStrength"]?.SetValue(FluidConfig.LiquidPlayerMaskStrength);
-			Effect.Parameters["PlayerTintStrength"]?.SetValue(FluidConfig.LiquidPlayerTintStrength);
+			Effect.Parameters["PlayerDesaturation"]?.SetValue(FluidConfig.LiquidPlayerDesaturation);
+			Effect.Parameters["PlayerCast"]?.SetValue(FluidConfig.LiquidPlayerCast);
+			Effect.Parameters["PlayerDarken"]?.SetValue(FluidConfig.LiquidPlayerDarken);
 
 			DrawFullscreenQuad(source, destination, Effect);
 		}
