@@ -117,6 +117,16 @@ namespace GorelordsBrawler.Constants
 			// with BlendState.Additive (see nez-liquid-rendering skill).
 			public const int LiquidRenderLayer = 100;
 			public const int LiquidFieldRendererOrder = -10; // runs before the default scene Renderer
+			// PlayerMaskRenderer renders each active player's CURRENT sprite frame
+			// into its own RT with Color.White tint, so the RT's alpha channel is
+			// a pixel-perfect silhouette of the players. Sampled by liquid.fx to
+			// reduce the metaball mask exactly over the player art (instead of
+			// the bounding-rect approximation we tried first). Order -5 so it
+			// runs after LiquidFieldRenderer (-10) but before the default scene
+			// renderer (0) — order within renderers doesn't actually matter for
+			// the post-process consumer, but -5 keeps the rendering passes
+			// chronologically grouped for inspector clarity.
+			public const int PlayerMaskRendererOrder = -5;
 			public const int LiquidPostProcessorOrder = 0;
 			public const float HitboxColorAlpha = 0.6f;
 		}

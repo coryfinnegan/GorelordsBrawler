@@ -46,14 +46,24 @@ namespace GorelordsBrawler.Scenes
 			AddSceneComponent(new HitParticleManager());
 			var playerManager = AddSceneComponent(new PlayerManager());
 
-			// Liquid post-process is wired AFTER PlayerManager exists because
-			// it now needs the manager reference to project player rects into
-			// shader uniforms each frame (Phase 3 — see-through-acid effect).
+			// Phase 3 see-through-acid: render every active player's CURRENT
+			// sprite frame to a dedicated RT with Color.White tint. The RT's
+			// alpha channel is a pixel-perfect silhouette consumed by liquid.fx
+			// for the "show player through the acid" effect — pixel-perfect
+			// instead of bounding-rect-approximated, so the see-through region
+			// follows the actual sprite shape and animation pose.
+			var playerMaskRenderer = new PlayerMaskRenderer(
+				GameConstants.Rendering.PlayerMaskRendererOrder, playerManager);
+			AddRenderer(playerMaskRenderer);
+
+			// Liquid post-process is wired AFTER PlayerMaskRenderer exists
+			// because it samples the mask RT every frame as the player-presence
+			// signal in the shader.
 			AddPostProcessor(new LiquidPostProcessor(
 				GameConstants.Rendering.LiquidPostProcessorOrder,
 				liquidEffect,
 				liquidFieldRenderer,
-				playerManager,
+				playerMaskRenderer,
 				bodyColor: new Color((byte)45, (byte)180, (byte)40, (byte)255),
 				edgeColor: new Color((byte)150, (byte)255, (byte)90, (byte)255)));
 			var setup = Core.GetGlobalManager<MatchSetupManager>();
