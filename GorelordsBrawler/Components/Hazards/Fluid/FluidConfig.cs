@@ -72,6 +72,20 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 		public const float LiquidThresholdMax = 0.55f;  // top (fully solid above this)
 		public const float LiquidEdgeBandWidth = 0.04f; // ½-width of the bright meniscus highlight
 
+		// ── In-acid player presence (Phase 3 of acid-deadly-polish-plan) ──────
+		// liquid.fx reduces the metaball bodyMask inside each player's rect by
+		// this much, so the scene (player sprite) shows through the acid. The
+		// shader also applies a subtle green tint inside player regions to read
+		// as "stained by the acid" rather than fully clear glass.
+		//   0.0 → no see-through (acid stays fully opaque over players)
+		//   1.0 → fully see-through (acid completely transparent over players)
+		// 0.7 = 70% reduction → player visible but acid still tints the area.
+		public const float LiquidPlayerMaskStrength = 0.7f;
+		// 0.0 → no green tint applied to scene inside player regions
+		// 1.0 → fully tinted (almost cartoony)
+		// 0.4 keeps the player sprite recognisable but visibly "in the acid".
+		public const float LiquidPlayerTintStrength = 0.4f;
+
 		// ── Surface "alive" pulse (Phase 1 of acid-deadly-polish-plan) ────────
 		// Animates the brightness of the surface highlight in liquid.fx so the
 		// acid reads as charged/corrosive instead of inert. Body geometry is

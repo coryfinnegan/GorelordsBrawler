@@ -62,6 +62,25 @@ float  EdgeBandWidth;   // half-width of the bright edge band; e.g. 0.04
 float  Pulse;
 float  PulseStrength;   // 0..1 — how much of the edge highlight is pulsed away at Pulse=0
 
+// ── Player rectangles (Phase 3: in-acid player presence) ──────────────────
+// LiquidPostProcessor projects each active player's collider bounds into UV
+// space (0..1) and writes them here every frame. Unused slots default to
+// (0,0,0,0) — the AABB test naturally fails everywhere except the corner
+// pixel (uv == 0,0), which is acceptable noise.
+//
+// Inside any player rect, we reduce bodyMask (so the scene/player sprite
+// shows through the acid) and tint the scene a bit greener (so the player
+// reads as "stained / submerged" rather than fully clear glass).
+//
+// 4 = MAX_PLAYERS in this party brawler. Loop is [unroll]-able so the
+// ps_4_0_level_9_1 profile compiles it as four fixed AABB checks per
+// pixel — cheap, no per-pixel branching cost.
+#define MAX_PLAYERS 4
+float4 PlayerRects[MAX_PLAYERS];  // xy = uvMin, zw = uvMax
+int    PlayerCount;               // 0..MAX_PLAYERS, slots beyond this are ignored
+float  PlayerMaskStrength;        // 0..1, how much to reduce bodyMask in player regions (0.7 → 30% opacity acid over player)
+float  PlayerTintStrength;        // 0..1, how much green tint to apply to scene inside player regions
+
 float4 LiquidPS(float2 uv : TEXCOORD0) : COLOR
 {
     float4 scene  = tex2D(SceneSampler, uv);
@@ -69,6 +88,29 @@ float4 LiquidPS(float2 uv : TEXCOORD0) : COLOR
 
     // Body mask: 0 outside the liquid, 1 inside, soft band between.
     float bodyMask = smoothstep(ThresholdMin, ThresholdMax, fieldA);
+
+    // ── Player presence mask (Phase 3) ────────────────────────────────────
+    // For each active player rect, set playerMask = 1 inside the rect.
+    // Unrolled max-of-AABB-tests; cheap on ps_4_0_level_9_1.
+    float playerMask = 0.0;
+    [unroll]
+    for (int i = 0; i < MAX_PLAYERS; i++)
+    {
+        float4 r = PlayerRects[i];
+        // Slot active AND uv inside the rect.
+        bool inside = (i < PlayerCount)
+                   && (uv.x >= r.x) && (uv.x <= r.z)
+                   && (uv.y >= r.y) && (uv.y <= r.w);
+        playerMask = max(playerMask, inside ? 1.0 : 0.0);
+    }
+    // Reduce bodyMask where playerMask > 0 → acid becomes partially
+    // transparent over the player → scene (player sprite) shows through.
+    float bodyMaskAfterPlayer = bodyMask * lerp(1.0, 1.0 - PlayerMaskStrength, playerMask);
+    // Subtle green tint on the scene inside player regions sells "stained
+    // by the acid" without obscuring the sprite. Tint is multiplicative so
+    // bright pixels (red HitFlash) stay bright, just shifted green.
+    float3 underwaterTint = lerp(float3(1.0, 1.0, 1.0), float3(0.55, 1.0, 0.7), playerMask * PlayerTintStrength);
+    scene.rgb *= underwaterTint;
 
     // Edge highlight: narrow ridge centred on the threshold midpoint.
     // Computed as (rise) - (fall) of two smoothsteps around the midpoint.
@@ -89,8 +131,9 @@ float4 LiquidPS(float2 uv : TEXCOORD0) : COLOR
 
     // Composite over scene by the body mask, respecting LiquidColor.a as a
     // global opacity scale (lets us partially see-through the liquid if we
-    // want, by lowering LiquidColor.a).
-    float3 outRgb = lerp(scene.rgb, liquidRgb, bodyMask * LiquidColor.a);
+    // want, by lowering LiquidColor.a). bodyMaskAfterPlayer is the
+    // player-region-reduced mask so submerged players show through.
+    float3 outRgb = lerp(scene.rgb, liquidRgb, bodyMaskAfterPlayer * LiquidColor.a);
     return float4(outRgb, 1.0);
 }
 

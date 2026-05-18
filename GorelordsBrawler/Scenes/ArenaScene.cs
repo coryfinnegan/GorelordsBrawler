@@ -41,17 +41,21 @@ namespace GorelordsBrawler.Scenes
 				System.AppDomain.CurrentDomain.BaseDirectory,
 				"Content", "Effects", "liquid.mgfxo");
 			var liquidEffect = new Effect(Core.GraphicsDevice, File.ReadAllBytes(effectPath));
-			AddPostProcessor(new LiquidPostProcessor(
-				GameConstants.Rendering.LiquidPostProcessorOrder,
-				liquidEffect,
-				liquidFieldRenderer,
-				bodyColor: new Color((byte)45, (byte)180, (byte)40, (byte)255),
-				edgeColor: new Color((byte)150, (byte)255, (byte)90, (byte)255)));
-
 			AddSceneComponent(new PauseManager());
 			AddSceneComponent(new CombatEffectsManager());
 			AddSceneComponent(new HitParticleManager());
 			var playerManager = AddSceneComponent(new PlayerManager());
+
+			// Liquid post-process is wired AFTER PlayerManager exists because
+			// it now needs the manager reference to project player rects into
+			// shader uniforms each frame (Phase 3 — see-through-acid effect).
+			AddPostProcessor(new LiquidPostProcessor(
+				GameConstants.Rendering.LiquidPostProcessorOrder,
+				liquidEffect,
+				liquidFieldRenderer,
+				playerManager,
+				bodyColor: new Color((byte)45, (byte)180, (byte)40, (byte)255),
+				edgeColor: new Color((byte)150, (byte)255, (byte)90, (byte)255)));
 			var setup = Core.GetGlobalManager<MatchSetupManager>();
 
 			// Load Tiled map
@@ -99,6 +103,19 @@ namespace GorelordsBrawler.Scenes
 			// the Nez runtime inspector under this entity.
 			var sizzleEntity = CreateEntity("acid-sizzle");
 			sizzleEntity.AddComponent(new AcidSizzleManager(acidSurface, contactHazard));
+
+			// Phase 3 deadly-polish: in-acid presence — give each player a
+			// SubmersionFeel component that flips their PhysicsBody to
+			// reduced-gravity + drag while submerged. Wired here (not in
+			// CharacterFactory) because the AcidSurface dependency only
+			// exists at the scene level; CharacterFactory stays hazard-
+			// agnostic. The visibility half of Phase 3 lives in liquid.fx
+			// and is driven by the LiquidPostProcessor above — nothing to
+			// wire per-player for that part.
+			foreach (var player in playerManager.GetActivePlayers())
+			{
+				player.AddComponent(new SubmersionFeel(acidSurface));
+			}
 
 #if DEBUG
 			if (AppSettings.DebugServer)
