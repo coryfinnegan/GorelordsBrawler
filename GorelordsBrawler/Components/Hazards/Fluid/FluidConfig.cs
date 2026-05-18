@@ -79,8 +79,14 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 		// as "stained by the acid" rather than fully clear glass.
 		//   0.0 → no see-through (acid stays fully opaque over players)
 		//   1.0 → fully see-through (acid completely transparent over players)
-		// 0.7 = 70% reduction → player visible but acid still tints the area.
-		public const float LiquidPlayerMaskStrength = 0.7f;
+		// 0.9: at 0.7 the 30%-opacity acid over players blurred the per-leg gap
+		// at low viewing resolutions (review feedback: "it's just a square,"
+		// even though the mask was already sprite-shaped — verified via shader
+		// magenta debug). 0.9 makes the gap sharply visible against the
+		// surrounding 100%-opacity acid — sprite shape unmistakable at any
+		// resolution. PlayerTintStrength carries the "stained" feel
+		// independently of opacity.
+		public const float LiquidPlayerMaskStrength = 0.9f;
 		// 0.0 → no green tint applied to scene inside player regions
 		// 1.0 → fully tinted (almost cartoony)
 		// 0.4 keeps the player sprite recognisable but visibly "in the acid".
