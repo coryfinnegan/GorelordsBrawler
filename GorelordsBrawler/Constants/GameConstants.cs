@@ -128,6 +128,11 @@ namespace GorelordsBrawler.Constants
 			// chronologically grouped for inspector clarity.
 			public const int PlayerMaskRendererOrder = -5;
 			public const int LiquidPostProcessorOrder = 0;
+			// Phase 4 acid-deadly-polish: runs AFTER LiquidPostProcessor so the
+			// vignette + chromatic aberration apply to the FINAL composited
+			// image (including the acid). If this ran before liquid, the
+			// metaball pass would paint over our tint in acid regions.
+			public const int DamageFeedbackPostProcessorOrder = 10;
 			public const float HitboxColorAlpha = 0.6f;
 		}
 

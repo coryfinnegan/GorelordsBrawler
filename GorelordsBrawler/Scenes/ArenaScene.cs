@@ -7,6 +7,7 @@ using Nez.Tiled;
 using GorelordsBrawler.Components;
 using GorelordsBrawler.Components.Hazards;
 using GorelordsBrawler.Components.Hazards.Fluid;
+using GorelordsBrawler.Components.PostProcessors;
 using GorelordsBrawler.Constants;
 using GorelordsBrawler.Input;
 using GorelordsBrawler.Systems;
@@ -66,6 +67,23 @@ namespace GorelordsBrawler.Scenes
 				playerMaskRenderer,
 				bodyColor: new Color((byte)45, (byte)180, (byte)40, (byte)255),
 				edgeColor: new Color((byte)150, (byte)255, (byte)90, (byte)255)));
+
+			// Phase 4 deadly-polish: chromatic-aberration pulse on acid damage
+			// + HP-driven radial vignette. Runs at order 10 so it composites
+			// AFTER the liquid pass (order 0) — the vignette/CA apply to the
+			// FINAL image including the green acid. Driving logic lives on the
+			// DamageFeedbackController entity created after BrawlerCamera below
+			// (it needs the camera ref for shake). The post-processor itself is
+			// added here so its order slot is fixed and any later mutations to
+			// the post-process stack don't accidentally reshuffle priorities.
+			var damageFeedbackEffectPath = Path.Combine(
+				System.AppDomain.CurrentDomain.BaseDirectory,
+				"Content", "Effects", "damage_feedback.mgfxo");
+			var damageFeedbackEffect = new Effect(Core.GraphicsDevice,
+				File.ReadAllBytes(damageFeedbackEffectPath));
+			var damageFeedbackPost = AddPostProcessor(new DamageFeedbackPostProcessor(
+				GameConstants.Rendering.DamageFeedbackPostProcessorOrder,
+				damageFeedbackEffect));
 			var setup = Core.GetGlobalManager<MatchSetupManager>();
 
 			// Load Tiled map
@@ -151,6 +169,17 @@ namespace GorelordsBrawler.Scenes
 			// position. Targets and acid-surface coupling are intentionally
 			// dropped so nothing pulls the view around.
 			brawlerCam.Static = true;
+
+			// Phase 4 deadly-polish: spin up the controller AFTER brawlerCam
+			// because it holds a ref to call AddShake on each acid damage
+			// tick. Hosted on its own entity (same convention as
+			// AcidBubbleEmitter / AcidSizzleManager) so its [Inspectable]
+			// tunables appear in the Nez runtime inspector. The post-processor
+			// it drives was already AddPostProcessor'd above; this controller
+			// just writes per-frame uniforms into it.
+			var damageFeedbackEntity = CreateEntity("damage-feedback");
+			damageFeedbackEntity.AddComponent(new DamageFeedbackController(
+				damageFeedbackPost, playerManager, contactHazard, brawlerCam));
 
 			var ruleset = new StockRuleset();
 			AddSceneComponent(new MatchManager(ruleset));
