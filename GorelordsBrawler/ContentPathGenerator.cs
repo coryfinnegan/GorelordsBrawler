@@ -18,6 +18,7 @@ namespace Nez
 
 		public static class Effects
 		{
+			public const string Damage_feedback = @"Content\Effects\damage_feedback.fx";
 			public const string Liquid = @"Content\Effects\liquid.fx";
 		}
 
