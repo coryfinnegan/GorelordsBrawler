@@ -76,6 +76,17 @@ When Nez is integrated, its default content (effects/textures) from `Nez/Default
 
 Nez uses tabs (4-space width) per its `.editorconfig`. Follow the same convention for game code.
 
+## Common Pitfalls
+
+### Hitstop sets `Time.TimeScale = 0`, so `Time.DeltaTime` becomes 0 for several frames
+`CombatEffectsManager.TriggerHit` freezes the game (`Time.TimeScale = 0`) for `GameConstants.Combat.HitstopDuration` (~4 frames) on every melee hit. Any `IUpdatable`/`SceneComponent` that reads the **scaled** `Time.DeltaTime` will therefore receive `dt = 0` during that window. Two consequences to design for:
+
+- **Never divide by `dt`.** A per-frame integrator that derives velocity as `(newPos - oldPos) / dt` produces `1/0 = +Infinity → NaN` when `dt = 0`. Guard the whole update as a no-op when `dt <= 0`. This was the root cause of the "acid liquid vanishes + FPS tanks when you hit a player" bug: the PBF fluid's `UpdateVelocitiesAndPositions` did `invDt = 1f / dt`, NaN'd every particle on the first hitstop frame, and never recovered (see below). Fixed by an early return in `FluidSimulation.Step` for `dt <= 0`.
+- **NaN is a silent, persistent killer in particle/grid systems.** Once a position goes NaN it usually never leaves: `NaN > cutoff` is `false` so off-screen despawn checks skip it, and `(int)float.NaN == 0` in C# collapses *every* NaN particle into a single spatial-hash cell, turning the neighbor search into O(n²) — that's the permanent FPS cliff, not a one-frame stutter. When a sim "dies" after an event, suspect NaN before anything else.
+- If a system should keep animating *through* a hitstop freeze (e.g. hit-flash, screen-space FX decay), use `Time.UnscaledDeltaTime` deliberately — but most gameplay sims should freeze with everything else, so plain `Time.DeltaTime` + a `dt <= 0` guard is correct.
+
+Regression coverage: `tests/Fluid.Tests/FluidSimulationTests.cs → Zero_Timestep_During_Hitstop_Does_Not_Produce_NaN`. A true end-to-end repro isn't feasible yet — the debug server (`GameDebugServer`) is read-only (`GET /state`, `GET /screenshot`) with no input-injection endpoint to script a melee hit — so this failure mode is pinned at the unit level instead.
+
 ## Planning Workflow
 
 Feature development follows a plan → review → implement → archive cycle:
