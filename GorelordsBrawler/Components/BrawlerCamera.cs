@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Nez;
@@ -15,7 +14,11 @@ namespace GorelordsBrawler.Components
 	{
 		private readonly List<Entity> _targets = [];
 		private Camera _camera;
-		private float _shakeTrauma;
+		private CameraShake _shake;
+		// The intended (un-shaken) camera position. Shake modulates around this
+		// each frame so it never accumulates into the base — the static view
+		// returns to exactly this point once trauma settles.
+		private Vector2 _basePosition;
 		private bool _hasMapBounds;
 		private float _mapWidth;
 		private float _mapHeight;
@@ -23,7 +26,7 @@ namespace GorelordsBrawler.Components
 
 		public void AddShake(float intensity)
 		{
-			_shakeTrauma = Math.Min(_shakeTrauma + intensity, 1f);
+			_shake.AddTrauma(intensity);
 		}
 
         [Inspectable]
@@ -101,6 +104,9 @@ namespace GorelordsBrawler.Components
 		public override void OnAddedToEntity()
 		{
 			_camera = Entity.Scene.Camera;
+			// Seed the base with the camera's starting position so dynamic mode's
+			// first-frame Lerp behaves exactly as before (lerps from here, not origin).
+			_basePosition = _camera.Position;
 		}
 
 		public void Update()
@@ -131,7 +137,7 @@ namespace GorelordsBrawler.Components
 			float fitZoomX = DesignWidth  / _mapWidth;
 			float fitZoomY = DesignHeight / _mapHeight;
 			_camera.RawZoom  = MathHelper.Min(fitZoomX, fitZoomY);
-			_camera.Position = new Vector2(_mapWidth * 0.5f, _mapHeight * 0.5f);
+			_basePosition    = new Vector2(_mapWidth * 0.5f, _mapHeight * 0.5f);
 			_staticPlaced    = true;
 		}
 
@@ -163,18 +169,20 @@ namespace GorelordsBrawler.Components
 			var targetZoom = MathHelper.Min(zoomX, zoomY);
 			targetZoom = MathHelper.Clamp(targetZoom, MinZoom, MaxZoom);
 
-			// Smoothly interpolate camera position and zoom
-			_camera.Position = Vector2.Lerp(_camera.Position, center, FollowLerp);
-			_camera.RawZoom  = MathHelper.Lerp(_camera.RawZoom, targetZoom, FollowLerp);
+			// Smoothly interpolate the base (un-shaken) position and zoom. Operating
+			// on _basePosition rather than _camera.Position keeps last frame's shake
+			// offset out of the smoothing — ApplyShake re-adds it after.
+			_basePosition   = Vector2.Lerp(_basePosition, center, FollowLerp);
+			_camera.RawZoom = MathHelper.Lerp(_camera.RawZoom, targetZoom, FollowLerp);
 
 			// Clamp camera to map bounds so it doesn't scroll past edges
 			if (_hasMapBounds)
 			{
 				var halfViewW = (DesignWidth  / _camera.RawZoom) * 0.5f;
 				var halfViewH = (DesignHeight / _camera.RawZoom) * 0.5f;
-				_camera.Position = new Vector2(
-					MathHelper.Clamp(_camera.Position.X, halfViewW, _mapWidth  - halfViewW),
-					MathHelper.Clamp(_camera.Position.Y, halfViewH, _mapHeight - halfViewH));
+				_basePosition = new Vector2(
+					MathHelper.Clamp(_basePosition.X, halfViewW, _mapWidth  - halfViewW),
+					MathHelper.Clamp(_basePosition.Y, halfViewH, _mapHeight - halfViewH));
 			}
 
 			// Acid surface constraint: keep the rising surface in the upper 60% of the view
@@ -184,25 +192,30 @@ namespace GorelordsBrawler.Components
 				var halfViewH = (DesignHeight / _camera.RawZoom) * 0.5f;
 				// Minimum camera Y ensures acidLevel appears no lower than 60% down the view.
 				float minCamY = _acid.CurrentLevel - halfViewH * 0.8f;
-				if (_camera.Position.Y < minCamY)
-					_camera.Position = new Vector2(_camera.Position.X, minCamY);
+				if (_basePosition.Y < minCamY)
+				{
+					_basePosition = new Vector2(_basePosition.X, minCamY);
+				}
 			}
 		}
 
 		private void ApplyShake()
 		{
-			if (_shakeTrauma <= 0f)
-				return;
-
-			var shakeMag = _shakeTrauma * _shakeTrauma * GameConstants.Combat.MaxShakeOffset;
-			_camera.Position += new Vector2(
-				(Nez.Random.NextFloat() * 2f - 1f) * shakeMag,
-				(Nez.Random.NextFloat() * 2f - 1f) * shakeMag);
-			_shakeTrauma -= GameConstants.Combat.ShakeDecay * Time.DeltaTime;
-			if (_shakeTrauma < 0f)
-			{
-				_shakeTrauma = 0f;
-			}
+			// Always rebuild Position from the fixed base + this frame's offset (set, not +=).
+			// When trauma is spent the offset is exactly zero, so a static view settles back to
+			// precisely map center with no residual drift.
+			//
+			// Decay runs on UNSCALED time: a hit triggers shake and hitstop (TimeScale=0) on the
+			// same frame, so scaled DeltaTime would freeze trauma for the whole freeze and the
+			// camera would resume at full-strength shake when the world un-pauses. Unscaled time
+			// lets the shake keep relaxing in real time through the freeze, matching
+			// CombatEffectsManager/HitFlash which also tick on unscaled time during hitstop.
+			var offset = _shake.Advance(
+				Time.UnscaledDeltaTime,
+				GameConstants.Combat.MaxShakeOffset,
+				GameConstants.Combat.ShakeDecay,
+				Nez.Random.NextFloat);
+			_camera.Position = _basePosition + offset;
 		}
 	}
 }
