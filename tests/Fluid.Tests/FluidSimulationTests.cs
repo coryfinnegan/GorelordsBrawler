@@ -165,5 +165,56 @@ namespace Fluid.Tests
 			// Plus ~6 neighbors at r=8 contribute roughly half that each → ρ₀ ≈ 0.4
 			Assert.InRange(sim.RestDensity, 0.05f, 5.0f);
 		}
+
+		// ── 5. Zero-timestep (hitstop) must not blow up ─────────────────────
+		// Regression for the "liquid disappears + FPS tanks on melee hit" bug.
+		// A melee hit triggers hitstop (CombatEffectsManager sets Time.TimeScale
+		// = 0), so AcidSurface.Update feeds dt = Time.DeltaTime = 0 into Step.
+		// UpdateVelocitiesAndPositions computed invDt = 1/dt → +Infinity → NaN
+		// velocities → NaN positions. NaN particles never despawn AND all collapse
+		// to one spatial-hash cell (int)NaN==0, making neighbor search O(n²).
+		// Step must treat dt <= 0 as a no-op so the settled state survives a freeze.
+
+		[Fact]
+		public void Zero_Timestep_During_Hitstop_Does_Not_Produce_NaN()
+		{
+			var sim       = NewSim(200, 400, capacity: 600);
+			var colliders = NewBox(200, 400);
+
+			float r = FluidConfig.ParticleRadius;
+			for (int row = 0; row < 25; row++)
+			{
+				for (int col = 0; col < 20; col++)
+				{
+					sim.Spawn(10 + col * (2 * r + 1), 50 + row * (2 * r + 1), 0, 0);
+				}
+			}
+
+			// Settle so particles are in contact (where the ΔP correction is
+			// non-zero — that correction divided by dt=0 is what NaNs).
+			Run(sim, colliders, 120);
+
+			int countBefore = sim.Count;
+
+			// 4 frozen frames == HitstopDuration 0.06s at 60fps.
+			for (int i = 0; i < 4; i++)
+			{
+				sim.Step(0f, colliders);
+			}
+
+			// Resume a few normal frames — NaN, if introduced, propagates here.
+			Run(sim, colliders, 5);
+
+			for (int i = 0; i < sim.Count; i++)
+			{
+				Assert.True(float.IsFinite(sim.Px[i]), $"Px[{i}] not finite: {sim.Px[i]}");
+				Assert.True(float.IsFinite(sim.Py[i]), $"Py[{i}] not finite: {sim.Py[i]}");
+				Assert.True(float.IsFinite(sim.Vx[i]), $"Vx[{i}] not finite: {sim.Vx[i]}");
+				Assert.True(float.IsFinite(sim.Vy[i]), $"Vy[{i}] not finite: {sim.Vy[i]}");
+			}
+
+			// A freeze should preserve the fluid, not vanish it.
+			Assert.Equal(countBefore, sim.Count);
+		}
 	}
 }
