@@ -43,7 +43,7 @@ namespace GorelordsBrawler.Scenes
 				"Content", "Effects", "liquid.mgfxo");
 			var liquidEffect = new Effect(Core.GraphicsDevice, File.ReadAllBytes(effectPath));
 			AddSceneComponent(new PauseManager());
-			AddSceneComponent(new CombatEffectsManager());
+			var combatEffects = AddSceneComponent(new CombatEffectsManager());
 			AddSceneComponent(new HitParticleManager());
 			var playerManager = AddSceneComponent(new PlayerManager());
 
@@ -158,6 +158,9 @@ namespace GorelordsBrawler.Scenes
 				// finiteness proves it didn't NaN (the hitstop dt=0 failure mode).
 				exporter.RegisterProvider("acidParticleCount", () => acidSurface.ParticleCount);
 				exporter.RegisterProvider("acidFinite",        () => acidSurface.AllParticlesFinite());
+				// Combat: true during a hit freeze (TimeScale=0). Lets the acid-survives-a-hit
+				// regression prove it actually drove the game through the dt=0 window.
+				exporter.RegisterProvider("hitstopActive",     () => combatEffects.IsHitstopActive);
 			}
 #endif
 

@@ -33,17 +33,21 @@ public sealed class GameDriver : IDisposable, IAsyncDisposable
 	private GameDriver(Process proc)
 	{
 		_process = proc;
-		_http    = new HttpClient { BaseAddress = new Uri(ServerUrl), Timeout = TimeSpan.FromSeconds(5) };
+		// 30s: comfortably above the server's own 10s /step ceiling (which returns 408 on a hung
+		// game), so a large step batch never trips a premature client-side timeout — but a truly
+		// stuck game still surfaces as a 408 → EnsureSuccessStatusCode throw, not a silent hang.
+		_http    = new HttpClient { BaseAddress = new Uri(ServerUrl), Timeout = TimeSpan.FromSeconds(30) };
 	}
 
 	/// <summary>Locate and launch the game with E2E appsettings then wait for the debug server.</summary>
 	public static async Task<GameDriver> StartAsync()
 	{
-		string exe = FindGameExe();
+		var (fileName, arguments, workingDir) = FindGameLauncher();
 
-		// Write appsettings.json that enables debug server + direct arena + fast acid +
-		// automation (both players use the scripted input device, driven over HTTP).
-		string settingsPath = Path.Combine(Path.GetDirectoryName(exe)!, "appsettings.json");
+		// Write appsettings.json next to the game artifact: debug server + direct arena + fast acid
+		// + automation. DebugAutomation is the load-bearing flag — without it BOTH players are
+		// created with keyboard devices and POST /input is silently ignored.
+		string settingsPath = Path.Combine(workingDir, "appsettings.json");
 		File.WriteAllText(settingsPath, """
 			{
 			  "DebugServer":      true,
@@ -53,34 +57,48 @@ public sealed class GameDriver : IDisposable, IAsyncDisposable
 			}
 			""");
 
-		var psi = new ProcessStartInfo(exe)
+		var psi = new ProcessStartInfo(fileName)
 		{
+			Arguments        = arguments,
 			UseShellExecute  = false,
-			WorkingDirectory = Path.GetDirectoryName(exe)!,
+			WorkingDirectory = workingDir,
 		};
 
 		var proc = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start game process.");
 		var driver = new GameDriver(proc);
 
-		await driver.WaitForServerAsync();
+		await driver.WaitForReadyAsync();
 		return driver;
 	}
 
-	/// <summary>Poll /state until the server responds, up to StartupTimeout ms.</summary>
-	private async Task WaitForServerAsync()
+	/// <summary>
+	/// Wait until the game is actually INTERACTIVE, not merely until the HTTP server answers.
+	///
+	/// The debug server starts inside Initialize() — BEFORE <c>Scene = new ArenaScene()</c> — and
+	/// Nez promotes/begins the scene on the next Update. So "the server responds" can be true while
+	/// /state still reports zero players. If a test connects in that window and switches to stepped
+	/// mode before the scene has begun, the scene initializes under stepping and scripted input is
+	/// never processed — the cold-start race that made earlier runs flaky. Waiting for live, grounded
+	/// players guarantees every test starts from the same warm, settled state a human would see.
+	/// </summary>
+	private async Task WaitForReadyAsync()
 	{
 		var deadline = DateTime.UtcNow.AddMilliseconds(StartupTimeout);
 		while (DateTime.UtcNow < deadline)
 		{
 			try
 			{
-				using var resp = await _http.GetAsync("/state");
-				if (resp.IsSuccessStatusCode) return;
+				var state = await GetStateAsync();
+				if (state.Players.Count >= 2 && state.Players.TrueForAll(p => p.Grounded))
+				{
+					return;
+				}
 			}
-			catch { /* not up yet */ }
-			await Task.Delay(200);
+			catch { /* server not up yet, or state not yet serializable */ }
+			await Task.Delay(100);
 		}
-		throw new TimeoutException($"Game debug server did not respond within {StartupTimeout}ms.");
+		throw new TimeoutException(
+			$"Game did not reach a live, grounded state within {StartupTimeout}ms.");
 	}
 
 	/// <summary>Query the current game state from /state.</summary>
@@ -123,6 +141,9 @@ public sealed class GameDriver : IDisposable, IAsyncDisposable
 	/// <summary>Place a player at a world position with zero velocity (scenario setup helper).</summary>
 	public Task TeleportAsync(int player, float x, float y) => PostAsync("/teleport", new { player, x, y });
 
+	/// <summary>Apply raw damage to a player (scenario setup helper — e.g. stage a death).</summary>
+	public Task DamageAsync(int player, int amount) => PostAsync("/damage", new { player, amount });
+
 	/// <summary>
 	/// Step in batches (default 5 frames) until the predicate holds or maxFrames is reached.
 	/// Deterministic alternative to WaitForAsync's wall-clock polling — use in stepped mode.
@@ -154,7 +175,7 @@ public sealed class GameDriver : IDisposable, IAsyncDisposable
 
 	public void Dispose()
 	{
-		try { if (!_process.HasExited) _process.Kill(); } catch { /* swallow */ }
+		try { if (!_process.HasExited) _process.Kill(entireProcessTree: true); } catch { /* swallow */ }
 		_process.Dispose();
 		_http.Dispose();
 	}
@@ -165,33 +186,42 @@ public sealed class GameDriver : IDisposable, IAsyncDisposable
 		return ValueTask.CompletedTask;
 	}
 
-	private static string FindGameExe()
+	/// <summary>
+	/// Locate the built game and decide how to launch it.
+	///
+	/// A <c>dotnet build GorelordsBrawler.slnx</c> emits NO standalone apphost: the test projects
+	/// reference the game with <c>UseAppHost=false</c> (so a test build never clobbers a running
+	/// game exe), and that is the only build of the game the solution performs. So the normal path
+	/// is to launch via <c>dotnet GorelordsBrawler.dll</c>. If a standalone exe IS present (e.g.
+	/// from a <c>dotnet publish</c>), we prefer it.
+	/// </summary>
+	private static (string fileName, string arguments, string workingDir) FindGameLauncher()
 	{
-		// Walk up from the test bin directory to find the game exe
+		string dll = FindGameArtifact("GorelordsBrawler.dll")
+			?? throw new FileNotFoundException(
+				"Could not locate GorelordsBrawler.dll. Build the solution first: " +
+				"dotnet build GorelordsBrawler.slnx");
+
+		string workingDir = Path.GetDirectoryName(dll)!;
+		string exe        = Path.ChangeExtension(dll, ".exe");
+
+		// Both content and appsettings.json resolve from AppContext.BaseDirectory (the artifact
+		// dir), so WorkingDirectory only needs to point there for either launch form.
+		return File.Exists(exe)
+			? (exe, "", workingDir)
+			: ("dotnet", $"\"{dll}\"", workingDir);
+	}
+
+	/// <summary>Walk up from the test bin dir into the game's build output to find an artifact.</summary>
+	private static string? FindGameArtifact(string fileName)
+	{
 		string dir = AppContext.BaseDirectory;
 		for (int i = 0; i < 8; i++)
 		{
-			var candidate = Path.Combine(dir, "GorelordsBrawler", "bin", "Debug", "net8.0",
-				"GorelordsBrawler.exe");
+			var candidate = Path.Combine(dir, "GorelordsBrawler", "bin", "Debug", "net8.0", fileName);
 			if (File.Exists(candidate)) return candidate;
 
 			dir = Path.GetDirectoryName(dir) ?? dir;
-		}
-
-		// Fall back to PATH
-		string? onPath = FindOnPath("GorelordsBrawler");
-		if (onPath != null) return onPath;
-
-		throw new FileNotFoundException(
-			"Could not locate GorelordsBrawler.exe. Build the game project first, or set PATH.");
-	}
-
-	private static string? FindOnPath(string name)
-	{
-		foreach (var dir in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator))
-		{
-			var full = Path.Combine(dir, name + ".exe");
-			if (File.Exists(full)) return full;
 		}
 		return null;
 	}

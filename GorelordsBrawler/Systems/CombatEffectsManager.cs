@@ -16,6 +16,14 @@ namespace GorelordsBrawler.Systems
 		private BrawlerCamera _brawlerCam;
 		private HitParticleManager _particleManager;
 
+		/// <summary>
+		/// True while a hit freeze is in effect (i.e. <c>Time.TimeScale == 0</c>). The E2E harness
+		/// reads this to confirm a melee hit actually drove the game into the <c>dt=0</c> window —
+		/// the exact path that NaN'd the acid sim (PR #11) — so the acid-survives-a-hit regression
+		/// can prove it exercised the failure mode rather than passing trivially.
+		/// </summary>
+		public bool IsHitstopActive => _hitstopTimer > 0f;
+
 		public void TriggerHit(Entity defender, float scaledKnockbackForce,
 			Vector2 hitPosition, Vector2 knockbackDirection)
 		{

@@ -86,9 +86,11 @@ namespace GorelordsBrawler.DevTools
 			int id = 0;
 			foreach (var p in _players.GetActivePlayers())
 			{
-				var health = p.GetComponent<Health>();
-				var body   = p.GetComponent<PhysicsBody>();
-				var pos    = p.Transform.Position;
+				var health  = p.GetComponent<Health>();
+				var body    = p.GetComponent<PhysicsBody>();
+				var hurtbox = p.GetComponent<Hurtbox>();
+				var hitstun = p.GetComponent<Hitstun>();
+				var pos     = p.Transform.Position;
 				list.Add(new
 				{
 					id,
@@ -99,6 +101,14 @@ namespace GorelordsBrawler.DevTools
 					grounded = body?.Grounded   ?? false,
 					vx       = (int)(body?.Velocity.X ?? 0),
 					vy       = (int)(body?.Velocity.Y ?? 0),
+					// Trustworthy combat oracles for the E2E harness (acid-independent):
+					hitstun        = hitstun?.IsActive ?? false,
+					meleeHitsTaken = hurtbox?.HitsTaken ?? 0,
+					dead           = health?.IsDead ?? false,
+					// FacingDirection is written ONLY by WalkAbility's normal movement branch,
+					// which hitstun skips — so it's a clean, knockback-independent probe of
+					// whether input is being processed (used by the hitstun-lockout test).
+					facing         = body?.FacingDirection ?? 1,
 				});
 				id++;
 			}

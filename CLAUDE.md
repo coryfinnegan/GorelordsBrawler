@@ -99,11 +99,12 @@ Feature development follows a plan → review → implement → archive cycle:
 Active proposals live in `docs/`. Completed features have their docs in `docs/implemented/`.
 
 ### Current Proposals
-- `docs/e2e-gameplay-automation-proposal.md` — scripted-input device + deterministic frame-stepping so E2E tests can drive real gameplay (awaiting review)
+- `docs/e2e-gameplay-automation-hardening-proposal.md` — make the gameplay E2E harness actually run (launcher fix), add trustworthy acid-independent oracles (meleeHitsTaken / hitstun / hitstopActive / facing), and pin the solid-core regressions (this PR)
 
 ### Implemented Features
 - `docs/implemented/match-system-proposal.md` — Stock lives match system with ruleset pattern
 - `docs/implemented/character-select-proposal.md` — Character select screen, modular stats refactor, Doc Marauder, scene transitions
+- `docs/implemented/e2e-gameplay-automation-proposal.md` — scripted-input device + deterministic frame-stepping (PR #13)
 
 ## Nez Documentation
 
