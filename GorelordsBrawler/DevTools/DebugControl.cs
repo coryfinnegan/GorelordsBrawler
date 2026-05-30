@@ -186,6 +186,26 @@ namespace GorelordsBrawler.DevTools
 				}
 			});
 		}
+
+		/// <summary>
+		/// Apply raw damage to a player's <see cref="Health"/>. Setup-only — used to stage a
+		/// scenario deterministically (e.g. drive a player to 0 HP to exercise the death/respawn
+		/// cycle) without leaning on a hazard's timing or geometry, which would couple the test to
+		/// the hazard sim. Mirrors the <c>/teleport</c> handoff.
+		/// </summary>
+		public static void EnqueueDamage(int player, int amount)
+		{
+			Enqueue(() =>
+			{
+				var pm      = Core.Scene?.GetSceneComponent<PlayerManager>();
+				var players = pm?.GetActivePlayers();
+				if (players == null || player < 0 || player >= players.Count)
+				{
+					return;
+				}
+				players[player].GetComponent<Health>()?.TakeDamage(amount);
+			});
+		}
 	}
 }
 #endif

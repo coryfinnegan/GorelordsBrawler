@@ -7,6 +7,15 @@ namespace GorelordsBrawler.Components
 {
 	public class Hurtbox : Component, ITriggerListener
 	{
+		/// <summary>
+		/// Monotonic count of distinct melee hits this hurtbox has registered. Incremented
+		/// exactly once per connection (at the per-attack dedup point below) and ONLY on the
+		/// melee path — contact hazards like acid call <see cref="Health.TakeDamage"/> directly
+		/// and never touch this. The E2E harness reads it as a trustworthy "a hit landed" oracle
+		/// that an HP delta (contaminated by acid damage-over-time) can't provide.
+		/// </summary>
+		public int HitsTaken { get; private set; }
+
 		private Health _health;
 		private PhysicsBody _body;
 		private Hitstun _hitstun;
@@ -37,6 +46,10 @@ namespace GorelordsBrawler.Components
 			{
 				return;
 			}
+
+			// A new, distinct melee hit has connected — record it before any damage/knockback
+			// so the count reflects "connections" even if HP is already at the floor.
+			HitsTaken++;
 
 			// Identify which zone was hit (for future damage multipliers / limb removal)
 			string hitZone = _zoneTracker?.GetZoneName(local);
