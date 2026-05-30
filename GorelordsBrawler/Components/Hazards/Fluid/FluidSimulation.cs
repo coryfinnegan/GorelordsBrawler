@@ -179,7 +179,13 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 
 		public void Step(float dt, FluidCollider colliders)
 		{
-			if (Count == 0)
+			// A zero/negative timestep has no physics to integrate, and
+			// UpdateVelocitiesAndPositions derives velocity as (pred - pos)/dt —
+			// at dt=0 that's a divide-by-zero → Inf → NaN positions, which then
+			// never despawn AND collapse to one spatial-hash cell (O(n²)). dt=0
+			// is a real runtime state: hitstop sets Time.TimeScale=0, so the
+			// scaled Time.DeltaTime feeding this is 0. Freeze the fluid instead.
+			if (Count == 0 || dt <= 0f)
 			{
 				return;
 			}
