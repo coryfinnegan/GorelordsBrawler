@@ -1,7 +1,9 @@
 #if DEBUG
 using System;
+using System.IO;
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -10,8 +12,14 @@ namespace GorelordsBrawler.DevTools
 	/// <summary>
 	/// Minimal HTTP server (port 7777) for automated game testing.
 	///
-	/// GET  /screenshot — returns the current rendered frame as PNG (blocks until next Draw)
+	/// GET  /screenshot — returns the current rendered frame as JPEG (blocks until next Draw)
 	/// GET  /state      — returns a JSON snapshot of acid + player state
+	///
+	/// Automation write-channel (all mutate state on the game thread via DebugControl):
+	/// POST /input      — { player, moveX?, moveY?, jump?, attack?, special? } scripted input
+	/// POST /run        — { mode: "free" | "stepped" } switch the loop's run mode
+	/// POST /step       — { frames } advance N fixed-dt frames; blocks until they've run
+	/// POST /teleport   — { player, x, y } place a player (setup helper)
 	/// </summary>
 	public static class GameDebugServer
 	{
@@ -138,6 +146,57 @@ namespace GorelordsBrawler.DevTools
 					resp.ContentLength64 = data.Length;
 					await resp.OutputStream.WriteAsync(data);
 				}
+				else if (req.HttpMethod == "POST" && path == "/input")
+				{
+					var body = await ReadJsonBodyAsync(req);
+					int player = GetInt(body, "player", 0);
+					DebugControl.EnqueueInput(
+						player,
+						GetNullableInt(body, "moveX"),
+						GetNullableInt(body, "moveY"),
+						GetNullableBool(body, "jump"),
+						GetNullableBool(body, "attack"),
+						GetNullableBool(body, "special"));
+					await WriteOkAsync(resp);
+				}
+				else if (req.HttpMethod == "POST" && path == "/run")
+				{
+					var body = await ReadJsonBodyAsync(req);
+					var mode = GetString(body, "mode", "free");
+					DebugControl.SetMode(
+						string.Equals(mode, "stepped", StringComparison.OrdinalIgnoreCase)
+							? RunMode.Stepped
+							: RunMode.Free);
+					await WriteOkAsync(resp);
+				}
+				else if (req.HttpMethod == "POST" && path == "/step")
+				{
+					var body   = await ReadJsonBodyAsync(req);
+					int frames = GetInt(body, "frames", 1);
+
+					var stepTask = DebugControl.RequestStepsAsync(frames);
+					try
+					{
+						// Generous ceiling: a step set shouldn't outrun the render loop, but
+						// guard against a frozen game so the HTTP client isn't hung forever.
+						await stepTask.WaitAsync(TimeSpan.FromSeconds(10));
+					}
+					catch (TimeoutException)
+					{
+						resp.StatusCode = 408;
+						return;
+					}
+					await WriteOkAsync(resp);
+				}
+				else if (req.HttpMethod == "POST" && path == "/teleport")
+				{
+					var body = await ReadJsonBodyAsync(req);
+					DebugControl.EnqueueTeleport(
+						GetInt(body, "player", 0),
+						(float)GetDouble(body, "x", 0),
+						(float)GetDouble(body, "y", 0));
+					await WriteOkAsync(resp);
+				}
 				else
 				{
 					resp.StatusCode = 404;
@@ -158,6 +217,53 @@ namespace GorelordsBrawler.DevTools
 			{
 				resp.OutputStream.Close();
 			}
+		}
+
+		// ── POST helpers ──────────────────────────────────────────────────────
+
+		private static async Task<JsonElement> ReadJsonBodyAsync(HttpListenerRequest req)
+		{
+			using var reader = new StreamReader(req.InputStream, req.ContentEncoding ?? Encoding.UTF8);
+			var raw = await reader.ReadToEndAsync();
+			if (string.IsNullOrWhiteSpace(raw))
+			{
+				// Empty body → empty object, so all GetX fall back to defaults.
+				using var empty = JsonDocument.Parse("{}");
+				return empty.RootElement.Clone();
+			}
+			using var doc = JsonDocument.Parse(raw);
+			return doc.RootElement.Clone();
+		}
+
+		private static async Task WriteOkAsync(HttpListenerResponse resp)
+		{
+			var data = Encoding.UTF8.GetBytes("{\"ok\":true}");
+			resp.ContentType = "application/json";
+			resp.ContentLength64 = data.Length;
+			await resp.OutputStream.WriteAsync(data);
+		}
+
+		private static int GetInt(JsonElement e, string name, int fallback)
+			=> e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : fallback;
+
+		private static double GetDouble(JsonElement e, string name, double fallback)
+			=> e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : fallback;
+
+		private static string GetString(JsonElement e, string name, string fallback)
+			=> e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : fallback;
+
+		private static int? GetNullableInt(JsonElement e, string name)
+			=> e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : (int?)null;
+
+		private static bool? GetNullableBool(JsonElement e, string name)
+		{
+			if (!e.TryGetProperty(name, out var v))
+			{
+				return null;
+			}
+			if (v.ValueKind == JsonValueKind.True)  return true;
+			if (v.ValueKind == JsonValueKind.False) return false;
+			return null;
 		}
 	}
 }

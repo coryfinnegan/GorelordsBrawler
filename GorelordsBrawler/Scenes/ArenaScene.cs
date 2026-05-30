@@ -154,6 +154,10 @@ namespace GorelordsBrawler.Scenes
 				exporter.RegisterProvider("acidActive", () => acidSurface.IsRising);
 				exporter.RegisterProvider("acidLevel",  () => (int)acidSurface.CurrentLevel);
 				exporter.RegisterProvider("acidSpeed",  () => acidSurface.IsRising ? 1 : 0);
+				// Automation assertions: particle count proves the pool didn't vanish/respawn,
+				// finiteness proves it didn't NaN (the hitstop dt=0 failure mode).
+				exporter.RegisterProvider("acidParticleCount", () => acidSurface.ParticleCount);
+				exporter.RegisterProvider("acidFinite",        () => acidSurface.AllParticlesFinite());
 			}
 #endif
 

@@ -6,11 +6,13 @@ namespace GorelordsBrawler.E2E.Tests;
 /// <summary>Mirrors the JSON structure emitted by DebugStateExporter.</summary>
 public class GameStateSnapshot
 {
-	[JsonPropertyName("time")]       public float Time       { get; set; }
-	[JsonPropertyName("acidActive")] public bool  AcidActive { get; set; }
-	[JsonPropertyName("acidLevel")]  public int   AcidLevel  { get; set; }
-	[JsonPropertyName("acidSpeed")]  public float AcidSpeed  { get; set; }
-	[JsonPropertyName("players")]    public List<PlayerSnapshot> Players { get; set; } = new();
+	[JsonPropertyName("time")]              public float Time              { get; set; }
+	[JsonPropertyName("acidActive")]        public bool  AcidActive        { get; set; }
+	[JsonPropertyName("acidLevel")]         public int   AcidLevel         { get; set; }
+	[JsonPropertyName("acidSpeed")]         public float AcidSpeed         { get; set; }
+	[JsonPropertyName("acidParticleCount")] public int   AcidParticleCount { get; set; }
+	[JsonPropertyName("acidFinite")]        public bool  AcidFinite        { get; set; } = true;
+	[JsonPropertyName("players")]           public List<PlayerSnapshot> Players { get; set; } = new();
 }
 
 public class PlayerSnapshot

@@ -18,6 +18,14 @@ namespace GorelordsBrawler
 		/// <summary>Skip menus and launch directly into ArenaScene with two keyboard players.</summary>
 		public static bool DebugDirectArena { get; private set; } = false;
 
+		/// <summary>
+		/// E2E automation mode. When combined with DebugDirectArena, both players use the
+		/// scripted input device (driven over HTTP) instead of the keyboard, and the loop
+		/// disables pause-on-focus-loss so frame-stepping works while the window is in the
+		/// background. Debug builds only.
+		/// </summary>
+		public static bool DebugAutomation { get; private set; } = false;
+
 		public static void Load()
 		{
 			try
@@ -37,6 +45,8 @@ namespace GorelordsBrawler
 					DebugFastAcid = fa.GetBoolean();
 				if (root.TryGetProperty("DebugDirectArena", out var da))
 					DebugDirectArena = da.GetBoolean();
+				if (root.TryGetProperty("DebugAutomation", out var au))
+					DebugAutomation = au.GetBoolean();
 			}
 			catch (Exception e)
 			{

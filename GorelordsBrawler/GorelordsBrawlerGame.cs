@@ -17,6 +17,41 @@ namespace GorelordsBrawler
 			GameReference = this;
 		}
 
+#if DEBUG
+		// Fixed timestep used while frame-stepping (RunMode.Stepped). Core.Update derives
+		// Nez Time.DeltaTime from gameTime.ElapsedGameTime, so feeding a constant elapsed
+		// makes each stepped frame advance a deterministic dt independent of wall-clock —
+		// the determinism lever the E2E harness relies on. 1/60 s matches the normal cadence.
+		private static readonly GameTime _fixedStepGameTime =
+			new GameTime(System.TimeSpan.Zero, System.TimeSpan.FromSeconds(1.0 / 60.0));
+#endif
+
+		protected override void Update(GameTime gameTime)
+		{
+#if DEBUG
+			if (AppSettings.DebugServer)
+			{
+				// Apply queued automation commands (scripted input, teleport, run-mode) on the
+				// game thread before anything advances, so a stepped frame sees this turn's input.
+				DevTools.DebugControl.DrainCommands();
+
+				if (DevTools.DebugControl.Mode == DevTools.RunMode.Stepped)
+				{
+					// Frozen between steps. Gating base.Update is a TRUE pause (unlike
+					// TimeScale = 0, which still ticks SceneComponents). Draw still runs below
+					// via the normal loop, so /screenshot keeps working while paused.
+					if (DevTools.DebugControl.HasPendingStep())
+					{
+						base.Update(_fixedStepGameTime);
+						DevTools.DebugControl.CompleteStep();
+					}
+					return;
+				}
+			}
+#endif
+			base.Update(gameTime);
+		}
+
 		protected override void Initialize()
 		{
 			Window.AllowUserResizing = true;
@@ -47,11 +82,21 @@ namespace GorelordsBrawler
 #if DEBUG
 			if (AppSettings.DebugDirectArena)
 			{
+				// In automation mode both players use the scripted device (driven over HTTP);
+				// otherwise the usual two-keyboard local setup. PauseOnFocusLost is disabled so
+				// frame-stepping keeps advancing even when the test runner has window focus.
+				bool automate = AppSettings.DebugAutomation;
+				if (automate)
+					PauseOnFocusLost = false;
+
+				var p0Device = automate ? Systems.InputDeviceType.Scripted0 : Systems.InputDeviceType.KeyboardWASD;
+				var p1Device = automate ? Systems.InputDeviceType.Scripted1 : Systems.InputDeviceType.KeyboardArrows;
+
 				var setup = GetGlobalManager<Systems.MatchSetupManager>();
 				setup.Selections.Add(new Systems.PlayerSelection
-					{ SlotIndex = 0, Device = Systems.InputDeviceType.KeyboardWASD,   CharacterType = Constants.GameConstants.Characters.FutureAxe });
+					{ SlotIndex = 0, Device = p0Device, CharacterType = Constants.GameConstants.Characters.FutureAxe });
 				setup.Selections.Add(new Systems.PlayerSelection
-					{ SlotIndex = 1, Device = Systems.InputDeviceType.KeyboardArrows, CharacterType = Constants.GameConstants.Characters.FutureAxe });
+					{ SlotIndex = 1, Device = p1Device, CharacterType = Constants.GameConstants.Characters.FutureAxe });
 				Scene = new Scenes.ArenaScene();
 				return;
 			}

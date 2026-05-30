@@ -99,7 +99,7 @@ Feature development follows a plan → review → implement → archive cycle:
 Active proposals live in `docs/`. Completed features have their docs in `docs/implemented/`.
 
 ### Current Proposals
-(none)
+- `docs/e2e-gameplay-automation-proposal.md` — scripted-input device + deterministic frame-stepping so E2E tests can drive real gameplay (awaiting review)
 
 ### Implemented Features
 - `docs/implemented/match-system-proposal.md` — Stock lives match system with ruleset pattern

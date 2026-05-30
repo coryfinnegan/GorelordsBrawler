@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -40,13 +41,15 @@ public sealed class GameDriver : IDisposable, IAsyncDisposable
 	{
 		string exe = FindGameExe();
 
-		// Write appsettings.json that enables debug server + direct arena + fast acid
+		// Write appsettings.json that enables debug server + direct arena + fast acid +
+		// automation (both players use the scripted input device, driven over HTTP).
 		string settingsPath = Path.Combine(Path.GetDirectoryName(exe)!, "appsettings.json");
 		File.WriteAllText(settingsPath, """
 			{
 			  "DebugServer":      true,
 			  "DebugDirectArena": true,
-			  "DebugFastAcid":    true
+			  "DebugFastAcid":    true,
+			  "DebugAutomation":  true
 			}
 			""");
 
@@ -99,6 +102,54 @@ public sealed class GameDriver : IDisposable, IAsyncDisposable
 			await Task.Delay(200);
 		}
 		throw new TimeoutException($"Condition not met within {timeoutMs}ms.");
+	}
+
+	// ── Automation write-channel ───────────────────────────────────────────────
+
+	/// <summary>Switch the game's run mode: "free" (real-time) or "stepped" (frame-by-frame).</summary>
+	public Task RunAsync(string mode) => PostAsync("/run", new { mode });
+
+	/// <summary>
+	/// Set scripted input for a player. Null arguments leave that field unchanged, so you can
+	/// toggle a button without disturbing a held movement direction. moveX/moveY are -1/0/1.
+	/// </summary>
+	public Task SetInputAsync(int player, int? moveX = null, int? moveY = null,
+		bool? jump = null, bool? attack = null, bool? special = null)
+		=> PostAsync("/input", new { player, moveX, moveY, jump, attack, special });
+
+	/// <summary>Advance exactly <paramref name="frames"/> fixed-dt frames; returns once they've run.</summary>
+	public Task StepAsync(int frames = 1) => PostAsync("/step", new { frames });
+
+	/// <summary>Place a player at a world position with zero velocity (scenario setup helper).</summary>
+	public Task TeleportAsync(int player, float x, float y) => PostAsync("/teleport", new { player, x, y });
+
+	/// <summary>
+	/// Step in batches (default 5 frames) until the predicate holds or maxFrames is reached.
+	/// Deterministic alternative to WaitForAsync's wall-clock polling — use in stepped mode.
+	/// </summary>
+	public async Task<GameStateSnapshot> StepUntilAsync(
+		Func<GameStateSnapshot, bool> condition, int maxFrames = 600, int batch = 5)
+	{
+		var state = await GetStateAsync();
+		if (condition(state)) return state;
+
+		int stepped = 0;
+		while (stepped < maxFrames)
+		{
+			await StepAsync(batch);
+			stepped += batch;
+			state = await GetStateAsync();
+			if (condition(state)) return state;
+		}
+		throw new TimeoutException($"Condition not met within {maxFrames} stepped frames.");
+	}
+
+	private async Task PostAsync(string path, object body)
+	{
+		var json    = JsonSerializer.Serialize(body);
+		using var c = new StringContent(json, Encoding.UTF8, "application/json");
+		using var r = await _http.PostAsync(path, c);
+		r.EnsureSuccessStatusCode();
 	}
 
 	public void Dispose()

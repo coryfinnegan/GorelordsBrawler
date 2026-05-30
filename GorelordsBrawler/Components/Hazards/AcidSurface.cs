@@ -27,6 +27,30 @@ namespace GorelordsBrawler.Components.Hazards
 		public bool  IsRising     { get; private set; }
 		public float CurrentLevel { get; private set; }
 
+		/// <summary>Live particle count — exposed for E2E assertions (e.g. "acid didn't vanish").</summary>
+		public int ParticleCount => _sim?.Count ?? 0;
+
+		/// <summary>
+		/// True if every live particle position is finite. The hitstop→NaN failure mode
+		/// (TimeScale=0 → dt=0 → 1/dt) collapses particles to NaN, which is otherwise invisible
+		/// in a screenshot until the pool drains. E2E tests assert this directly.
+		/// </summary>
+		public bool AllParticlesFinite()
+		{
+			if (_sim == null)
+			{
+				return true;
+			}
+			for (int i = 0; i < _sim.Count; i++)
+			{
+				if (!float.IsFinite(_sim.Px[i]) || !float.IsFinite(_sim.Py[i]))
+				{
+					return false;
+				}
+			}
+			return true;
+		}
+
 		// ── Internal state ────────────────────────────────────────────────────
 		private readonly int _mapWidth;
 		private readonly int _mapHeight;

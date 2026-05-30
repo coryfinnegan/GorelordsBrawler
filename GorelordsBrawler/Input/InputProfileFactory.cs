@@ -10,6 +10,19 @@ namespace GorelordsBrawler.Input
 	{
 		public static InputProfile CreateFromDevice(InputDeviceType device)
 		{
+#if DEBUG
+			// Automation devices: route to a scripted profile whose VirtualInput nodes read
+			// from ScriptedInputRegistry. Handled before the switch so the scripted factory
+			// (also DEBUG-only) doesn't need to appear in a release-compiled switch arm.
+			if (device == InputDeviceType.Scripted0)
+			{
+				return CreateScripted(0);
+			}
+			if (device == InputDeviceType.Scripted1)
+			{
+				return CreateScripted(1);
+			}
+#endif
 			return device switch
 			{
 				InputDeviceType.KeyboardWASD => CreateKeyboardWASD(),
@@ -21,6 +34,28 @@ namespace GorelordsBrawler.Input
 				_ => throw new ArgumentException($"Unknown device type: {device}")
 			};
 		}
+
+#if DEBUG
+		/// <summary>
+		/// Build a scripted input profile for E2E automation. Every node reads from the
+		/// shared <see cref="Scripted.ScriptedInputRegistry"/> entry for this player, which the
+		/// debug server writes via <c>POST /input</c>. Because these are ordinary VirtualInput
+		/// nodes, gameplay components see them exactly as keyboard/gamepad input.
+		/// </summary>
+		public static InputProfile CreateScripted(int playerIndex)
+		{
+			var s = Scripted.ScriptedInputRegistry.ForPlayer(playerIndex);
+			return new InputProfile
+			{
+				MoveX   = new VirtualIntegerAxis(new Scripted.ScriptedAxisNode(() => s.MoveX)),
+				MoveY   = new VirtualIntegerAxis(new Scripted.ScriptedAxisNode(() => s.MoveY)),
+				Jump    = new VirtualButton(GameConstants.Input.JumpBufferTime,
+					new Scripted.ScriptedButtonNode(() => s.Jump)),
+				Attack  = new VirtualButton(new Scripted.ScriptedButtonNode(() => s.Attack)),
+				Special = new VirtualButton(new Scripted.ScriptedButtonNode(() => s.Special)),
+			};
+		}
+#endif
 
 		public static InputProfile CreateKeyboardWASD()
 		{
