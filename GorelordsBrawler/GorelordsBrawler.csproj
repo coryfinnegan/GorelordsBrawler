@@ -25,7 +25,13 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.*" />
-    <PackageReference Include="MonoGame.Content.Builder.Task" Version="3.8.*" />
+    <!--
+      MonoGame.Content.Builder.Task is intentionally NOT referenced. The project does not use the
+      MGCB pipeline: shaders are pre-compiled (.mgfxo, loaded via File.ReadAllBytes), fonts/JSON/Tiled
+      maps are loaded via NezContentManager's direct readers (LoadBitmapFont/LoadJson/LoadTiledMap),
+      and nothing calls Content.Load<T>(...). Adding the package back would warn (or error, if you
+      also add a <MonoGameContentReference>) every build for no real work.
+    -->
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Nez\Nez.Portable\Nez.MG38.csproj" />

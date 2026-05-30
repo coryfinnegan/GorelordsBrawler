@@ -35,8 +35,8 @@ The project is in early development — the main game class (`GorelordsBrawlerGa
 ## Build Commands
 
 ```bash
-# Build the project
-dotnet build GorelordsBrawler/GorelordsBrawler.csproj
+# Build the whole solution (game + Nez + all test projects) — always use the .slnx, never a single csproj
+dotnet build GorelordsBrawler.slnx
 
 # Run the game
 dotnet run --project GorelordsBrawler/GorelordsBrawler.csproj
