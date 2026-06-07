@@ -111,6 +111,14 @@ namespace GorelordsBrawler.Scenes
 			int mw = tiledMap.WorldWidth, mh = tiledMap.WorldHeight;
 			var acidEntity = CreateEntity("acid");
 			var acidSurface = acidEntity.AddComponent(new AcidSurface(mw, mh, tiledMap));
+			// Phase A "Sump": seed a resting pool in the central basin so the acid
+			// is present and dangerous from t=0 (the Calm phase) — long before the
+			// scripted rise. Deferred internally until the sim exists.
+			acidSurface.PreFill(
+				GameConstants.Hazards.BasinLeftX,
+				GameConstants.Hazards.BasinRightX,
+				GameConstants.Hazards.BasinRestTopY,
+				GameConstants.Hazards.BasinFloorY);
 			var contactHazard = acidEntity.AddComponent(new ContactHazard());
 			contactHazard.DamagePerSecond = GameConstants.Hazards.AcidDamagePerSec;
 			contactHazard.GetBounds = acidSurface.GetDamageBounds;

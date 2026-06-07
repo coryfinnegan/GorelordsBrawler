@@ -69,6 +69,15 @@ namespace GorelordsBrawler.Components.Hazards
 
 		private readonly System.Random _rng = new System.Random(0xACED);
 
+		// Pre-fill request (deferred until OnAddedToEntity, when _sim exists).
+		private bool  _preFillRequested;
+		private float _pfLeft, _pfRight, _pfTop, _pfBottom;
+
+		// Inlet fill cap: max live particles the inlet will pour up to, derived
+		// from basin geometry in OnAddedToEntity. Bounds the working set so the
+		// basin fills to ~the lip and stops, instead of running to MaxParticles.
+		private int _inletParticleCap;
+
 		private static readonly Color _acidColor = new Color((byte)60, (byte)180, (byte)40, (byte)200);
 
 		public AcidSurface(int mapWidth, int mapHeight, TmxMap map = null)
@@ -124,10 +133,70 @@ namespace GorelordsBrawler.Components.Hazards
 
 			_grid = new FluidOccupancyGrid(_mapWidth, _mapHeight, FluidConfig.GridCellSize);
 
+			// Geometry-derived inlet cap: how many particles fill the basin from
+			// its floor up to the fill ceiling. PBF settles to ~hex packing, so
+			// each particle's footprint is (2r)²·(√3/2). This REPLACES the old
+			// volumetric inlet-stop (CurrentLevel < topPlatformY + margin), which
+			// assumed the acid spreads across the full map width — wrong by ~3×
+			// for the narrow basin, so it never tripped and the pool ran to the
+			// 5000 hard cap, flooding the arena and tanking FPS.
+			float fillArea    = (GameConstants.Hazards.BasinRightX - GameConstants.Hazards.BasinLeftX)
+			                  * (GameConstants.Hazards.BasinFloorY  - GameConstants.Hazards.BasinFillCeilingY);
+			float perParticle = 4f * FluidConfig.ParticleRadius * FluidConfig.ParticleRadius * 0.8660254f;
+			_inletParticleCap = (int)(fillArea / perParticle);
+
 			_renderer = Entity.AddComponent(new FluidRenderer(_sim, _mapWidth, _mapHeight, _acidColor));
+
+			// Deferred pre-fill: the resting basin pool must be spawned AFTER _sim
+			// exists. PreFill() (called from ArenaScene during scene construction)
+			// only records the region; this is where it actually runs.
+			if (_preFillRequested)
+			{
+				ExecutePreFill();
+			}
 		}
 
 		public void Activate() => IsRising = true;
+
+		/// <summary>
+		/// Request a resting block of acid filling the world-space rectangle
+		/// [left,right] × [top,bottom], spawned at scene start so the basin holds
+		/// a pool from t=0 (the "Calm" phase) — long before the rise begins.
+		/// Deferred to <see cref="OnAddedToEntity"/> because components are
+		/// constructed before that hook fires, so <c>_sim</c> doesn't exist yet
+		/// when ArenaScene calls this.
+		/// </summary>
+		public void PreFill(float left, float right, float top, float bottom)
+		{
+			_preFillRequested = true;
+			_pfLeft   = left;
+			_pfRight  = right;
+			_pfTop    = top;
+			_pfBottom = bottom;
+		}
+
+		private void ExecutePreFill()
+		{
+			// Lay particles on a grid at rest spacing (2·radius). PBF relaxes them
+			// toward hex packing over the first few Steps; the tiny initial settle
+			// reads as the pool "finding its level."
+			float spacing = 2f * FluidConfig.ParticleRadius;
+			for (float y = _pfBottom - spacing; y > _pfTop; y -= spacing)
+			{
+				for (float x = _pfLeft + spacing; x < _pfRight - spacing; x += spacing)
+				{
+					if (_sim.Spawn(x, y, 0f, 0f) < 0)
+					{
+						return;   // at capacity — stop early
+					}
+				}
+			}
+
+			// Make surface/damage-bounds queries valid on frame 0, before the
+			// first Update() Step rebuilds the grid.
+			_grid.RebuildFrom(_sim);
+			UpdateCurrentLevel();
+		}
 
 		// ──────────────────────────────────────────────────────────────────────
 		// Per-frame
@@ -135,14 +204,28 @@ namespace GorelordsBrawler.Components.Hazards
 
 		public void Update()
 		{
-			if (!IsRising || _sim == null)
+			if (_sim == null)
 			{
 				return;
 			}
 
 			float dt = Math.Min(Time.DeltaTime, GameConstants.Physics.MaxDeltaTime);
 
-			SpawnInlet(dt);
+			// Pour from the inlet only while rising. Pre-filled acid (the Calm
+			// phase) has particles but isn't "rising" yet — it must still simulate
+			// so it settles, stays contained by the basin, and damages anyone
+			// knocked into it. Only the inlet pour is gated on IsRising.
+			if (IsRising)
+			{
+				SpawnInlet(dt);
+			}
+
+			// Dry and not pouring — nothing to simulate, skip the per-frame work
+			// (broadphase rebuild + step) entirely.
+			if (_sim.Count == 0)
+			{
+				return;
+			}
 
 			// Refresh dynamic collider list — picks up newly spawned platforms.
 			// Query area = wet bounds expanded by 2·h, or the full map if dry.
@@ -159,10 +242,13 @@ namespace GorelordsBrawler.Components.Hazards
 
 		private void SpawnInlet(float dt)
 		{
-			// Stop pouring once the pool effectively buries the top platform —
-			// caps the working-set particle count and avoids wasting cycles on
-			// off-screen pile-ups.
-			if (CurrentLevel < _topPlatformY + FluidConfig.InletStopMargin)
+			// Stop pouring once the basin is filled to its target level. This is a
+			// COUNT cap (not the old CurrentLevel test): CurrentLevel is a
+			// volumetric estimate assuming full-map-width spreading, which is wrong
+			// by ~3× for the narrow basin and never tripped — so the inlet used to
+			// pour to MaxParticles (5000), overflow the arena, and tank FPS. The
+			// count cap is derived from basin geometry in OnAddedToEntity.
+			if (_sim.Count >= _inletParticleCap)
 			{
 				return;
 			}
