@@ -100,6 +100,7 @@ Active proposals live in `docs/`. Completed features have their docs in `docs/im
 
 ### Current Proposals
 - `docs/e2e-gameplay-automation-hardening-proposal.md` — make the gameplay E2E harness actually run (launcher fix), add trustworthy acid-independent oracles (meleeHitsTaken / hitstun / hitstopActive / facing), and pin the solid-core regressions (this PR)
+- `docs/acid-arena-design-proposal.md` — "The Sump" acid arena: central basin (knock-in pit + flood reservoir) with Calm→Rise→Scramble→Surge→Flood phases, depth-scaled lethality, and telegraphing — makes the PBF fluid sim the central play feature
 
 ### Implemented Features
 - `docs/implemented/match-system-proposal.md` — Stock lives match system with ruleset pattern

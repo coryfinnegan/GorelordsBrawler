@@ -216,5 +216,56 @@ namespace Fluid.Tests
 			// A freeze should preserve the fluid, not vanish it.
 			Assert.Equal(countBefore, sim.Count);
 		}
+
+		// ── 6. Basin containment (the "Sump" Phase A premise) ───────────────
+		// A resting pool dropped into a U-shaped vessel (two solid banks + a
+		// floor partway up) must stay in the central channel: contained left/
+		// right by the bank faces, resting on the floor, never leaking out the
+		// concave bank↔floor corners. This is the load-bearing assumption behind
+		// the whole acid-arena redesign — if acid leaked here, the basin would
+		// not hold a pool. World coords mirror arena1.tmx: channel x∈[448,832],
+		// floor top y=736.
+
+		[Fact]
+		public void Acid_Stays_Contained_In_Basin_Channel()
+		{
+			var sim       = NewSim(1280, 800, capacity: 1200);
+			var colliders = new FluidCollider(0, 1280, 0, 800);   // outer walls, far from basin
+			colliders.SetAabbs(new[]
+			{
+				new RectangleF(0,   0, 448, 800),   // left bank  (inner face x=448)
+				new RectangleF(832, 0, 448, 800),   // right bank (inner face x=832)
+				new RectangleF(0, 736, 1280, 64),   // basin floor (top y=736)
+			}, 3);
+
+			// Resting block of acid inside the channel.
+			float r = FluidConfig.ParticleRadius;
+			float spacing = 2 * r;
+			int spawned = 0;
+			for (float y = 728; y > 600; y -= spacing)
+			{
+				for (float x = 456; x < 824; x += spacing)
+				{
+					sim.Spawn(x, y, 0, 0);
+					spawned++;
+				}
+			}
+
+			Run(sim, colliders, 300);
+
+			// Nothing leaked out (would despawn below the world floor) or vanished.
+			Assert.Equal(spawned, sim.Count);
+
+			for (int i = 0; i < sim.Count; i++)
+			{
+				Assert.True(float.IsFinite(sim.Px[i]) && float.IsFinite(sim.Py[i]),
+					$"particle {i} went non-finite: ({sim.Px[i]},{sim.Py[i]})");
+				// Horizontal: stayed between the two bank faces.
+				Assert.InRange(sim.Px[i], 448f - 1f, 832f + 1f);
+				// Vertical: rests on/above the basin floor, never tunnels through it,
+				// and didn't get flung up out of the basin.
+				Assert.InRange(sim.Py[i], 400f, 736f + 1f);
+			}
+		}
 	}
 }

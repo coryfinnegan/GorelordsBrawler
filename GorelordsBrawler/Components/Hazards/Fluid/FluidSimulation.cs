@@ -1,5 +1,7 @@
 using System;
 using Microsoft.Xna.Framework;
+using System.Collections.Concurrent;
+using System.Threading.Tasks;
 
 namespace GorelordsBrawler.Components.Hazards.Fluid
 {
@@ -73,6 +75,21 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 		private readonly float _sCorrK;
 		private readonly int   _sCorrN;
 		private readonly float _xsphC;
+
+		// ── Parallelism ───────────────────────────────────────────────────────
+		/// <summary>
+		/// When true (default) the Jacobi-style per-particle solver stages run
+		/// multi-threaded via range-partitioned Parallel.ForEach. Set false to force
+		/// the serial path (the benchmark toggles this to measure speedup; also an
+		/// escape hatch). Safe because every parallel stage READS neighbour state and
+		/// WRITES only its own index (_lambda[i]/_dpx[i]/PredX[i]/Vx[i]) — no
+		/// write-write races. BuildSpatialHash (shared scatter) stays serial.
+		/// </summary>
+		public bool ParallelEnabled = true;
+
+		// Below this particle count fork/join overhead outweighs the win → run
+		// serial. Calibrated empirically (see FluidBenchmark).
+		private const int ParallelThreshold = 512;
 
 		public FluidSimulation(
 			int capacity,
@@ -177,6 +194,22 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 		// Per-frame step
 		// ──────────────────────────────────────────────────────────────────────
 
+		// Run a per-particle stage over [0, Count) serially or across all cores.
+		// Range partitioning invokes the delegate once per CHUNK, not per particle —
+		// essential for tight numeric loops where per-element delegate overhead would
+		// dominate (.NET TPL guidance: "How to: Speed Up Small Loop Bodies").
+		private void RunPerParticle(System.Action<int, int> rangeBody)
+		{
+			int count = Count;
+			if (!ParallelEnabled || count < ParallelThreshold)
+			{
+				rangeBody(0, count);
+				return;
+			}
+			Parallel.ForEach(Partitioner.Create(0, count),
+				range => rangeBody(range.Item1, range.Item2));
+		}
+
 		public void Step(float dt, FluidCollider colliders)
 		{
 			// A zero/negative timestep has no physics to integrate, and
@@ -215,21 +248,24 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 			float maxStep = _h;
 			float maxStep2 = maxStep * maxStep;
 
-			for (int i = 0; i < Count; i++)
+			RunPerParticle((__lo, __hi) =>
 			{
-				Vy[i] += vyAdd;
-				float dx = Vx[i] * dt;
-				float dy = Vy[i] * dt;
-				float mag2 = dx * dx + dy * dy;
-				if (mag2 > maxStep2)
+				for (int i = __lo; i < __hi; i++)
 				{
-					float scale = maxStep / MathF.Sqrt(mag2);
-					dx *= scale;
-					dy *= scale;
-				}
-				PredX[i] = Px[i] + dx;
-				PredY[i] = Py[i] + dy;
-			}
+					Vy[i] += vyAdd;
+					float dx = Vx[i] * dt;
+					float dy = Vy[i] * dt;
+					float mag2 = dx * dx + dy * dy;
+					if (mag2 > maxStep2)
+					{
+						float scale = maxStep / MathF.Sqrt(mag2);
+						dx *= scale;
+						dy *= scale;
+					}
+					PredX[i] = Px[i] + dx;
+					PredY[i] = Py[i] + dy;
+							}
+			});
 		}
 
 		// ── Spatial hash (counting sort) ──────────────────────────────────────
@@ -287,67 +323,70 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 			float rho0 = RestDensity;
 			float invRho0 = 1f / rho0;
 
-			for (int i = 0; i < Count; i++)
+			RunPerParticle((__lo, __hi) =>
 			{
-				float pix = PredX[i];
-				float piy = PredY[i];
-				float density = 0f;
-				float sumGradX = 0f;
-				float sumGradY = 0f;
-				float sumGradSq = 0f;
-
-				int ci = _cellOf[i];
-				int cy = ci / _cols;
-				int cx = ci - cy * _cols;
-
-				for (int dy = -1; dy <= 1; dy++)
+				for (int i = __lo; i < __hi; i++)
 				{
-					int ny = cy + dy;
-					if (ny < 0 || ny >= _rows) continue;
-					for (int dx = -1; dx <= 1; dx++)
-					{
-						int nx = cx + dx;
-						if (nx < 0 || nx >= _cols) continue;
-						int cell = ny * _cols + nx;
-						int start = _cellStart[cell];
-						int end   = _cellStart[cell + 1];
-						for (int k = start; k < end; k++)
-						{
-							int j = _cellIdx[k];
-							float rx = pix - PredX[j];
-							float ry = piy - PredY[j];
-							float r2 = rx * rx + ry * ry;
-							if (r2 >= _h2)
-							{
-								continue;
-							}
-							// Density
-							density += Poly6FromR2(r2);
+					float pix = PredX[i];
+					float piy = PredY[i];
+					float density = 0f;
+					float sumGradX = 0f;
+					float sumGradY = 0f;
+					float sumGradSq = 0f;
 
-							if (j == i || r2 == 0f)
+					int ci = _cellOf[i];
+					int cy = ci / _cols;
+					int cx = ci - cy * _cols;
+
+					for (int dy = -1; dy <= 1; dy++)
+					{
+						int ny = cy + dy;
+						if (ny < 0 || ny >= _rows) continue;
+						for (int dx = -1; dx <= 1; dx++)
+						{
+							int nx = cx + dx;
+							if (nx < 0 || nx >= _cols) continue;
+							int cell = ny * _cols + nx;
+							int start = _cellStart[cell];
+							int end   = _cellStart[cell + 1];
+							for (int k = start; k < end; k++)
 							{
-								continue;
+								int j = _cellIdx[k];
+								float rx = pix - PredX[j];
+								float ry = piy - PredY[j];
+								float r2 = rx * rx + ry * ry;
+								if (r2 >= _h2)
+								{
+									continue;
+								}
+								// Density
+								density += Poly6FromR2(r2);
+
+								if (j == i || r2 == 0f)
+								{
+									continue;
+								}
+								float r = MathF.Sqrt(r2);
+								// Spiky gradient (vector) for the constraint
+								float gMag = SpikyGradMag(r) * invRho0;
+								float gx = gMag * (rx / r);
+								float gy = gMag * (ry / r);
+								sumGradX += gx;
+								sumGradY += gy;
+								sumGradSq += gx * gx + gy * gy;
 							}
-							float r = MathF.Sqrt(r2);
-							// Spiky gradient (vector) for the constraint
-							float gMag = SpikyGradMag(r) * invRho0;
-							float gx = gMag * (rx / r);
-							float gy = gMag * (ry / r);
-							sumGradX += gx;
-							sumGradY += gy;
-							sumGradSq += gx * gx + gy * gy;
 						}
 					}
-				}
 
-				sumGradSq += sumGradX * sumGradX + sumGradY * sumGradY;
-				// Clamp C ≥ 0: incompressibility is one-sided — don't pull particles
-				// together at free surfaces (under-dense regions). Tensile-instability
-				// correction (sCorr) handles surface cohesion instead.
-				float c = density / rho0 - 1f;
-				if (c < 0f) c = 0f;
-				_lambda[i] = -c / (sumGradSq + _epsilon);
-			}
+					sumGradSq += sumGradX * sumGradX + sumGradY * sumGradY;
+					// Clamp C ≥ 0: incompressibility is one-sided — don't pull particles
+					// together at free surfaces (under-dense regions). Tensile-instability
+					// correction (sCorr) handles surface cohesion instead.
+					float c = density / rho0 - 1f;
+					if (c < 0f) c = 0f;
+					_lambda[i] = -c / (sumGradSq + _epsilon);
+							}
+			});
 		}
 
 		// ── PBF: ΔP + collision ───────────────────────────────────────────────
@@ -358,78 +397,84 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 			float invRho0 = 1f / rho0;
 			float wDq = _wDq;
 
-			for (int i = 0; i < Count; i++)
+			RunPerParticle((__lo, __hi) =>
 			{
-				float pix = PredX[i];
-				float piy = PredY[i];
-				float dpx = 0f;
-				float dpy = 0f;
-				float li = _lambda[i];
-
-				int ci = _cellOf[i];
-				int cy = ci / _cols;
-				int cx = ci - cy * _cols;
-
-				for (int dy = -1; dy <= 1; dy++)
+				for (int i = __lo; i < __hi; i++)
 				{
-					int ny = cy + dy;
-					if (ny < 0 || ny >= _rows) continue;
-					for (int dx = -1; dx <= 1; dx++)
+					float pix = PredX[i];
+					float piy = PredY[i];
+					float dpx = 0f;
+					float dpy = 0f;
+					float li = _lambda[i];
+
+					int ci = _cellOf[i];
+					int cy = ci / _cols;
+					int cx = ci - cy * _cols;
+
+					for (int dy = -1; dy <= 1; dy++)
 					{
-						int nx = cx + dx;
-						if (nx < 0 || nx >= _cols) continue;
-						int cell = ny * _cols + nx;
-						int start = _cellStart[cell];
-						int end   = _cellStart[cell + 1];
-						for (int k = start; k < end; k++)
+						int ny = cy + dy;
+						if (ny < 0 || ny >= _rows) continue;
+						for (int dx = -1; dx <= 1; dx++)
 						{
-							int j = _cellIdx[k];
-							if (j == i) continue;
-							float rx = pix - PredX[j];
-							float ry = piy - PredY[j];
-							float r2 = rx * rx + ry * ry;
-							if (r2 >= _h2 || r2 == 0f)
+							int nx = cx + dx;
+							if (nx < 0 || nx >= _cols) continue;
+							int cell = ny * _cols + nx;
+							int start = _cellStart[cell];
+							int end   = _cellStart[cell + 1];
+							for (int k = start; k < end; k++)
 							{
-								continue;
+								int j = _cellIdx[k];
+								if (j == i) continue;
+								float rx = pix - PredX[j];
+								float ry = piy - PredY[j];
+								float r2 = rx * rx + ry * ry;
+								if (r2 >= _h2 || r2 == 0f)
+								{
+									continue;
+								}
+								float r = MathF.Sqrt(r2);
+
+								// Tensile-instability correction (sCorr)
+								float wRatio = Poly6FromR2(r2) / wDq;
+								float sCorr = -_sCorrK * MathF.Pow(wRatio, _sCorrN);
+
+								float coeff = (li + _lambda[j] + sCorr) * invRho0;
+								float gMag = SpikyGradMag(r);
+								dpx += coeff * gMag * (rx / r);
+								dpy += coeff * gMag * (ry / r);
 							}
-							float r = MathF.Sqrt(r2);
-
-							// Tensile-instability correction (sCorr)
-							float wRatio = Poly6FromR2(r2) / wDq;
-							float sCorr = -_sCorrK * MathF.Pow(wRatio, _sCorrN);
-
-							float coeff = (li + _lambda[j] + sCorr) * invRho0;
-							float gMag = SpikyGradMag(r);
-							dpx += coeff * gMag * (rx / r);
-							dpy += coeff * gMag * (ry / r);
 						}
 					}
-				}
 
-				_dpx[i] = dpx;
-				_dpy[i] = dpy;
-			}
+					_dpx[i] = dpx;
+					_dpy[i] = dpy;
+							}
+			});
 
 			// Apply ΔP (capped at h/4 per iteration to stay in the linear regime
 			// of the constraint and keep neighbors valid through later iters),
 			// then collide.
 			float maxDp = 0.25f * _h;
 			float maxDp2 = maxDp * maxDp;
-			for (int i = 0; i < Count; i++)
+			RunPerParticle((__lo, __hi) =>
 			{
-				float dx = _dpx[i];
-				float dy = _dpy[i];
-				float m2 = dx * dx + dy * dy;
-				if (m2 > maxDp2)
+				for (int i = __lo; i < __hi; i++)
 				{
-					float s = maxDp / MathF.Sqrt(m2);
-					dx *= s;
-					dy *= s;
-				}
-				PredX[i] += dx;
-				PredY[i] += dy;
-				colliders.Project(ref PredX[i], ref PredY[i], FluidConfig.ParticleRadius);
-			}
+					float dx = _dpx[i];
+					float dy = _dpy[i];
+					float m2 = dx * dx + dy * dy;
+					if (m2 > maxDp2)
+					{
+						float s = maxDp / MathF.Sqrt(m2);
+						dx *= s;
+						dy *= s;
+					}
+					PredX[i] += dx;
+					PredY[i] += dy;
+					colliders.Project(ref PredX[i], ref PredY[i], FluidConfig.ParticleRadius);
+							}
+			});
 		}
 
 		// ── Finalize velocities + post-solve collision tag ────────────────────
@@ -438,35 +483,38 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 		{
 			float invDt = 1f / dt;
 			float drag  = MathF.Max(0f, 1f - FluidConfig.LinearDrag * dt);
-			for (int i = 0; i < Count; i++)
+			RunPerParticle((__lo, __hi) =>
 			{
-				float vx = (PredX[i] - Px[i]) * invDt;
-				float vy = (PredY[i] - Py[i]) * invDt;
-
-				Px[i] = PredX[i];
-				Py[i] = PredY[i];
-
-				// Damp velocity components on whichever face the particle settled against
-				int side = colliders.ContactSide(Px[i], Py[i], FluidConfig.ParticleRadius);
-				if (side == 1 || side == 2) // top/bottom face — kill vertical, friction on tangent
+				for (int i = __lo; i < __hi; i++)
 				{
-					vy *= -FluidConfig.PlatformRestitution;
-					vx *= 1f - FluidConfig.WallTangentFriction * dt;
-				}
-				else if (side == 3 || side == 4) // left/right face
-				{
-					vx *= -FluidConfig.WallRestitution;
-					vy *= 1f - FluidConfig.WallTangentFriction * dt;
-				}
+					float vx = (PredX[i] - Px[i]) * invDt;
+					float vy = (PredY[i] - Py[i]) * invDt;
 
-				// Global linear drag — converges resting fluid; cheap insurance
-				// against energy creep from solver overshoot.
-				vx *= drag;
-				vy *= drag;
+					Px[i] = PredX[i];
+					Py[i] = PredY[i];
 
-				Vx[i] = vx;
-				Vy[i] = vy;
-			}
+					// Damp velocity components on whichever face the particle settled against
+					int side = colliders.ContactSide(Px[i], Py[i], FluidConfig.ParticleRadius);
+					if (side == 1 || side == 2) // top/bottom face — kill vertical, friction on tangent
+					{
+						vy *= -FluidConfig.PlatformRestitution;
+						vx *= 1f - FluidConfig.WallTangentFriction * dt;
+					}
+					else if (side == 3 || side == 4) // left/right face
+					{
+						vx *= -FluidConfig.WallRestitution;
+						vy *= 1f - FluidConfig.WallTangentFriction * dt;
+					}
+
+					// Global linear drag — converges resting fluid; cheap insurance
+					// against energy creep from solver overshoot.
+					vx *= drag;
+					vy *= drag;
+
+					Vx[i] = vx;
+					Vy[i] = vy;
+							}
+			});
 		}
 
 		// ── XSPH viscosity ────────────────────────────────────────────────────
@@ -479,58 +527,67 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 			}
 
 			// Accumulate Δv into _dpx/_dpy (reused as scratch)
-			for (int i = 0; i < Count; i++)
+			RunPerParticle((__lo, __hi) =>
 			{
-				_dpx[i] = 0f;
-				_dpy[i] = 0f;
-			}
-
-			for (int i = 0; i < Count; i++)
-			{
-				float pix = Px[i];
-				float piy = Py[i];
-				float vix = Vx[i];
-				float viy = Vy[i];
-
-				int ci = CellOf(pix, piy);
-				int cy = ci / _cols;
-				int cx = ci - cy * _cols;
-
-				for (int dy = -1; dy <= 1; dy++)
+				for (int i = __lo; i < __hi; i++)
 				{
-					int ny = cy + dy;
-					if (ny < 0 || ny >= _rows) continue;
-					for (int dx = -1; dx <= 1; dx++)
-					{
-						int nx = cx + dx;
-						if (nx < 0 || nx >= _cols) continue;
-						int cell = ny * _cols + nx;
-						int start = _cellStart[cell];
-						int end   = _cellStart[cell + 1];
-						for (int k = start; k < end; k++)
-						{
-							int j = _cellIdx[k];
-							if (j == i) continue;
-							float rx = pix - Px[j];
-							float ry = piy - Py[j];
-							float r2 = rx * rx + ry * ry;
-							if (r2 >= _h2)
-							{
-								continue;
+					_dpx[i] = 0f;
+					_dpy[i] = 0f;
 							}
-							float w = Poly6FromR2(r2);
-							_dpx[i] += (Vx[j] - vix) * w;
-							_dpy[i] += (Vy[j] - viy) * w;
+			});
+
+			RunPerParticle((__lo, __hi) =>
+			{
+				for (int i = __lo; i < __hi; i++)
+				{
+					float pix = Px[i];
+					float piy = Py[i];
+					float vix = Vx[i];
+					float viy = Vy[i];
+
+					int ci = CellOf(pix, piy);
+					int cy = ci / _cols;
+					int cx = ci - cy * _cols;
+
+					for (int dy = -1; dy <= 1; dy++)
+					{
+						int ny = cy + dy;
+						if (ny < 0 || ny >= _rows) continue;
+						for (int dx = -1; dx <= 1; dx++)
+						{
+							int nx = cx + dx;
+							if (nx < 0 || nx >= _cols) continue;
+							int cell = ny * _cols + nx;
+							int start = _cellStart[cell];
+							int end   = _cellStart[cell + 1];
+							for (int k = start; k < end; k++)
+							{
+								int j = _cellIdx[k];
+								if (j == i) continue;
+								float rx = pix - Px[j];
+								float ry = piy - Py[j];
+								float r2 = rx * rx + ry * ry;
+								if (r2 >= _h2)
+								{
+									continue;
+								}
+								float w = Poly6FromR2(r2);
+								_dpx[i] += (Vx[j] - vix) * w;
+								_dpy[i] += (Vy[j] - viy) * w;
+							}
 						}
 					}
-				}
-			}
+							}
+			});
 
-			for (int i = 0; i < Count; i++)
+			RunPerParticle((__lo, __hi) =>
 			{
-				Vx[i] += _xsphC * _dpx[i];
-				Vy[i] += _xsphC * _dpy[i];
-			}
+				for (int i = __lo; i < __hi; i++)
+				{
+					Vx[i] += _xsphC * _dpx[i];
+					Vy[i] += _xsphC * _dpy[i];
+							}
+			});
 		}
 
 		// ── Despawn ───────────────────────────────────────────────────────────

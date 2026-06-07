@@ -327,6 +327,27 @@ namespace GorelordsBrawler.Constants
 			public const float AcidRiseSpeed          = 0.0025f; // fraction of mapHeight/sec (~2px/sec at 800px)
 			public const float AcidDebugRiseMultiplier = 4f;     // DebugFastAcid multiplies speed by this
 			public const float AcidDamagePerSec       = 4f;
+
+			// ── Basin geometry ("The Sump", Phase A) ──────────────────────────
+			// World-space bounds of the central acid basin carved into arena1.tmx.
+			// These mirror the TMX collision layer (cols 14-25 open, floored at
+			// row 23) — the tiles are the source of truth for COLLISION; these
+			// constants exist so AcidSurface.PreFill knows where to drop the
+			// resting pool without re-parsing the map. Keep in sync with
+			// tools/gen_sump_map.py if the basin moves. (Phase C will fold these
+			// into a dedicated AcidConfig alongside inlet/drain/surge data.)
+			public const float BasinLeftX   = 448f;   // col 14 * 32 — inner left lip
+			public const float BasinRightX  = 832f;   // col 26 * 32 — inner right lip
+			public const float BasinFloorY  = 736f;   // row 23 * 32 — top of the floor tiles
+			public const float BasinRestTopY = 640f;  // resting acid surface (~3 tiles deep), leaves ~96px of lip above
+			// Inlet fill ceiling: the rise tops out here and STOPS, so the basin
+			// fills to ~the lip (544) without overflowing the banks. Drives the
+			// geometry-derived particle cap in AcidSurface — see the note there on
+			// why the old volumetric inlet-stop was geometry-blind. 560 = ~half a
+			// tile below the lip, a safe margin against slosh overshoot. Phase C
+			// makes this dynamic (the flood deliberately raises it past the lip).
+			public const float BasinFillCeilingY = 560f;
+
 			public const float PlatformSpawnInterval  = 20f;    // wait for ALL platforms to clear before next batch
 			public const float PlatformBurnDuration   = 18f;
 			public const float PlatformBurnDelay      = 10f;
@@ -382,13 +403,15 @@ namespace GorelordsBrawler.Constants
 			public const float InnerLeft  = 32f;
 			public const float InnerRight = 1248f;
 
-			// Fallback spawn positions if map has no spawns object layer
+			// Fallback spawn positions if map has no spawns object layer.
+			// Match the Sump bank-top spawns in arena1.tmx — the old values sat
+			// at y=732, which is now INSIDE the basin (would spawn players in acid).
 			public static readonly Vector2[] FallbackSpawnPositions = new[]
 			{
-				new Vector2(256, 732),
-				new Vector2(1024, 732),
-				new Vector2(544, 508),
-				new Vector2(960, 508),
+				new Vector2(200, 520),   // left bank, outer
+				new Vector2(1080, 520),  // right bank, outer
+				new Vector2(360, 520),   // left bank, inner
+				new Vector2(920, 520),   // right bank, inner
 			};
 		}
 	}
