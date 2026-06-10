@@ -5,6 +5,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Nez;
 using Nez.Tiled;
 using GorelordsBrawler.Components;
+using GorelordsBrawler.Components.Abilities;
 using GorelordsBrawler.Components.Hazards;
 using GorelordsBrawler.Components.Hazards.Fluid;
 using GorelordsBrawler.Components.PostProcessors;
@@ -120,7 +121,9 @@ namespace GorelordsBrawler.Scenes
 				GameConstants.Hazards.BasinRestTopY,
 				GameConstants.Hazards.BasinFloorY);
 			var contactHazard = acidEntity.AddComponent(new ContactHazard());
-			contactHazard.DamagePerSecond = GameConstants.Hazards.AcidDamagePerSec;
+			// Phase B: base rate is the SURFACE chip; depth scales it up per-player
+			// via the closure below. (Replaced the old flat 4 dps drip.)
+			contactHazard.DamagePerSecond = GameConstants.Hazards.AcidSurfaceDps;
 			contactHazard.GetBounds = acidSurface.GetDamageBounds;
 			var spawner = AddSceneComponent(new PlatformSpawner(mw, mh));
 			AddSceneComponent(new AcidPhaseManager(acidSurface, spawner, mw, mh));
@@ -148,10 +151,45 @@ namespace GorelordsBrawler.Scenes
 			// agnostic. The visibility half of Phase 3 lives in liquid.fx
 			// and is driven by the LiquidPostProcessor above — nothing to
 			// wire per-player for that part.
-			foreach (var player in playerManager.GetActivePlayers())
+			foreach (var slot in playerManager.GetActiveSlots())
 			{
-				player.AddComponent(new SubmersionFeel(acidSurface));
+				slot.PlayerEntity.AddComponent(new SubmersionFeel(acidSurface));
+				// Phase B escape mechanic: mash jump to stroke up out of the acid.
+				// Needs the slot's InputProfile (same one Walk/JumpAbility use).
+				slot.PlayerEntity.AddComponent(new SwimAbility(slot.Input));
 			}
+
+			// Phase B depth-scaled lethality: the acid bites harder the deeper a
+			// body is. The closure reads each player's SubmersionFeel state
+			// (refreshed at UpdateOrder -10, before this hazard's Update) and maps
+			// depth through the pure CombatMath curve. Surface lap = 1× (base
+			// chip); fully submerged = AcidDeepDpsMult× → a fast melt that's still
+			// escapable by swimming. Tuning lives in GameConstants.Hazards.
+			//
+			// NOT submerged = 0× — i.e. immune. This matters: ContactHazard's
+			// GetBounds is the coarse AABB of ALL wet cells, and with the Sump's
+			// central pour + splashes that rectangle can span dry bank ground a
+			// player is standing on. Pre-Phase-B they'd take phantom chip damage
+			// for being inside the box without touching acid. SubmersionFeel's
+			// per-column local-surface query is the precise per-player contact
+			// test, so the AABB is now just the broadphase and this closure is
+			// the narrow-phase — damage tracks the fluid's actual shape (pillar 1).
+			contactHazard.DamageScaleForEntity = entity =>
+			{
+				var feel = entity.GetComponent<SubmersionFeel>();
+				if (feel == null)
+				{
+					return 1f;   // non-player / untracked entity: generic base rate
+				}
+				if (!feel.IsSubmerged)
+				{
+					return 0f;   // inside the wet AABB but not actually in acid
+				}
+				return Combat.CombatMath.AcidDpsMultiplier(
+					feel.SubmergedDepth,
+					GameConstants.Hazards.AcidDeepDpsMult,
+					GameConstants.Hazards.AcidFullSubmergeDepth);
+			};
 
 #if DEBUG
 			if (AppSettings.DebugServer)
@@ -166,6 +204,13 @@ namespace GorelordsBrawler.Scenes
 				// finiteness proves it didn't NaN (the hitstop dt=0 failure mode).
 				exporter.RegisterProvider("acidParticleCount", () => acidSurface.ParticleCount);
 				exporter.RegisterProvider("acidFinite",        () => acidSurface.AllParticlesFinite());
+				// Phase B: the hazard's live damage AABB (the broadphase). E2E uses it to
+				// prove the phantom-damage fix — a player INSIDE this box but not
+				// submerged must take zero damage.
+				exporter.RegisterProvider("acidBoundsLeft",   () => (int)acidSurface.GetDamageBounds().X);
+				exporter.RegisterProvider("acidBoundsTop",    () => (int)acidSurface.GetDamageBounds().Y);
+				exporter.RegisterProvider("acidBoundsRight",  () => (int)(acidSurface.GetDamageBounds().X + acidSurface.GetDamageBounds().Width));
+				exporter.RegisterProvider("acidBoundsBottom", () => (int)(acidSurface.GetDamageBounds().Y + acidSurface.GetDamageBounds().Height));
 				// Combat: true during a hit freeze (TimeScale=0). Lets the acid-survives-a-hit
 				// regression prove it actually drove the game through the dt=0 window.
 				exporter.RegisterProvider("hitstopActive",     () => combatEffects.IsHitstopActive);

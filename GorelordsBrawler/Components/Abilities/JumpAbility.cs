@@ -13,6 +13,7 @@ namespace GorelordsBrawler.Components.Abilities
 		private LocomotionAnimator _locomotion;
 		private CombatController _combat;
 		private LedgeHangAbility _ledge;
+		private SubmersionFeel _submersion;
 
 		public JumpAbility(InputProfile input)
 		{
@@ -38,9 +39,24 @@ namespace GorelordsBrawler.Components.Abilities
 			{
 				_ledge = Entity.GetComponent<LedgeHangAbility>();
 			}
+			if (_submersion == null)
+			{
+				// May be absent (non-acid scenes) — only resolved, never required.
+				_submersion = Entity.GetComponent<SubmersionFeel>();
+			}
 
 			// Suppress jumping while on a ledge (LedgeHangAbility handles jump-release)
 			if (_ledge != null && _ledge.IsOnLedge)
+			{
+				return;
+			}
+
+			// Suppress ALL jumping while submerged — the jump button belongs to
+			// SwimAbility underwater. Without this, the double-jump branch below
+			// (which fires when airborne, and a submerged body is not Grounded)
+			// would let a player air-jump straight out of the acid, bypassing the
+			// swim-to-escape mechanic entirely.
+			if (_submersion != null && _submersion.IsSubmerged)
 			{
 				return;
 			}

@@ -97,9 +97,32 @@ public class GameConstantsTests
 	}
 
 	[Fact]
-	public void AcidDamagePerSec_IsPositive()
+	public void AcidDepthLethality_ConstantsAreSane()
 	{
-		Assert.True(GameConstants.Hazards.AcidDamagePerSec > 0f);
+		// Phase B: surface chip must exist, the deep end must amplify it, and the
+		// saturation depth must be a real distance.
+		Assert.True(GameConstants.Hazards.AcidSurfaceDps > 0f);
+		Assert.True(GameConstants.Hazards.AcidDeepDpsMult > 1f);
+		Assert.True(GameConstants.Hazards.AcidFullSubmergeDepth > 0f);
+	}
+
+	[Fact]
+	public void SwimStroke_ClampIsAtLeastTheImpulse()
+	{
+		// If the rise-speed clamp were below the per-stroke impulse, every stroke
+		// would be immediately truncated and mashing would feel dead.
+		Assert.True(GameConstants.Hazards.SwimStrokeImpulse > 0f);
+		Assert.True(GameConstants.Hazards.SwimMaxRiseSpeed >= GameConstants.Hazards.SwimStrokeImpulse);
+	}
+
+	[Fact]
+	public void SwimBreachDepth_IsANearSurfaceBand()
+	{
+		// The breach band must exist but stay NEAR the surface: if it reached
+		// full-submerge depth, every deep press would be a free full jump and the
+		// stroke/mash regime (and the deep-launch kill window) would vanish.
+		Assert.True(GameConstants.Hazards.SwimBreachDepth > 0f);
+		Assert.True(GameConstants.Hazards.SwimBreachDepth < GameConstants.Hazards.AcidFullSubmergeDepth / 2f);
 	}
 
 	[Fact]

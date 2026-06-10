@@ -28,9 +28,9 @@ If you catch yourself writing those phrases, that is the signal you are taking a
 
 ## Project Overview
 
-GorelordsBrawler is a 2D game built with **MonoGame 3.8 DesktopGL** on **.NET 8.0**. The **Nez framework** (included as a Git submodule in `Nez/`) provides an Entity-Component-System architecture and extensive 2D game utilities on top of MonoGame.
+GorelordsBrawler is a 2D party brawler built with **MonoGame 3.8 DesktopGL** on **.NET 8.0**. The **Nez framework** (Git submodule in `Nez/` — run `git submodule update --init --recursive` in fresh checkouts/worktrees) provides the Entity-Component-System architecture and 2D utilities on top of MonoGame.
 
-The project is in early development — the main game class (`GorelordsBrawlerGame.cs`) still uses the default MonoGame template and has not yet been converted to use `Nez.Core`.
+The game is fully on Nez: `GorelordsBrawlerGame : Nez.Core` with a scene flow (MainMenu → Settings → CharacterSelect → Arena), data-driven characters (JSON + sprite atlases), a stock-lives match system, a parallelized PBF acid-fluid simulation with metaball rendering, and a Debug-build HTTP automation server used by the E2E and smoke harnesses.
 
 ## Build Commands
 
@@ -41,23 +41,43 @@ dotnet build GorelordsBrawler.slnx
 # Run the game
 dotnet run --project GorelordsBrawler/GorelordsBrawler.csproj
 
-# Restore tools (MonoGame content pipeline)
+# Restore tools (mgfxc shader compiler, t4) — run per fresh checkout/worktree
 dotnet tool restore --tool-manifest GorelordsBrawler/.config/dotnet-tools.json
 ```
 
-Solution file: `GorelordsBrawler.slnx` (VS 2022+ format). Currently only contains the main project — Nez is not yet added to the solution.
+Solution file: `GorelordsBrawler.slnx` (VS 2022+ format) — contains the game, `Nez/Nez.Portable/Nez.MG38.csproj`, and the four test projects (Unit, Integration, Fluid, E2E). A running game exe holds a file lock that fails the build — kill `GorelordsBrawler` processes before building.
+
+## Testing
+
+Four automated layers + one human layer. Full workflow, decision table, and recipes live in the **feature-dev skill** ([.claude/skills/feature-dev/SKILL.md](.claude/skills/feature-dev/SKILL.md)) — consult it for every feature.
+
+```bash
+# Fast suites: unit + integration + fluid (no game window)
+dotnet test GorelordsBrawler.slnx --nologo --filter "Category!=E2E&FullyQualifiedName!~Benchmark_Step"
+
+# E2E: drives REAL gameplay via scripted input + frame-stepping (launches game windows, ~3 min)
+E2E_TESTS=1 dotnet test tests/GorelordsBrawler.E2E.Tests/GorelordsBrawler.E2E.Tests.csproj --nologo
+
+# Fluid perf benchmark — Release ONLY (Debug numbers are meaningless)
+FLUID_BENCH=1 dotnet test tests/Fluid.Tests -c Release --filter FluidBenchmark
+
+# Smoke: visual gate + recorded MP4 for the PR (-OpenIde on the pre-PR run)
+pwsh .claude/skills/smoke-test/smoke_test.ps1 -Feature acid
+```
+
+**The rule: mechanics get automated tests; the user's hands are for FEEL.** Anything requiring input — movement, attacks, swimming, knock-ins — is E2E-testable through the debug server's write channel; never declare gameplay "manual-only." Changing arena geometry or movement/hazard mechanics requires running the **full** E2E assembly, not just the new tests.
 
 ## Architecture
 
-**Entry point:** `Program.cs` → creates and runs `GorelordsBrawlerGame`
+**Entry point:** `Program.cs` → `GorelordsBrawlerGame : Nez.Core`. `Initialize()` registers global managers (`MatchSetupManager`), loads `AppSettings` (debug flags: `DebugServer`, `DebugDirectArena`, `DebugFastAcid`, `DebugAutomation`), and starts either `MainMenuScene` or — under `DebugDirectArena` — `ArenaScene` directly. In Debug builds, `Update()` hosts the deterministic frame-stepping gate the E2E harness uses (`DebugControl`, fixed 1/60 dt).
 
-**Current state:** `GorelordsBrawlerGame` inherits from MonoGame's `Game` class directly. To integrate Nez, it should inherit from `Nez.Core` instead, which provides the full ECS pipeline.
-
-**Nez ECS pattern (target architecture):**
-- **Scene** — root container managing entities, renderers, and post-processors
+**Nez ECS pattern (in use everywhere):**
+- **Scene** — root container managing entities, renderers, and post-processors (`Scenes/`, all extend `BaseScene`)
 - **Entity** — container for components, has a Transform
 - **Component** — modular behavior/rendering attached to entities
-- **SceneComponent** — scene-level logic without an entity
+- **SceneComponent** — scene-level logic without an entity (managers like `PlayerManager`, `CombatEffectsManager`)
+
+Project layout, component inventories, and system-by-system notes live in the auto-memory (`MEMORY.md` → Architecture / Project Structure) rather than being duplicated here.
 
 **Key Nez subsystems available:**
 - Physics: lightweight collision (AABB, circle, polygon) with SpatialHash broadphase
@@ -68,13 +88,17 @@ Solution file: `GorelordsBrawler.slnx` (VS 2022+ format). Currently only contain
 
 ## Content Pipeline
 
-Content is managed via MonoGame Content Builder (`Content/Content.mgcb`). Currently empty.
+There is **no MGCB pipeline** — no `Content.mgcb`, and the `MonoGame.Content.Builder.Task` package was deliberately removed (re-adding it without a real `.mgcb` file breaks the build). Content loads through three direct paths, all copy-to-output:
 
-When Nez is integrated, its default content (effects/textures) from `Nez/DefaultContent/` needs to be copied or linked into `Content/nez/`.
+- **Shaders**: HLSL in `Content/Effects/*.fx`, pre-compiled to `.mgfxo` via `dotnet mgfxc <in>.fx <out>.mgfxo /Profile:OpenGL`, loaded with `new Effect(GraphicsDevice, File.ReadAllBytes(...))`.
+- **Sprites**: `tools/build_atlas.py` renders/packs character sheets into Nez `.atlas` files (+ `.sockets.json` / `.hurtboxes.json` sidecars), parsed by `SpriteAtlasLoader` at runtime.
+- **Maps/JSON/fonts**: Tiled `.tmx` via `Content.LoadTiledMap()`, character JSON via Nez direct readers. `Content/maps/arena1.tmx` is **generated** by `tools/gen_sump_map.py` (constraint asserts included) — regenerate rather than hand-editing 3000 CSV cells.
 
 ## Code Style
 
-Nez uses tabs (4-space width) per its `.editorconfig`. Follow the same convention for game code.
+- **Tabs** (4-space width), matching the Nez convention. Never run `dotnet format` on these files — it converts tabs→spaces and rewrites whole files; for mechanical multi-site edits use a byte-preserving script (template: `tools/parallelize_fluid.py`).
+- **Always braces** on `if`/`else`/`for`/`foreach` — no braceless control statements.
+- Magic values live in `GameConstants` (gameplay) or the owning feature's config class (e.g. `FluidConfig`); live-tunable knobs are `[Inspectable, Range(...)]` fields.
 
 ## Common Pitfalls
 
@@ -85,27 +109,32 @@ Nez uses tabs (4-space width) per its `.editorconfig`. Follow the same conventio
 - **NaN is a silent, persistent killer in particle/grid systems.** Once a position goes NaN it usually never leaves: `NaN > cutoff` is `false` so off-screen despawn checks skip it, and `(int)float.NaN == 0` in C# collapses *every* NaN particle into a single spatial-hash cell, turning the neighbor search into O(n²) — that's the permanent FPS cliff, not a one-frame stutter. When a sim "dies" after an event, suspect NaN before anything else.
 - If a system should keep animating *through* a hitstop freeze (e.g. hit-flash, screen-space FX decay), use `Time.UnscaledDeltaTime` deliberately — but most gameplay sims should freeze with everything else, so plain `Time.DeltaTime` + a `dt <= 0` guard is correct.
 
-Regression coverage: `tests/Fluid.Tests/FluidSimulationTests.cs → Zero_Timestep_During_Hitstop_Does_Not_Produce_NaN`. A true end-to-end repro isn't feasible yet — the debug server (`GameDebugServer`) is read-only (`GET /state`, `GET /screenshot`) with no input-injection endpoint to script a melee hit — so this failure mode is pinned at the unit level instead.
+Regression coverage: unit (`tests/Fluid.Tests/FluidSimulationTests.cs → Zero_Timestep_During_Hitstop_Does_Not_Produce_NaN`) **and** end-to-end (`GameplayAutomationE2ETests → MeleeHit_WhileAcidPresent_DoesNotBreakTheFluid`, which scripts a real melee connect and steps through the dt=0 freeze).
+
+### The debug server is NOT read-only — gameplay is fully automatable
+`GameDebugServer` has a write channel (since PR #13, hardened #15/#16): `POST /input` (per-player moveX/moveY/jump/attack/special on the scripted-input device), `POST /step` (advance exactly N fixed-dt frames), `POST /run` (free vs stepped mode), `POST /teleport`, `POST /damage`. It requires `DebugAutomation: true` in appsettings — without that flag, players get keyboard devices and `/input` is silently ignored. Tests drive it through the `ArenaPage`/`PlayerObject` Page Object Model in `tests/GorelordsBrawler.E2E.Tests/` (enable with `E2E_TESTS=1`; each test launches its own game window; `xunit.runner.json` serializes classes so they don't fight over port 7777). **If a behavior needs input to verify — movement, attacks, swimming, knock-ins — write an E2E test; do not declare it "manual-only."**
 
 ## Planning Workflow
 
 Feature development follows a plan → review → implement → archive cycle:
 
-1. **Plan** — Create a proposal markdown in `docs/` (e.g. `docs/feature-name-proposal.md`)
+1. **Plan** — Create a proposal markdown in `docs/` (e.g. `docs/feature-name-proposal.md`); research online first per "Your role"; lock contested design choices as **Decisions** in the user's words
 2. **Review** — User reviews and requests changes to the proposal
-3. **Implement** — Once approved, implement the feature per the proposal
-4. **Archive** — After implementation is complete and verified, move the doc to `docs/implemented/`
+3. **Implement & verify** — Once approved, follow the **feature-dev skill** ([.claude/skills/feature-dev/SKILL.md](.claude/skills/feature-dev/SKILL.md)): ground the plan in the actual code, implement to house conventions, test at the right layer (unit / fluid / integration / E2E / smoke), run all suites, and prepare the teaching PR (smoke `-OpenIde` on the pre-PR run)
+4. **Archive** — After implementation is complete and verified, `git mv` the doc to `docs/implemented/` and update the index below
 
 Active proposals live in `docs/`. Completed features have their docs in `docs/implemented/`.
 
 ### Current Proposals
-- `docs/e2e-gameplay-automation-hardening-proposal.md` — make the gameplay E2E harness actually run (launcher fix), add trustworthy acid-independent oracles (meleeHitsTaken / hitstun / hitstopActive / facing), and pin the solid-core regressions (this PR)
-- `docs/acid-arena-design-proposal.md` — "The Sump" acid arena: central basin (knock-in pit + flood reservoir) with Calm→Rise→Scramble→Surge→Flood phases, depth-scaled lethality, and telegraphing — makes the PBF fluid sim the central play feature
+- `docs/acid-arena-design-proposal.md` — "The Sump" acid arena. **Phase A (basin geometry + pre-fill + parallelized PBF solver) merged in PR #17. Phase B (depth-scaled lethality + swim/breach escape) in review.** Remaining: Phase C (phase machine + dual inlets + escalation), D (telegraphing), E (art pass)
 
-### Implemented Features
-- `docs/implemented/match-system-proposal.md` — Stock lives match system with ruleset pattern
-- `docs/implemented/character-select-proposal.md` — Character select screen, modular stats refactor, Doc Marauder, scene transitions
-- `docs/implemented/e2e-gameplay-automation-proposal.md` — scripted-input device + deterministic frame-stepping (PR #13)
+### Implemented Features (highlights — full list in `docs/implemented/`)
+- `match-system-proposal.md` — stock lives match system with ruleset pattern
+- `character-select-proposal.md` — character select, modular stats refactor, scene transitions
+- `e2e-gameplay-automation-proposal.md` — scripted-input device + deterministic frame-stepping (PR #13)
+- `e2e-gameplay-automation-hardening-proposal.md` — launcher fix, acid-independent oracles, solid-core regressions (PRs #15/#16)
+- `environment-system-proposal.md` — Tiled map integration (collision auto-colliders, spawn objects)
+- `acid-deadly-polish-plan.md` + `acid-damage-feedback-proposal.md` + `acid-in-liquid-presence-proposal.md` — the acid visual/feedback stack: bubbles, sizzle, submersion feel, see-through shader, damage post-processors (PRs #4–#10)
 
 ## Nez Documentation
 

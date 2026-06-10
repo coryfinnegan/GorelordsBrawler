@@ -53,6 +53,23 @@ namespace GorelordsBrawler.Systems
 			return players;
 		}
 
+		/// <summary>
+		/// Active slots (entity + its InputProfile together). Use this when a
+		/// scene-level system needs to attach an input-driven component to each
+		/// player after creation — e.g. SwimAbility, whose acid dependency only
+		/// exists at scene scope so it can't be wired in CharacterFactory.
+		/// </summary>
+		public List<PlayerSlot> GetActiveSlots()
+		{
+			var slots = new List<PlayerSlot>();
+			for (int i = 0; i < MaxPlayers; i++)
+			{
+				if (_slots[i] != null)
+					slots.Add(_slots[i]);
+			}
+			return slots;
+		}
+
 		public override void OnRemovedFromScene()
 		{
 			for (int i = 0; i < MaxPlayers; i++)
