@@ -13,6 +13,15 @@ public class GameStateSnapshot
 	[JsonPropertyName("acidParticleCount")] public int   AcidParticleCount { get; set; }
 	[JsonPropertyName("acidFinite")]        public bool  AcidFinite        { get; set; } = true;
 	[JsonPropertyName("hitstopActive")]     public bool  HitstopActive     { get; set; }
+
+	// Phase B: the live damage-AABB of the acid (the ContactHazard broadphase).
+	// Lets tests prove a player was INSIDE the box while dry — the phantom-damage
+	// regression scenario — instead of asserting vacuously.
+	[JsonPropertyName("acidBoundsLeft")]   public int AcidBoundsLeft   { get; set; }
+	[JsonPropertyName("acidBoundsTop")]    public int AcidBoundsTop    { get; set; }
+	[JsonPropertyName("acidBoundsRight")]  public int AcidBoundsRight  { get; set; }
+	[JsonPropertyName("acidBoundsBottom")] public int AcidBoundsBottom { get; set; }
+
 	[JsonPropertyName("players")]           public List<PlayerSnapshot> Players { get; set; } = new();
 }
 
@@ -32,4 +41,8 @@ public class PlayerSnapshot
 	[JsonPropertyName("meleeHitsTaken")] public int  MeleeHitsTaken { get; set; }
 	[JsonPropertyName("dead")]           public bool Dead           { get; set; }
 	[JsonPropertyName("facing")]         public int  Facing         { get; set; } = 1;
+
+	// Phase B oracles: depth-scaled lethality + swim escape.
+	[JsonPropertyName("submerged")]      public bool Submerged      { get; set; }
+	[JsonPropertyName("submergedDepth")] public int  SubmergedDepth { get; set; }
 }

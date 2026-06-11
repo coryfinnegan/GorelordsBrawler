@@ -41,14 +41,17 @@ return @{
         # The Sump (Phase A): the basin is PRE-FILLED with a resting pool at
         # scene start (AcidSurface.PreFill), so the acid is present and dangerous
         # during the "Calm" phase — long before it starts rising. PreFill runs
-        # synchronously in OnAddedToEntity, but the first /state snapshot can land
-        # a frame or two after the HTTP server opens (fields read empty until the
-        # exporter's first Update — same reason the original Check 2 used WaitFor).
-        # Wait for the first populated snapshot, then assert acid exists BEFORE
-        # the rise begins (acidActive still false → it's the pre-fill, not pour).
+        # synchronously in OnAddedToEntity, but the debug server comes up BEFORE
+        # the scene finishes loading content (shaders + 4096px atlases), so /state
+        # serves empty snapshots for several seconds on a COLD boot — e.g. the
+        # first launch after a fresh build. A 5 s timeout flaked exactly that way
+        # (passed with -NoBuild, failed right after a rebuild). 15 s rides out the
+        # content load; the calm-phase assert below still proves the pre-fill
+        # happened before the rise, because scene time (and the 3 s DebugFastAcid
+        # delay) only starts ticking once the scene is actually updating.
         $Ctx.Check('basin is pre-filled during the calm phase (before rise)', {
             param($c)
-            $s = $c.WaitFor({ param($x) $x.acidParticleCount -gt 0 }, 5000, 'acidParticleCount > 0')
+            $s = $c.WaitFor({ param($x) $x.acidParticleCount -gt 0 }, 15000, 'acidParticleCount > 0')
             if ($s.acidActive) {
                 throw "acid was already rising when particles first appeared (time=$($s.time)) — cannot prove the pool was pre-filled during calm"
             }

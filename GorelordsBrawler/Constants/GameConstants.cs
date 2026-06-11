@@ -326,7 +326,36 @@ namespace GorelordsBrawler.Constants
 			public const float AcidStartDelay        = 30f;
 			public const float AcidRiseSpeed          = 0.0025f; // fraction of mapHeight/sec (~2px/sec at 800px)
 			public const float AcidDebugRiseMultiplier = 4f;     // DebugFastAcid multiplies speed by this
-			public const float AcidDamagePerSec       = 4f;
+			// ── Depth-scaled lethality + swim escape (Phase B) ────────────────
+			// Acid damage scales with how far a body is submerged below the LOCAL
+			// surface. A toe-dip is a survivable scare; a deep launch melts fast
+			// (~1.5-2s KO vs a 100-HP fighter) — but is always escapable by mashing
+			// jump to stroke upward. The two halves are tuned TOGETHER: the stroke
+			// must out-climb shallow/mid damage but lose to the deep end.
+			//
+			// Damage curve (see CombatMath.AcidDpsMultiplier):
+			//   SurfaceDps      = base chip at depth 0 (the ContactHazard base rate)
+			//   DeepDpsMult     = multiplier at >= AcidFullSubmergeDepth
+			//   AcidFullSubmergeDepth = depth (px, feet-below-surface) at which the
+			//     multiplier saturates — ~one body height, i.e. "fully under".
+			public const float AcidSurfaceDps         = 9f;    // depth 0 — survivable chip
+			public const float AcidDeepDpsMult        = 6.5f;  // 9 * 6.5 ≈ 58 dps → ~1.7s KO @ 100 HP
+			public const float AcidFullSubmergeDepth  = 96f;   // px below surface = "fully submerged"
+
+			// Swim escape: each jump PRESS while submerged sets upward velocity to
+			// this (px/s, like a weaker jump). Mashing climbs you out. Capped so a
+			// held buffer can't accumulate — one stroke per press.
+			public const float SwimStrokeImpulse      = 230f;  // px/s up per stroke
+			public const float SwimMaxRiseSpeed       = 260f;  // clamp on upward velocity while submerged
+
+			// Breach: a jump press at depth <= this performs a FULL jump out of the
+			// water (character JumpSpeed, JumpHeld semantics) instead of a stroke.
+			// Without it the exit is luck-gated: a body cresting the surface bobs in
+			// a ~2-frame dry window (short-hop gravity slams it straight back in),
+			// so presses land on wet frames and become feeble strokes — found by the
+			// DeepKnockIn E2E frame trace. Standard water-exit pattern (Mario/
+			// Terraria: surface jump = real jump). ~half a body height.
+			public const float SwimBreachDepth        = 24f;
 
 			// ── Basin geometry ("The Sump", Phase A) ──────────────────────────
 			// World-space bounds of the central acid basin carved into arena1.tmx.

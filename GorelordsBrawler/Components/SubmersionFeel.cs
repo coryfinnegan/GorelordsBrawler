@@ -46,6 +46,16 @@ namespace GorelordsBrawler.Components
 
 		public bool IsSubmerged { get; private set; }
 
+		/// <summary>
+		/// How far the body's FEET are below the local acid surface, in pixels
+		/// (0 when dry or only touching the surface). This is the single source of
+		/// depth truth for Phase B: ContactHazard reads it for depth-scaled damage
+		/// and SwimAbility reads <see cref="IsSubmerged"/> to gate strokes. Measured
+		/// at the feet (collider bottom) so it grows smoothly as a body sinks —
+		/// matching "the deeper you're launched, the worse it bites."
+		/// </summary>
+		public float SubmergedDepth { get; private set; }
+
 		public SubmersionFeel(AcidSurface acid)
 		{
 			_acid = acid;
@@ -55,6 +65,12 @@ namespace GorelordsBrawler.Components
 		{
 			_body     = Entity.GetComponent<PhysicsBody>();
 			_collider = Entity.GetComponent<Collider>();
+			// Run BEFORE the abilities (Walk/Jump/Swim, UpdateOrder 0) and before
+			// PhysicsBody (100) so IsSubmerged/SubmergedDepth are fresh when
+			// SwimAbility and ContactHazard read them this same frame. Negative
+			// order = earliest. (ContactHazard lives on the acid entity, not the
+			// player, but reads this via the per-player closure in ArenaScene.)
+			UpdateOrder = -10;
 		}
 
 		public void Update()
@@ -71,6 +87,9 @@ namespace GorelordsBrawler.Components
 			// "the surface."
 			float localSurface = _acid.GetLocalSurfaceLevelAtX(x, headY);
 			IsSubmerged = localSurface < feetY;
+			// Depth = how far feet are below the surface (>=0). When dry, feetY <=
+			// localSurface so this clamps to 0.
+			SubmergedDepth = IsSubmerged ? (feetY - localSurface) : 0f;
 
 			if (IsSubmerged)
 			{

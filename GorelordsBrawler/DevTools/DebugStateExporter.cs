@@ -90,6 +90,7 @@ namespace GorelordsBrawler.DevTools
 				var body    = p.GetComponent<PhysicsBody>();
 				var hurtbox = p.GetComponent<Hurtbox>();
 				var hitstun = p.GetComponent<Hitstun>();
+				var submersion = p.GetComponent<SubmersionFeel>();
 				var pos     = p.Transform.Position;
 				list.Add(new
 				{
@@ -109,6 +110,9 @@ namespace GorelordsBrawler.DevTools
 					// which hitstun skips — so it's a clean, knockback-independent probe of
 					// whether input is being processed (used by the hitstun-lockout test).
 					facing         = body?.FacingDirection ?? 1,
+					// Phase B oracles: depth-scaled acid lethality + swim escape.
+					submerged      = submersion?.IsSubmerged ?? false,
+					submergedDepth = (int)(submersion?.SubmergedDepth ?? 0f),
 				});
 				id++;
 			}

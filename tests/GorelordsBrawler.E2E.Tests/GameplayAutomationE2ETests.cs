@@ -231,27 +231,34 @@ public class GameplayAutomationE2ETests
 		respawned.Players[0].Hp.ShouldBe(maxHp, "respawn should restore full HP");
 	}
 
-	// ── Acid damage-over-time (rising-hazard contract) ───────────────────────────
+	// ── Acid damage-over-time (contact contract) ─────────────────────────────────
 
 	[SkippableFact]
-	public async Task Acid_DamagesPlayer_OnlyAfterItRisesToThem()
+	public async Task Acid_DamagesPlayer_OnlyOnContact()
 	{
 		Skip.IfNot(ArenaPage.IsEnabled, $"Set {ArenaPage.EnableEnvVar}=1 to run E2E tests.");
 
-		// ARRANGE — at activation the surface is below the floor (acidLevel > player.Y), so the
-		// player is clear and undamaged. (Larger Y is lower on screen.)
+		// ARRANGE — at activation the pool sits in the central basin, far below the
+		// bank spawns, so the player is clear and undamaged. (The original version
+		// of this test waited for the rise to reach the bank player — valid in the
+		// old full-width arena, impossible in the Sump, whose inlet cap deliberately
+		// stops the rise at the basin until the Phase C flood. Contact is now staged
+		// explicitly, which keeps the contract geometry-proof.)
 		await using var arena = await ArenaPage.LaunchAsync();
 		await arena.EnterSteppedModeAsync();
 		var onset = await arena.StepUntilAsync(s => s.AcidActive, maxFrames: 1200, batch: 5);
 
-		// ACT — let the surface rise until it submerges the player, then keep stepping for damage.
-		var submerged = await arena.StepUntilAsync(s => s.AcidLevel < s.Players[0].Y, maxFrames: 3000, batch: 10);
-		int hpWhenSubmerged = submerged.Players[0].Hp;
-		var later = await arena.StepUntilAsync(s => s.Players[0].Hp < hpWhenSubmerged, maxFrames: 240, batch: 2);
+		// ACT — put the player INTO the pool (basin interior, off the inlet column)
+		// and step until the DoT starts ticking.
+		int hpBefore = onset.Players[0].Hp;
+		await arena.TeleportAsync(player: 0, 560f, 700f);
+		var inAcid = await arena.StepUntilAsync(s => s.Players[0].Submerged, maxFrames: 240, batch: 2);
+		var later  = await arena.StepUntilAsync(s => s.Players[0].Hp < hpBefore, maxFrames: 240, batch: 2);
 
 		// ASSERT
 		onset.AcidLevel.ShouldBeGreaterThan(onset.Players[0].Y, "acid should activate below the player (clear)");
 		onset.Players[0].Hp.ShouldBe(onset.Players[0].MaxHp, "a player clear of the acid takes no damage");
-		later.Players[0].Hp.ShouldBeLessThan(hpWhenSubmerged, "a submerged player should take acid damage over time");
+		inAcid.Players[0].Submerged.ShouldBeTrue("teleporting into the pool should submerge the player");
+		later.Players[0].Hp.ShouldBeLessThan(hpBefore, "a submerged player should take acid damage over time");
 	}
 }
