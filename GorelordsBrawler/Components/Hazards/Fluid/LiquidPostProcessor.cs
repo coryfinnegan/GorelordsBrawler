@@ -28,6 +28,14 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 		private readonly Color _bodyColor;
 		private readonly Color _edgeColor;
 
+		/// <summary>
+		/// 0→1 telegraph progress (Phase D), wired by ArenaScene to
+		/// AcidSurface.TellProgress. During a tell the meniscus pulse quickens
+		/// (prime-ratio frequency vs the idle breath, so they never sync) and
+		/// brightens — the liquid visibly "winds up" before a wave.
+		/// </summary>
+		public System.Func<float> TellProgressProvider;
+
 		public LiquidPostProcessor(int executionOrder, Effect liquidEffect,
 			LiquidFieldRenderer fieldRenderer, PlayerMaskRenderer playerMaskRenderer,
 			Color bodyColor, Color edgeColor)
@@ -54,10 +62,17 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 			// Pulse — sells "alive / corrosive / dangerous". Drives an
 			// in-shader modulation of the bright surface-highlight band only;
 			// the body shape is unaffected so geometry stays stable.
-			// Rate of 2.5 Hz reads as a slow breath. 0..1 range.
-			float pulse = (System.MathF.Sin(Time.TotalTime * FluidConfig.LiquidPulseSpeed) * 0.5f) + 0.5f;
+			// Idle: 2.5 Hz slow breath. During a telegraph (Phase D) the pulse
+			// crossfades to a faster frequency and the strength ramps up with
+			// tell progress — the meniscus visibly agitates before the wave.
+			float tell = TellProgressProvider?.Invoke() ?? 0f;
+			float idlePulse = (System.MathF.Sin(Time.TotalTime * FluidConfig.LiquidPulseSpeed) * 0.5f) + 0.5f;
+			float tellPulse = (System.MathF.Sin(Time.TotalTime * Constants.AcidConfig.TellPulseSpeed) * 0.5f) + 0.5f;
+			float pulse = MathHelper.Lerp(idlePulse, tellPulse, tell);
+			float strength = FluidConfig.LiquidPulseStrength
+				* (1f + tell * (Constants.AcidConfig.TellPulseBoost - 1f));
 			Effect.Parameters["Pulse"]?.SetValue(pulse);
-			Effect.Parameters["PulseStrength"]?.SetValue(FluidConfig.LiquidPulseStrength);
+			Effect.Parameters["PulseStrength"]?.SetValue(strength);
 
 			// Phase 3: bind the pixel-perfect player silhouette mask RT.
 			// PlayerMaskRenderer has already rendered all active players'

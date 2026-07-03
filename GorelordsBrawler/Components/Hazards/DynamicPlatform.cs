@@ -85,10 +85,13 @@ namespace GorelordsBrawler.Components.Hazards
 			// Swiss-cheese erosion + per-cell collision, at the LOG rate: a
 			// floater keeps fresh hull at the waterline forever (no waterline
 			// self-limit like a static tier), so its rate is ~4× slower to give
-			// the late-game footing a ~20 s life (AcidConfig).
+			// the late-game footing a ~20 s life (AcidConfig). Phase E: rough
+			// timber texture (tools/gen_arena_tileset.py) carved by the acid.
+			var texture = Entity.Scene.Content.LoadTexture(
+				Nez.Content.Sprites.Hazards.Log_wood);
 			_erodible = Entity.AddComponent(new ErodibleSurface(
 				_acid, Width, Height, _baseColor,
-				AcidConfig.LogErosionPassesPerSec));
+				AcidConfig.LogErosionPassesPerSec, texture));
 			_erodible.OnFullyEroded = () => OnDestroyed?.Invoke();
 		}
 

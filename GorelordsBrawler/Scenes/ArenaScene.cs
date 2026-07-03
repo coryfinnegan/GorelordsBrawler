@@ -62,13 +62,14 @@ namespace GorelordsBrawler.Scenes
 			// Liquid post-process is wired AFTER PlayerMaskRenderer exists
 			// because it samples the mask RT every frame as the player-presence
 			// signal in the shader.
-			AddPostProcessor(new LiquidPostProcessor(
+			var liquidPost = new LiquidPostProcessor(
 				GameConstants.Rendering.LiquidPostProcessorOrder,
 				liquidEffect,
 				liquidFieldRenderer,
 				playerMaskRenderer,
 				bodyColor: new Color((byte)45, (byte)180, (byte)40, (byte)255),
-				edgeColor: new Color((byte)150, (byte)255, (byte)90, (byte)255)));
+				edgeColor: new Color((byte)150, (byte)255, (byte)90, (byte)255));
+			AddPostProcessor(liquidPost);
 
 			// Phase 4 deadly-polish: chromatic-aberration pulse on acid damage
 			// + HP-driven radial vignette. Runs at order 10 so it composites
@@ -136,6 +137,10 @@ namespace GorelordsBrawler.Scenes
 			// static tiers dissolve, the arena transforms into a debris field
 			// instead of emptying out.
 			spawner.LoopProvider = () => phaseManager.Loop;
+			// Phase D telegraph: the liquid's meniscus pulse reads the tell so
+			// the surface visibly agitates before every surge/crest/rise (the
+			// bubble emitter and camera read AcidSurface.TellProgress directly).
+			liquidPost.TellProgressProvider = () => acidSurface.TellProgress;
 
 			// Dissolvable refuge tiers (functional-test decision: the acid EATS
 			// the arena as it climbs). Each TMX "tiers" object becomes a solid
@@ -289,6 +294,8 @@ namespace GorelordsBrawler.Scenes
 				exporter.RegisterProvider("acidPhase",      () => phaseManager.Phase.ToString());
 				exporter.RegisterProvider("acidLoop",       () => phaseManager.Loop);
 				exporter.RegisterProvider("acidSurgeCount", () => acidSurface.SurgeCount);
+				// Phase D: telegraph oracle — E2E asserts a tell precedes every wave.
+				exporter.RegisterProvider("acidTellActive", () => acidSurface.TellActive);
 				exporter.RegisterProvider("acidDraining",   () => phaseManager.IsDraining);
 				exporter.RegisterProvider("acidFillCap",    () => acidSurface.ParticleCap);
 				exporter.RegisterProvider("tiersRemaining", () => tiersAlive);

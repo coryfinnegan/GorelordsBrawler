@@ -126,10 +126,10 @@ Feature development follows a plan → review → implement → archive cycle:
 Active proposals live in `docs/`. Completed features have their docs in `docs/implemented/`.
 
 ### Current Proposals
-- `docs/acid-arena-design-proposal.md` — "The Sump" acid arena. **Phases A (basin + parallelized solver, PR #17) and B (depth lethality + swim/breach escape, PR #18) merged. Phase C (looping phase machine) + C.1 (measured-density calibration, contest-then-consume rise schedule, per-surface erosion, hull-aware log buoyancy, storm-flood terminal) in review.** Remaining: C.2 (layout), D (telegraphing), E (art pass)
-- `docs/sump-layout-redesign-proposal.md` — Phase C.2: tiers-only layout redesign (diving boards over the pit, cross-pit mid route, staggered top perches). **PROPOSED — awaiting review.**
+- *(none — the acid arena arc is complete; both docs live in `docs/implemented/`)*
 
 ### Implemented Features (highlights — full list in `docs/implemented/`)
+- `acid-arena-design-proposal.md` + `sump-layout-redesign-proposal.md` — "The Sump" acid arena, complete: parallelized PBF basin (PR #17), depth lethality + swim escape (PR #18), the looping phase machine + measured-density calibration + storm terminal (PR #19), then the C.2 four-band layout (diving boards / lows / inward mids / split tops), Phase D telegraphs (one tell channel → bubbles+pulse+rumble before every wave and rise), and the Phase E generated vessel tileset + textured destructibles (`tools/gen_arena_tileset.py`)
 - `match-system-proposal.md` — stock lives match system with ruleset pattern
 - `character-select-proposal.md` — character select, modular stats refactor, scene transitions
 - `e2e-gameplay-automation-proposal.md` — scripted-input device + deterministic frame-stepping (PR #13)

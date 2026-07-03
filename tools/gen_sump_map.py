@@ -75,15 +75,40 @@ fill_rect(solid, 26, 38, 17, 22)    # right bank
 # "tiers" OBJECT layer; ArenaScene turns each into an entity with a collider +
 # a DissolvingPlatform that burns away when the acid reaches its top edge.
 # rank: "low" gates the log spawner (logs only drop once the low pair is eaten).
+#
+# C.2 layout (docs/sump-layout-redesign-proposal.md) — four bands, placed
+# against the C.1 rise schedule (AcidConfig keeps the matching Y constants):
+#   shallow (row 15, y 480): DIVING BOARDS overhanging the pit edges — the
+#       early risk/reward perch and the first destruction beat (standing-dry
+#       under loop 0's 528 ceiling, fully drowned by loop 1's 432).
+#   low     (row 13, y 416): contested loop 1, consumed loop 2 — unchanged.
+#   mid     (row 9,  y 288): pulled INWARD to overhang the pit (a committed
+#       32 px gap-jump from the lows — the old layout was a zero-risk
+#       staircase) and narrowed 5→4 tiles. Storm territory.
+#   top     (row 5,  y 160): narrowed 6→5 tiles, center gap widened to 128 px
+#       so the final perches are a real jump apart, not one choke.
 TIERS = [
     # (col0, col1, row, rank)
-    (4, 9, 13, "low"),
-    (30, 35, 13, "low"),
-    (9, 13, 9, "mid"),
-    (26, 30, 9, "mid"),
-    (13, 18, 5, "top"),
-    (21, 26, 5, "top"),
+    (14, 16, 15, "shallow"),   # x 448-544, over the pit's left lip
+    (23, 25, 15, "shallow"),   # x 736-832, over the pit's right lip
+    (4, 9, 13, "low"),         # x 128-320
+    (30, 35, 13, "low"),       # x 960-1152
+    (11, 14, 9, "mid"),        # x 352-480 (32 px gap-jump from the low tier)
+    (25, 28, 9, "mid"),        # x 800-928
+    (13, 17, 5, "top"),        # x 416-576
+    (22, 26, 5, "top"),        # x 704-864 (128 px center gap)
 ]
+
+# The diving boards must genuinely OVERHANG the basin mouth (cols 14-25) —
+# that's their whole job — while every other band stays out of the two center
+# columns (19-20) the original design keeps clear.
+for (c0, c1, row, rank) in TIERS:
+    if rank == "shallow":
+        assert c0 <= 25 and c1 >= 14, \
+            f"shallow board ({c0}-{c1}) does not overhang the basin mouth"
+    else:
+        assert not (c0 <= 20 and c1 >= 19), \
+            f"tier ({c0}-{c1} row {row}) blocks the center columns 19-20"
 
 # ── Sanity: the corner inlet columns must be clear from ceiling to the banks ─
 # Acid pours from the TOP CORNERS of the map (cols 2 / 37, world x 72/1208),
@@ -115,14 +140,40 @@ for i, (sx, _sy) in enumerate(spawns):
     assert bank_ok, f"spawn {i} at x={sx} (col {col}) is not over a bank"
 
 
+# ── Phase-E visual gids (tools/gen_arena_tileset.py's tile inventory) ──────
+# The COLLISION layer keeps the plain semantic gids (2 solid / 3 wall) — the
+# physics never cares about looks. The PLATFORMS (visual) layer picks from the
+# rendered tileset: machined TOP plates where a surface is walkable, corroded
+# FILL below, acid-STAINED variants on basin-facing cells, and a deterministic
+# A/B hash so big plate runs don't tile visibly.
+FILL_A, TOP_A, FILL_B, TOP_B, TOP_STAIN, FILL_STAIN = 2, 4, 5, 6, 7, 8
+
+
+def visual_solid_gid(x, y):
+    top_exposed = (x, y - 1) not in solid and (x, y - 1) not in wall
+    # Basin-facing cells wear the acid staining: the pit floor + the two bank
+    # lip corners and inner walls the pool laps every loop.
+    basin_floor = 14 <= x <= 25
+    lip_corner  = y == 17 and x in (12, 13, 26, 27)
+    inner_wall  = x in (13, 26) and 17 <= y <= 22
+    variant     = (x * 7 + y * 13) % 2
+    if top_exposed:
+        if basin_floor or lip_corner:
+            return TOP_STAIN
+        return TOP_A if variant == 0 else TOP_B
+    if basin_floor or inner_wall:
+        return FILL_STAIN
+    return FILL_A if variant == 0 else FILL_B
+
+
 def gid_at(x, y, layer):
     if layer == "background":
         return BG
-    # platforms + collision are identical: walls and solids, matching visuals.
     if (x, y) in wall:
         return WALL
     if (x, y) in solid:
-        return SOLID
+        # collision stays semantic; only the visual layer picks variants
+        return visual_solid_gid(x, y) if layer == "platforms" else SOLID
     return 0
 
 
