@@ -1,3 +1,4 @@
+using System;
 using Microsoft.Xna.Framework;
 using Nez;
 using Nez.Sprites;
@@ -8,6 +9,16 @@ namespace GorelordsBrawler.Components
 {
 	public class RespawnHandler : Component, IUpdatable
 	{
+		/// <summary>
+		/// Optional flood-aware spawn picker (Phase C). When set, respawn asks it
+		/// for a position at the moment of respawn — so a player who dies during
+		/// a flood comes back on dry ground instead of inside the acid. Null =
+		/// the fixed construction-time spawn (non-acid scenes unchanged).
+		/// Installed as a closure by ArenaScene — the acid dependency only
+		/// exists at scene level, same pattern as the depth-damage closure.
+		/// </summary>
+		public Func<Vector2> SafeSpawnProvider;
+
 		private readonly Vector2 _spawnPosition;
 		private Health _health;
 		private float _respawnTimer;
@@ -57,7 +68,7 @@ namespace GorelordsBrawler.Components
 			if (_respawnTimer <= 0)
 			{
 				_health.Reset();
-				Entity.Transform.Position = _spawnPosition;
+				Entity.Transform.Position = SafeSpawnProvider?.Invoke() ?? _spawnPosition;
 				Entity.GetComponent<PhysicsBody>().Velocity = Vector2.Zero;
 				SetCombatComponentsEnabled(true);
 				_waitingToRespawn = false;

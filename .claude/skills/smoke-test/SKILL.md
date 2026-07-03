@@ -19,19 +19,21 @@ pwsh .claude/skills/smoke-test/smoke_test.ps1 -Feature acid
 
 `-Feature` picks the module under `features/`. The harness handles
 everything generic — building, launching, foregrounding the game window,
-recording, screenshot, upload, cleanup, restoring `appsettings.json`.
+recording, screenshot, upload, cleanup. It writes no `appsettings.json` —
+debug flags are injected as env vars on the game's child process, so a manual
+run after a smoke test still reads the player's own (keyboard-default) config.
 
 ## What the harness does (feature-agnostic)
 
 1. **Build** — `dotnet build GorelordsBrawler -c Debug`.
-2. **Compose appsettings.json** — baseline `DebugServer = true` + `DebugDirectArena = true` merged with the feature's `AppSettings` hashtable. The original `appsettings.json` is backed up and restored on exit.
+2. **Compose debug flags** — baseline `DebugServer = true` + `DebugDirectArena = true` merged with the feature's `AppSettings` hashtable, injected as `GLB_*` environment variables on the game's child process (`ConvertTo-GameEnvName` maps `DebugDirectArena → GLB_DEBUG_DIRECT_ARENA`, mirroring `AppSettings.Env*`). Nothing is written to `appsettings.json`, so there is no backup/restore and a later manual run reads the player's own config.
 3. **Launch** the game, wait up to 20 s for `:7777/state`.
 4. **Start frame capture job** — a background PowerShell job polls `GET /screenshot` (which returns the live back buffer) at as-fast-as-the-game-can-respond for `RecordSeconds` (feature default, 20 if unset), saving numbered PNGs to a temp dir. This is more reliable than `gdigrab` because the game keeps rendering even when its window thinks it's not focused — MonoGame disables vsync when `Game.IsActive` is false and `gdigrab` would capture a black DWM cache.
 5. **Run feature checks** — invokes the feature's `Invoke` scriptblock with a `[SmokeCtx]` (see below).
 6. **Wait for capture job**, then **stitch** the captured PNGs into an MP4 with `ffmpeg -framerate <captured/sec> -i frame_%05d.png -c:v libx264 ...`. Captured framerate is typically ~10 fps (limited by HTTP round-trip on `/screenshot`).
 7. **Fetch** one more `/screenshot` for the still-frame artifact at `.smoke-test-screenshot.{feature}.png`.
 8. **Upload** the MP4 to `https://catbox.moe/user/api.php` (free, no expiration). URL printed + written to `.smoke-test-recording-url.{feature}.txt`.
-9. **Kill the game, clean frame dir, restore appsettings.json** in every exit path.
+9. **Kill the game, clean frame dir** in every exit path (no config file was written, so nothing to restore).
 
 Failure exit codes:
 - `1` build failure / missing feature module / bad descriptor
@@ -44,6 +46,7 @@ Failure exit codes:
 Anything under `features/*.ps1`. Currently:
 
 - **`acid`** — Acid hazard lifecycle: inactive → activates → rises → damages players. ~6 s of useful gameplay, recorded for 20 s to capture the visible pool fill-up.
+- **`pacing`** — Acid pacing gates: the MEASURED standing surface lands on the configured fill ceiling (the cap↔surface calibration that silently broke once), and the drain relief beat takes ~its configured duration. Run it whenever fluid solver constants, `AcidConfig` ceilings/flows, or `FluidConfig.EffectiveParticleArea` change.
 
 ## Writing a new feature
 

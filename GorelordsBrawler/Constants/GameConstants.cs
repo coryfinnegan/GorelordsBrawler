@@ -322,10 +322,11 @@ namespace GorelordsBrawler.Constants
 
 		public static class Hazards
 		{
-			// Timing
+			// Timing. (Pour rates live in AcidConfig.InletFlowFor — direct
+			// particles/sec per loop; the old AcidRiseSpeed px²-area model was a
+			// third density assumption disagreeing with the measured pool.)
 			public const float AcidStartDelay        = 30f;
-			public const float AcidRiseSpeed          = 0.0025f; // fraction of mapHeight/sec (~2px/sec at 800px)
-			public const float AcidDebugRiseMultiplier = 4f;     // DebugFastAcid multiplies speed by this
+			public const float AcidDebugRiseMultiplier = 4f;     // DebugFastAcid multiplies the pour by this
 			// ── Depth-scaled lethality + swim escape (Phase B) ────────────────
 			// Acid damage scales with how far a body is submerged below the LOCAL
 			// surface. A toe-dip is a survivable scare; a deep launch melts fast
@@ -377,13 +378,9 @@ namespace GorelordsBrawler.Constants
 			// makes this dynamic (the flood deliberately raises it past the lip).
 			public const float BasinFillCeilingY = 560f;
 
-			public const float PlatformSpawnInterval  = 20f;    // wait for ALL platforms to clear before next batch
-			public const float PlatformBurnDuration   = 18f;
-			public const float PlatformBurnDelay      = 10f;
-
-			// Spawn area — normalized [0, 1]
-			public const float PlatformSpawnMinX  = 0.1f;
-			public const float PlatformSpawnMaxX  = 0.9f;
+			// Drop-log size (spawn X anchors live in AcidConfig.LogSpawnX*;
+			// log LIFETIME is contact-erosion at AcidConfig.LogErosionPassesPerSec —
+			// the old timed-burn constants are gone with the burn machinery)
 			public const float PlatformWidth      = 0.10f;
 			public const float PlatformHeight     = 32f;   // world units (1 tile)
 
@@ -396,24 +393,48 @@ namespace GorelordsBrawler.Constants
 			public const float PlatformFallSpawnY   = -48f;   // spawn above the map top edge
 			public const float PlatformImpactFactor = 0.5f;   // fraction of fall velocity transferred on platform-on-platform landing
 
-			// Platform float (spring) physics on acid surface
-			// ζ = Damping / (2 * sqrt(SpringK)) ≈ 0.5 → underdamped, 1-2 visible bounces
+			// Platform float (spring) physics — used ONLY for resting on solid
+			// ground (a log on a dry bank sits flat on top). Floating IN acid uses
+			// depth-based buoyancy below, not this spring.
+			// ζ = Damping / (2 * sqrt(SpringK)) ≈ 0.5 → underdamped, 1-2 bounces
 			public const float SpringK          = 25f;
 			public const float Damping          = 5f;
+
+			// Depth-based buoyancy (Archimedes) for a log floating IN the acid.
+			// The old code sprang the log's CENTER to surface-Height/2, pinning
+			// the whole hull ABOVE the waterline — "floating on top." Real
+			// buoyancy is a force proportional to SUBMERGED volume that balances
+			// gravity at a partial-submersion equilibrium (Kerner, "Water
+			// interaction model for boats in video games", Game Developer).
+			//   BuoyancyRestFraction — fraction of the hull underwater at rest
+			//     (0.6 → the log sits 60% sunk, waterline across its upper third).
+			//   BuoyancyGravity — downward accel (px/s²); with the rest fraction
+			//     it sets the restoring stiffness k = g/(restFrac·Height).
+			//   BuoyancyDamping — per-second vertical-velocity damping; ~ζ 0.6 so
+			//     it dips, bobs once, and settles instead of oscillating forever.
+			public const float BuoyancyRestFraction = 0.6f;
+			public const float BuoyancyGravity       = 600f;
+			public const float BuoyancyDamping       = 5f;
+
+			// Water-entry energy loss: the splash IS the energy sink. On entering
+			// the acid a log keeps only this fraction of its fall velocity — the
+			// rest "went into" the visible Disturb splash. Without it the full
+			// 500 px/s plunge feeds the underdamped spring and the log rockets
+			// back out ("bouncing way too high"). Standard floating-body water-
+			// entry treatment (Gamedeveloper boat-water model; VertexFragment
+			// "Buoyancy for Dummies": damping exists to kill entry oscillation).
+			public const float WaterEntryVelocityRetention = 0.2f;
 			public const float AngularSpringK   = 60f;
 			public const float AngularDamping   = 8f;
 			public const float LandingImpulse   = 120f;  // tilt kick when player lands on floating platform
 			public const float MaxTiltDegrees   = 15f;
 
-			// Platform positions — (centerX, centerY, width) all normalized [0, 1]
-			public static readonly (float cx, float cy, float w)[] Platforms = new[]
-			{
-				(0.500f, 0.500f, 0.250f),  // Top
-				(0.213f, 0.700f, 0.175f),  // MidLeft
-				(0.788f, 0.700f, 0.175f),  // MidRight
-				(0.313f, 0.820f, 0.125f),  // BotLeft
-				(0.688f, 0.820f, 0.125f),  // BotRight
-			};
+			// (The old normalized Platforms array is gone — it described the
+			// pre-Sump arena and was only consumed to derive acid inlet/trigger
+			// geometry. Phase C replaced every consumer with explicit world-space
+			// values in AcidConfig, which mirror the real TMX. The drop-in log
+			// platforms it never described are sized by the PlatformWidth/Height
+			// constants above.)
 		}
 
 		public static class Ledge
@@ -433,14 +454,14 @@ namespace GorelordsBrawler.Constants
 			public const float InnerRight = 1248f;
 
 			// Fallback spawn positions if map has no spawns object layer.
-			// Match the Sump bank-top spawns in arena1.tmx — the old values sat
-			// at y=732, which is now INSIDE the basin (would spawn players in acid).
+			// Match the Sump bank-top spawns in arena1.tmx — far-outer corners,
+			// clear of the low refuge tiers (x 128-320 / 960-1152).
 			public static readonly Vector2[] FallbackSpawnPositions = new[]
 			{
-				new Vector2(200, 520),   // left bank, outer
-				new Vector2(1080, 520),  // right bank, outer
-				new Vector2(360, 520),   // left bank, inner
-				new Vector2(920, 520),   // right bank, inner
+				new Vector2(96, 520),    // P1 — far left bank corner
+				new Vector2(1184, 520),  // P2 — far right bank corner
+				new Vector2(384, 520),   // inner left
+				new Vector2(896, 520),   // inner right
 			};
 		}
 	}

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using Microsoft.Xna.Framework;
@@ -126,7 +127,62 @@ namespace GorelordsBrawler.Scenes
 			contactHazard.DamagePerSecond = GameConstants.Hazards.AcidSurfaceDps;
 			contactHazard.GetBounds = acidSurface.GetDamageBounds;
 			var spawner = AddSceneComponent(new PlatformSpawner(mw, mh));
-			AddSceneComponent(new AcidPhaseManager(acidSurface, spawner, mw, mh));
+			// Phase C: the looping Calm→Rise→Scramble→Surge→Drain machine with
+			// per-loop escalation and the terminal FinalFlood at the time cap.
+			// Geometry/timing all live in AcidConfig (the Phase-A hand-sync debt
+			// paid: nothing derives from the old normalized platform array).
+			var phaseManager = AddSceneComponent(new AcidPhaseManager(acidSurface));
+			// The log population target escalates with the loop (2 → 4): as the
+			// static tiers dissolve, the arena transforms into a debris field
+			// instead of emptying out.
+			spawner.LoopProvider = () => phaseManager.Loop;
+
+			// Dissolvable refuge tiers (functional-test decision: the acid EATS
+			// the arena as it climbs). Each TMX "tiers" object becomes a solid
+			// ledge that burns away when the rising surface reaches it. The LOW
+			// pair gates the log spawner: drop-logs begin the moment the first
+			// footing is eaten — platforms arrive BECAUSE the acid took the
+			// ground, not on a timer.
+			int tiersAlive = 0, lowTiersAlive = 0;
+			var tierGroup = tiledMap.GetObjectGroup("tiers");
+			if (tierGroup != null)
+			{
+				foreach (var obj in tierGroup.Objects)
+				{
+					string rank = "";
+					if (obj.Properties != null)
+					{
+						obj.Properties.TryGetValue("rank", out rank);
+					}
+					var tierEntity = CreateEntity($"tier-{obj.Name}");
+					tierEntity.Transform.Position = new Vector2(
+						obj.X + obj.Width * 0.5f, obj.Y + obj.Height * 0.5f);
+					var tier = tierEntity.AddComponent(new DissolvingPlatform(
+						acidSurface, obj.Width, obj.Height, rank));
+
+					tiersAlive++;
+					bool isLow = rank == "low";
+					if (isLow)
+					{
+						lowTiersAlive++;
+					}
+					tier.OnDissolved = () => tiersAlive--;
+					// Debris starts falling once the low pair is MOSTLY chewed —
+					// full erosion of the last crumbs lags the visible
+					// destruction, and the logs should arrive while the acid is
+					// still visibly eating the first footing.
+					if (isLow)
+					{
+						tier.OnMostlyEroded = () =>
+						{
+							if (--lowTiersAlive == 0)
+							{
+								spawner.StartSpawning(acidSurface);
+							}
+						};
+					}
+				}
+			}
 			// Phase 1 deadly-polish: ambient bubbles rising from the surface.
 			// Hosted on its own entity (rather than as a SceneComponent) so
 			// the [Inspectable] tuning knobs (SpawnsPerSec, StartSize, etc.)
@@ -157,6 +213,17 @@ namespace GorelordsBrawler.Scenes
 				// Phase B escape mechanic: mash jump to stroke up out of the acid.
 				// Needs the slot's InputProfile (same one Walk/JumpAbility use).
 				slot.PlayerEntity.AddComponent(new SwimAbility(slot.Input));
+
+				// Phase C flood-safe respawn: pick the spawn at the MOMENT of
+				// respawn, from the lowest candidate whose column is dry — so a
+				// death during a flood comes back on the surviving refuge, not
+				// inside the acid. Closure pattern: RespawnHandler stays
+				// hazard-agnostic, the scene installs the acid-aware policy.
+				var respawnHandler = slot.PlayerEntity.GetComponent<RespawnHandler>();
+				if (respawnHandler != null)
+				{
+					respawnHandler.SafeSpawnProvider = () => PickSafeSpawn(acidSurface);
+				}
 			}
 
 			// Phase B depth-scaled lethality: the acid bites harder the deeper a
@@ -199,6 +266,11 @@ namespace GorelordsBrawler.Scenes
 				// keys the same way so /state stays a union of whatever is on screen.
 				exporter.RegisterProvider("acidActive", () => acidSurface.IsRising);
 				exporter.RegisterProvider("acidLevel",  () => (int)acidSurface.CurrentLevel);
+				// MEASURED standing surface (median basin-center probes) — the
+				// oracle tests assert fill ceilings against. acidLevel above is
+				// the legacy volumetric ESTIMATE, geometry-blind for a basin
+				// pool (it read "below the floor" while the pool sat on banks).
+				exporter.RegisterProvider("acidSurfaceY", () => (int)acidSurface.GetStandingSurfaceY());
 				exporter.RegisterProvider("acidSpeed",  () => acidSurface.IsRising ? 1 : 0);
 				// Automation assertions: particle count proves the pool didn't vanish/respawn,
 				// finiteness proves it didn't NaN (the hitstop dt=0 failure mode).
@@ -211,6 +283,15 @@ namespace GorelordsBrawler.Scenes
 				exporter.RegisterProvider("acidBoundsTop",    () => (int)acidSurface.GetDamageBounds().Y);
 				exporter.RegisterProvider("acidBoundsRight",  () => (int)(acidSurface.GetDamageBounds().X + acidSurface.GetDamageBounds().Width));
 				exporter.RegisterProvider("acidBoundsBottom", () => (int)(acidSurface.GetDamageBounds().Y + acidSurface.GetDamageBounds().Height));
+				// Phase C oracles: the phase machine's observable state, so E2E can
+				// assert transition order, escalation, drain recession, and the
+				// final flood without screen-scraping.
+				exporter.RegisterProvider("acidPhase",      () => phaseManager.Phase.ToString());
+				exporter.RegisterProvider("acidLoop",       () => phaseManager.Loop);
+				exporter.RegisterProvider("acidSurgeCount", () => acidSurface.SurgeCount);
+				exporter.RegisterProvider("acidDraining",   () => phaseManager.IsDraining);
+				exporter.RegisterProvider("acidFillCap",    () => acidSurface.ParticleCap);
+				exporter.RegisterProvider("tiersRemaining", () => tiersAlive);
 				// Combat: true during a hit freeze (TimeScale=0). Lets the acid-survives-a-hit
 				// regression prove it actually drove the game through the dt=0 window.
 				exporter.RegisterProvider("hitstopActive",     () => combatEffects.IsHitstopActive);
@@ -244,6 +325,36 @@ namespace GorelordsBrawler.Scenes
 			var ruleset = new StockRuleset();
 			AddSceneComponent(new MatchManager(ruleset));
 			AddSceneComponent(new MatchHUD(ruleset));
+		}
+
+		/// <summary>
+		/// Flood-aware respawn pick: the LOWEST AcidConfig candidate whose column's
+		/// acid surface clears the feet by the clearance margin — respawns stay
+		/// near the action until the flood forces them up the tiers. If NOTHING
+		/// qualifies (deep storm, refuges gone), spawn ABOVE the live surface at
+		/// the last candidate's column instead of inside the acid — the hazard
+		/// may doom you, but it never executes you on frame 0 (Brinstar rule:
+		/// the stage hazard launches and burns, it doesn't KO outright).
+		/// </summary>
+		private static Vector2 PickSafeSpawn(AcidSurface acid)
+		{
+			var candidates = AcidConfig.RespawnPoints;
+			foreach (var p in candidates)
+			{
+				float headY   = p.Y - 24f;
+				float feetY   = p.Y + 24f;
+				float surface = acid.GetLocalSurfaceLevelAtX(p.X, headY);
+				if (surface - feetY >= AcidConfig.RespawnClearancePx)
+				{
+					return p;
+				}
+			}
+
+			var last = candidates[candidates.Length - 1];
+			float standing = acid.GetStandingSurfaceY();
+			// Feet (center + 24) must clear the standing surface by the margin.
+			float safeY = standing - AcidConfig.RespawnClearancePx - 24f;
+			return new Vector2(last.X, MathF.Min(last.Y, safeY));
 		}
 
 		private static Vector2[] ReadSpawnPositions(TmxMap map)

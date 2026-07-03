@@ -11,12 +11,14 @@ namespace GorelordsBrawler.E2E.Tests;
 /// <summary>
 /// Manages a game process for E2E tests.
 ///
-/// Prerequisites — create appsettings.e2e.json next to the game exe:
-///   { "DebugServer": true, "DebugDirectArena": true, "DebugFastAcid": true }
+/// The debug/automation flags are injected as environment variables on the
+/// spawned game process (see StartAsync) — never by writing appsettings.json in
+/// the build output, which would leak debug mode (and silently kill the keyboard)
+/// into the next manual run. The game's AppSettings overlays these env vars on
+/// top of its config file.
 ///
-/// Guard: call GameDriver.IsAvailable before starting tests.
-/// The E2E_TESTS environment variable must be set to "1" to enable E2E tests.
-/// This prevents them from running in standard CI unless explicitly opted in.
+/// Guard: the E2E_TESTS environment variable must be set to "1" to enable E2E
+/// tests, so they don't run in standard CI unless explicitly opted in (IsEnabled).
 /// </summary>
 public sealed class GameDriver : IDisposable, IAsyncDisposable
 {
@@ -44,25 +46,29 @@ public sealed class GameDriver : IDisposable, IAsyncDisposable
 	{
 		var (fileName, arguments, workingDir) = FindGameLauncher();
 
-		// Write appsettings.json next to the game artifact: debug server + direct arena + fast acid
-		// + automation. DebugAutomation is the load-bearing flag — without it BOTH players are
-		// created with keyboard devices and POST /input is silently ignored.
-		string settingsPath = Path.Combine(workingDir, "appsettings.json");
-		File.WriteAllText(settingsPath, """
-			{
-			  "DebugServer":      true,
-			  "DebugDirectArena": true,
-			  "DebugFastAcid":    true,
-			  "DebugAutomation":  true
-			}
-			""");
-
 		var psi = new ProcessStartInfo(fileName)
 		{
 			Arguments        = arguments,
 			UseShellExecute  = false,
 			WorkingDirectory = workingDir,
 		};
+
+		// Inject the automation config as environment variables scoped to THIS
+		// child process — deliberately NOT by writing appsettings.json in the
+		// build output. That file is the player's own config (defaults to the
+		// keyboard); an earlier design overwrote it here, and because
+		// File.WriteAllText stamps it newer than the source, MSBuild's
+		// PreserveNewest copy then skipped restoring it — so DebugAutomation:true
+		// leaked into the next manual `dotnet run` and silently swapped both
+		// players off the keyboard onto scripted HTTP input. Env vars die with
+		// the process, so nothing persists. DebugAutomation is the load-bearing
+		// flag: without it both players get keyboard devices and POST /input is
+		// ignored. These names mirror AppSettings.Env* (a cross-process contract,
+		// like the HTTP routes below).
+		psi.Environment["GLB_DEBUG_SERVER"]       = "1";
+		psi.Environment["GLB_DEBUG_DIRECT_ARENA"] = "1";
+		psi.Environment["GLB_DEBUG_FAST_ACID"]    = "1";
+		psi.Environment["GLB_DEBUG_AUTOMATION"]   = "1";
 
 		var proc = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start game process.");
 		var driver = new GameDriver(proc);

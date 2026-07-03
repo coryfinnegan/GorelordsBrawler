@@ -5,7 +5,8 @@
 .DESCRIPTION
     Generic end-to-end harness:
         1. Build the game (Debug).
-        2. Launch with DebugServer + DebugDirectArena + per-feature appsettings.
+        2. Launch with DebugServer + DebugDirectArena + per-feature flags,
+           injected as env vars on the game process (no appsettings.json written).
         3. Bring the game window to the foreground.
         4. Start an ffmpeg gdigrab recording of the game window.
         5. Run the chosen feature's check sequence against http://localhost:7777/state.
@@ -136,8 +137,12 @@ if ($NoRecord) {
     Write-Host '[smoke] ffmpeg not on PATH — recording will be skipped. (winget install Gyan.FFmpeg)' -ForegroundColor Yellow
 }
 
-# ── Compose appsettings.json (back up any existing) ────────────────────────
+# ── Debug settings → game-process environment (no file written) ────────────
 # Baseline: DebugServer + DebugDirectArena. Feature can add/override anything.
+# These are injected as environment variables on the GAME child process at
+# launch (see below), never by writing appsettings.json in the build output —
+# that file is the player's own config, and overwriting it used to leave debug
+# flags behind for the next manual run. Env vars die with the game process.
 
 $Settings = @{
     DebugServer      = $true
@@ -147,14 +152,12 @@ if ($Feat.AppSettings) {
     foreach ($k in $Feat.AppSettings.Keys) { $Settings[$k] = $Feat.AppSettings[$k] }
 }
 
-$SettingsPath = Join-Path $ExeDir 'appsettings.json'
-$BackupPath   = "$SettingsPath.smoke-backup"
-$BackupMade   = $false
-if (Test-Path $SettingsPath) {
-    Copy-Item $SettingsPath $BackupPath -Force
-    $BackupMade = $true
+# PascalCase setting name -> GLB_UPPER_SNAKE env var (mirrors AppSettings.Env*
+# and GameDriver's psi.Environment keys). E.g. DebugDirectArena ->
+# GLB_DEBUG_DIRECT_ARENA.
+function ConvertTo-GameEnvName([string] $Key) {
+    'GLB_' + (($Key -creplace '([a-z0-9])([A-Z])', '$1_$2').ToUpperInvariant())
 }
-$Settings | ConvertTo-Json | Set-Content -Path $SettingsPath -Encoding UTF8
 
 # ── Smoke context: passed to feature's Invoke block ────────────────────────
 
@@ -215,11 +218,6 @@ function Stop-All {
     if ($script:Game -and -not $script:Game.HasExited) {
         try { $script:Game.Kill($true) } catch {}
     }
-    if ($script:BackupMade) {
-        Move-Item $script:BackupPath $script:SettingsPath -Force
-    } else {
-        Remove-Item $script:SettingsPath -ErrorAction SilentlyContinue
-    }
 }
 
 try {
@@ -227,6 +225,15 @@ try {
     $psi = [System.Diagnostics.ProcessStartInfo]::new($ExePath)
     $psi.UseShellExecute  = $false
     $psi.WorkingDirectory = $ExeDir
+    # Scope the debug flags to THIS game process via env vars — not a written
+    # appsettings.json, and NOT the script-global $env: (which the -OpenIde
+    # Start-Process would inherit, leaking debug mode into the user's IDE/F5
+    # session). $psi.Environment starts seeded from the current process, so PATH
+    # etc. survive; we only add the GLB_ overrides.
+    foreach ($k in $Settings.Keys) {
+        $val = if ($Settings[$k]) { '1' } else { '0' }
+        $psi.Environment[(ConvertTo-GameEnvName $k)] = $val
+    }
     $Game = [System.Diagnostics.Process]::Start($psi)
 
     # ── Wait for debug server ──────────────────────────────────────────────

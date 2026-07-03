@@ -18,8 +18,9 @@ return @{
     Name        = 'acid'
     Description = 'Acid hazard lifecycle (inactive → active → rises → damages players).'
 
-    # Feature-specific appsettings layered on top of the harness baseline
-    # (DebugServer + DebugDirectArena are always set).
+    # Feature-specific debug flags layered on top of the harness baseline
+    # (DebugServer + DebugDirectArena are always set); injected as GLB_* env
+    # vars on the game process, not written to appsettings.json.
     AppSettings = @{
         DebugFastAcid = $true   # collapse 30 s start delay to 3 s for fast iteration
     }
@@ -86,27 +87,36 @@ return @{
             "time=$($s.time), $hits player(s) damaged"
         })
 
-        # Regression guard for the "FPS tanks as the basin fills" bug: the inlet
-        # must STOP once the basin is full (a geometry-derived particle cap),
-        # instead of pouring toward MaxParticles (5000) and flooding the arena.
-        # The old volumetric inlet-stop was geometry-blind and never tripped for
-        # the narrow basin. Let it fill, then confirm the count plateaued well
-        # below the 5000 cap and is no longer climbing. (DebugFastAcid 4x → the
-        # basin fills in ~5 s after activation; 8 s is a safe settle margin.)
-        $Ctx.Check('inlet stops at basin-full (count plateaus, no flood / FPS cliff)', {
+        # Regression guard for the "FPS tanks as the pour runs away" bug, in its
+        # Phase-C form: the pour must always respect its safety stop. The fill
+        # is CLOSED-LOOP on the measured surface, so the real count can
+        # legitimately run up to 1.25x the geometric estimate (acidFillCap)
+        # before the hard stop — the runaway bound is 1.30x + splash slack.
+        $Ctx.Check('pour always respects its safety stop (no runaway / FPS cliff)', {
             param($c)
             $c.WaitFor({ param($x) $x.acidActive }, 15000, 'acidActive == true') | Out-Null
             Start-Sleep -Seconds 8
-            $c1 = $c.GetState().acidParticleCount
+            $s1 = $c.GetState()
             Start-Sleep -Seconds 3
-            $c2 = $c.GetState().acidParticleCount
-            if ($c2 -ge 2500) {
-                throw "particle count $c2 too high — inlet did not cap (ran toward MaxParticles=5000, the flood/FPS regression)"
+            $s2 = $c.GetState()
+            foreach ($s in @($s1, $s2)) {
+                $bound = [int]($s.acidFillCap * 1.30) + 50
+                if ($s.acidParticleCount -gt $bound) {
+                    throw "count $($s.acidParticleCount) exceeds the safety envelope for estimate $($s.acidFillCap) (1.30x + 50 = $bound) in phase $($s.acidPhase) — pour running away"
+                }
             }
-            if (($c2 - $c1) -gt 100) {
-                throw "particle count still climbing ($c1 -> $c2 over 3 s) — inlet not capping"
-            }
-            "count plateaued at $c2 (< 2500, delta=$($c2 - $c1) over 3 s)"
+            "count $($s1.acidParticleCount)->$($s2.acidParticleCount) within envelope of estimate $($s2.acidFillCap) (phase=$($s2.acidPhase), loop=$($s2.acidLoop))"
+        })
+
+        # Phase C: the phase machine must progress past Rise into the Scramble/
+        # Surge stretch within the debug-fast window, and at least one surge
+        # must fire (the first surge fires ON Surge-phase entry, as the visible
+        # beat). Catches a stuck state machine that the older checks (level
+        # rises, players damaged) would sail straight past.
+        $Ctx.Check('phase machine progresses and a surge fires', {
+            param($c)
+            $s = $c.WaitFor({ param($x) $x.acidPhase -eq 'Surge' -and $x.acidSurgeCount -ge 1 }, 60000, "acidPhase == Surge with a surge fired")
+            "phase=$($s.acidPhase), loop=$($s.acidLoop), surges=$($s.acidSurgeCount), time=$($s.time)"
         })
 
         # No-NaN guard: the PBF sim must stay finite through the whole lifecycle

@@ -126,7 +126,8 @@ Feature development follows a plan → review → implement → archive cycle:
 Active proposals live in `docs/`. Completed features have their docs in `docs/implemented/`.
 
 ### Current Proposals
-- `docs/acid-arena-design-proposal.md` — "The Sump" acid arena. **Phase A (basin geometry + pre-fill + parallelized PBF solver) merged in PR #17. Phase B (depth-scaled lethality + swim/breach escape) in review.** Remaining: Phase C (phase machine + dual inlets + escalation), D (telegraphing), E (art pass)
+- `docs/acid-arena-design-proposal.md` — "The Sump" acid arena. **Phases A (basin + parallelized solver, PR #17) and B (depth lethality + swim/breach escape, PR #18) merged. Phase C (looping phase machine) + C.1 (measured-density calibration, contest-then-consume rise schedule, per-surface erosion, hull-aware log buoyancy, storm-flood terminal) in review.** Remaining: C.2 (layout), D (telegraphing), E (art pass)
+- `docs/sump-layout-redesign-proposal.md` — Phase C.2: tiers-only layout redesign (diving boards over the pit, cross-pit mid route, staggered top perches). **PROPOSED — awaiting review.**
 
 ### Implemented Features (highlights — full list in `docs/implemented/`)
 - `match-system-proposal.md` — stock lives match system with ruleset pattern

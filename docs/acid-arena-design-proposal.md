@@ -53,7 +53,7 @@ r24  ########################################  basin floor
 
 (`#` solid/collision, `=` one-way refuge ledge, `~` starting acid, `▼` spout/inlet, `S` spawn. Tier widths/positions are a starting blockout to refine in Tiled.)
 
-**On the two inlets / corner spouts (your call: pour from both corners).** The two sim inlets sit above the **basin-mouth corners** (the inner top edges of the two banks, cols ≈ 13 and 26), so each stream falls straight down into the central basin and converges in the deep — "two waterfalls into the pit." They are *not* at the far map corners (cols 1 / 38): those sit over the **solid banks**, so acid poured there would pool on the banks instead of filling the basin, breaking the basin-fill fantasy in Phase 0–1. Decorative spout *art* can still live in the far corners as set dressing; the physical inlets are at the mouth. As the flood ramps, the basin overflows the lip and *then* spreads onto the banks — that overflow is the intended "it's coming for you" beat, not an always-on state.
+**On the two inlets (functional-test correction, Phase C).** The streams pour from the **very top corners of the map** (cols 2 / 37, clear of every tier span): they fall the full arena height, land on the banks, sheet across them, and **cascade over the lips into the pit** — the pour itself is a spectacle, and the banks being wetted by it is intended (the acid is coming for everything). An earlier draft placed lip-level "wall valves" at the basin mouth to dodge the top tiers; the corrected design supersedes it. Inlet positions/velocities are pure data in `AcidConfig.Inlets`.
 
 **Why this shape:**
 
@@ -145,6 +145,15 @@ This is what reconciles "depth = death" with "there should be a way to escape": 
 *Verification:* drive a full match via the debug server; observe each phase transition and at least two loop iterations; confirm overflow-over-the-lip occurs during Rise, both inlets pour, a wave occurs during Surge, the level recedes during Drain, and surges measurably intensify loop-over-loop.
 
 *Risk — particle budget (real constraint):* `FluidConfig.MaxParticles = 5000`. A brim-full arena needs ~15 000 particles — **out of budget.** So each rise is **capped at the top-tier line**, the **drain frees particles** before the next loop re-uses them, and the **final flood caps at the top tier = the round-end trigger** — we never need to fill the whole map. Surges are transient impulses, not permanent volume. Dual inlets split the existing flow budget rather than adding to it. The cap is a design feature (rounds end decisively), not a workaround.
+
+#### Phase C.1 addendum — calibration & pacing (from the 2026-07-01 real-speed capture)
+
+The as-built Phase C was re-measured at real speed and corrected; four findings changed the design:
+
+1. **Measured particle density.** Every particles↔height conversion assumed hex packing (55.4 px²/particle); the solver actually settles at ~31 px² (`FluidConfig.EffectiveParticleArea`, pinned by a headless settle test). Under the old math no ceiling ever reached a platform in a real match. All caps/flows now derive from the measured value, and the `pacing` smoke feature asserts cap↔surface end-to-end.
+2. **Contest-then-consume rise schedule.** Contact erosion self-limits at the waterline, so a ceiling that LAPS a tier (432 across the low tiers' bodies) produces "fighting on dissolving ground," while a ceiling PAST the tops (392) shell-erodes it in ~3 s. Ceilings: 528 (banks awash) → 432 (contest lows) → 392 (consume lows). Inlet flow escalates per loop (60→222 particles/s) so every rise lands in ~30 s; the drain derives its rate at entry for a fixed ~9 s relief beat.
+3. **The terminal phase is a STORM, not a fill.** A literal full-map fill needs ~25k particles at measured density — 1.7× the budget. Instead the storm pours to a standing surface just under the mid tiers (~10.7k, in budget) while recurring high-strength crests break over the mid tiers (destroying them) and claw down the top perches — the match ends because the last footing crumbles, which also kills top-tier camping. Surge sweeps follow the live wet span (not just the basin) so crests actually reach the refuges.
+4. **Floating logs erode at their own rate with hull-tracked buoyancy.** A floater keeps fresh wood at the waterline forever (no self-limit), so logs get ~4× slower erosion (~20 s life) and buoyancy reads the surviving hull — eaten logs ride lower instead of hovering above the water. Log population now escalates with the loop (2→4): the late game gains debris as it loses tiers.
 
 ### Phase D — Telegraphing & juice (pillar 4)
 **Make every dynamic beat fair and satisfying.** All cues already exist in the codebase:

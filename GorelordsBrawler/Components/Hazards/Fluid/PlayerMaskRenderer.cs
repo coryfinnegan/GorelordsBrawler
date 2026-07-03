@@ -93,6 +93,13 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 				var player    = players[i];
 				var spriteRen = player.GetComponent<SpriteRenderer>(); // SpriteAnimator inherits SpriteRenderer
 				if (spriteRen == null || spriteRen.Sprite == null) continue;
+				// Skip players whose sprite isn't actually being drawn in the
+				// scene (dead / mid-respawn → RespawnHandler disables the
+				// SpriteRenderer). Otherwise the mask still carves a see-through
+				// window where the body would be, and since the scene there shows
+				// only the dark background, the acid renders a player-shaped HOLE
+				// of background — the "dead player leaves a silhouette" bug.
+				if (!spriteRen.Enabled) continue;
 
 				// Mirror the SpriteRenderer.Render() signature exactly so the
 				// mask aligns pixel-for-pixel with the in-scene draw. The ONLY

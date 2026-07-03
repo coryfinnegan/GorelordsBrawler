@@ -83,6 +83,40 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 			}
 		}
 
+		/// <summary>
+		/// Is there acid in the cell containing (worldX, worldY)? Point-overlap
+		/// test (WetThreshold, i.e. "any particle"). Out-of-bounds = dry.
+		/// </summary>
+		public bool IsWetAt(float worldX, float worldY)
+		{
+			int cx = (int)(worldX / CellSize);
+			int cy = (int)(worldY / CellSize);
+			if (cx < 0 || cx >= Cols || cy < 0 || cy >= Rows)
+			{
+				return false;
+			}
+			return _counts[cy * Cols + cx] >= FluidConfig.WetThreshold;
+		}
+
+		/// <summary>
+		/// Is the cell containing (worldX, worldY) occupied by a BODY of liquid
+		/// (at least <paramref name="minCount"/> particles) rather than stray
+		/// spray? The density discriminator erosion contact uses: standing
+		/// liquid at rest spacing packs ~8 particles into a 16 px cell and a
+		/// crest tongue 4–8, while airborne froth holds 1–3 — so "densely wet"
+		/// separates immersion from mist where a boolean wetness test cannot.
+		/// </summary>
+		public bool IsDenselyWetAt(float worldX, float worldY, int minCount)
+		{
+			int cx = (int)(worldX / CellSize);
+			int cy = (int)(worldY / CellSize);
+			if (cx < 0 || cx >= Cols || cy < 0 || cy >= Rows)
+			{
+				return false;
+			}
+			return _counts[cy * Cols + cx] >= minCount;
+		}
+
 		/// <summary>World Y of the topmost wet cell in the column at worldX, or MapHeight if dry.</summary>
 		public float GetSurfaceYAt(float worldX)
 		{
