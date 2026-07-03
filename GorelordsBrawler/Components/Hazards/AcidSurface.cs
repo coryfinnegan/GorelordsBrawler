@@ -80,6 +80,19 @@ namespace GorelordsBrawler.Components.Hazards
 		/// <summary>While true, the drain sluice removes particles each frame (pour should be off).</summary>
 		public bool Draining;
 
+		// Time since the last drain ended — lets surface-lag-sensitive checks
+		// (the hovering-log oracle) grace the catch-up window after a drain,
+		// when logs legitimately hang a few px above a tide that moved faster
+		// than buoyant descent.
+		private float _sinceDrainEnd = 999f;
+
+		/// <summary>
+		/// True during a drain and for the catch-up window after it (measured:
+		/// under debug-fast's 4× tides, stranded hulls take up to ~3.5 s for
+		/// the next rise to reach; real-speed lag never exceeds ~16 px).
+		/// </summary>
+		public bool DrainSettling => Draining || _sinceDrainEnd < 4f;
+
 		/// <summary>Total surges fired this match — automation oracle.</summary>
 		public int SurgeCount { get; private set; }
 
@@ -364,6 +377,15 @@ namespace GorelordsBrawler.Components.Hazards
 				_tellTimer -= dt;
 			}
 
+			if (Draining)
+			{
+				_sinceDrainEnd = 0f;
+			}
+			else if (_sinceDrainEnd < 999f)
+			{
+				_sinceDrainEnd += dt;
+			}
+
 			// Dry and not pouring — nothing to simulate, skip the per-frame work
 			// (broadphase rebuild + step) entirely.
 			if (_sim.Count == 0)
@@ -547,11 +569,26 @@ namespace GorelordsBrawler.Components.Hazards
 		/// <summary>
 		/// True if a BODY of acid (not stray spray) occupies the cell at this
 		/// world point — the erosion contact test. See
-		/// <see cref="FluidConfig.ErosionWetMinCount"/> for the density story.
+		/// <see cref="FluidConfig.BodyWetMinCount"/> for the density story.
 		/// </summary>
 		public bool IsAcidBodyAt(float worldX, float worldY)
 		{
-			return _grid?.IsDenselyWetAt(worldX, worldY, FluidConfig.ErosionWetMinCount) ?? false;
+			return _grid?.IsDenselyWetAt(worldX, worldY, FluidConfig.BodyWetMinCount) ?? false;
+		}
+
+		/// <summary>
+		/// Topmost cell holding a BODY of acid at or below the ceiling — the
+		/// waterline query for surface-anchored PHYSICS (log buoyancy, landing
+		/// checks). The threshold-1 <see cref="GetLocalSurfaceLevelAtX"/>
+		/// returns the first stray droplet, and a float spring coupled to that
+		/// reading ratchets its log into the air: an end sample inside a corner
+		/// stream's column read "waterline y≈48" and carried a log to the
+		/// ceiling (the "logs floating above the acid" bug).
+		/// </summary>
+		public float GetBodySurfaceLevelAtX(float worldX, float ceilingWorldY)
+		{
+			return _grid?.GetDenseSurfaceYAtBelow(worldX, ceilingWorldY, FluidConfig.BodyWetMinCount)
+				?? _mapHeight;
 		}
 
 		/// <summary>

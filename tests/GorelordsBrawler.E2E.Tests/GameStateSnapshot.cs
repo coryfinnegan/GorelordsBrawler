@@ -27,6 +27,9 @@ public class GameStateSnapshot
 	[JsonPropertyName("acidDraining")]   public bool   AcidDraining   { get; set; }
 	[JsonPropertyName("acidFillCap")]    public int    AcidFillCap    { get; set; }
 	[JsonPropertyName("tiersRemaining")] public int    TiersRemaining { get; set; }
+	// Phantom-waterline regression: floating logs held in AIR by a spray-
+	// contaminated surface reading. Must always be 0.
+	[JsonPropertyName("logsAirborne")]   public int    LogsAirborne   { get; set; }
 
 	// Phase B: the live damage-AABB of the acid (the ContactHazard broadphase).
 	// Lets tests prove a player was INSIDE the box while dry — the phantom-damage

@@ -299,6 +299,22 @@ namespace GorelordsBrawler.Scenes
 				exporter.RegisterProvider("acidDraining",   () => phaseManager.IsDraining);
 				exporter.RegisterProvider("acidFillCap",    () => acidSurface.ParticleCap);
 				exporter.RegisterProvider("tiersRemaining", () => tiersAlive);
+				// Phantom-waterline regression oracle: count of drop-logs whose
+				// float spring is holding them in AIR (hull bottom well above
+				// the measured surface, no acid body beneath). Must always be 0.
+				exporter.RegisterProvider("logsAirborne", () =>
+				{
+					int hovering = 0;
+					var logs = FindComponentsOfType<DynamicPlatform>();
+					for (int i = 0; i < logs.Count; i++)
+					{
+						if (logs[i].IsHoveringAboveAcid())
+						{
+							hovering++;
+						}
+					}
+					return hovering;
+				});
 				// Combat: true during a hit freeze (TimeScale=0). Lets the acid-survives-a-hit
 				// regression prove it actually drove the game through the dt=0 window.
 				exporter.RegisterProvider("hitstopActive",     () => combatEffects.IsHitstopActive);

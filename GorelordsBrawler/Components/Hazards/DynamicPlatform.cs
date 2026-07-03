@@ -37,6 +37,46 @@ namespace GorelordsBrawler.Components.Hazards
 		private float HullBottomLocal => _erodible?.SolidBottomLocalY ??  Height * 0.5f;
 		private float HullHeight      => Math.Max(4f, _erodible?.SolidHeight ?? Height);
 
+		/// <summary>
+		/// Oracle for the phantom-waterline bug: a log hanging in AIR — well
+		/// above the measured standing surface, with no body of acid directly
+		/// beneath it, AND above the solid ground at its column — is being held
+		/// up by a spray-chasing float spring. The three exclusions are each
+		/// load-bearing: a crest-riding log has dense liquid under its hull; a
+		/// log resting on drained bank ground sits AT the ground line
+		/// (_isFloating never returns to false, so "floating" alone can't tell
+		/// water from ground-rest); and during a drain the banks legitimately
+		/// hold water above the fast-dropping basin reading for a moment.
+		/// </summary>
+		public bool IsHoveringAboveAcid()
+		{
+			if (!_isFloating || Entity == null)
+			{
+				return false;
+			}
+			// The drain (+ a short catch-up window after it) is exempt: the
+			// sluice pulls the surface down faster than buoyant descent can
+			// follow (v ≈ k·lag/damping ⇒ ~9 px behind at real speed, ~30 px
+			// under debug-fast's 4× drain), the pool is deliberately non-flat
+			// (draw-down cone), and the returning rise takes a beat to catch
+			// the stranded hulls. A real spray-ratchet climb persists well past
+			// the window and is caught in the next phase.
+			if (_acid.DrainSettling)
+			{
+				return false;
+			}
+			// 96 px (3 hull heights): a spray-ratchet climb blows through this
+			// within a second and never comes back down; every legitimate
+			// transient measured (drain descent lag, post-drain catch-up while
+			// the next rise reaches stranded hulls) stays under ~76 px even at
+			// debug-fast's 4× tide speeds.
+			var pos = Entity.Transform.Position;
+			float hullBottom = pos.Y + HullBottomLocal;
+			return hullBottom < _acid.GetStandingSurfaceY() - 96f
+				&& hullBottom < Constants.AcidConfig.GroundYAt(pos.X) - 4f
+				&& !_acid.IsAcidBodyAt(pos.X, hullBottom + 8f);
+		}
+
 		/// <summary>Invoked just before the entity is destroyed, for spawn-count bookkeeping.</summary>
 		public Action OnDestroyed;
 
@@ -136,14 +176,15 @@ namespace GorelordsBrawler.Components.Hazards
 				return;
 			}
 
-			// Splash-robust landing check: scan for the surface AT OR BELOW the
-			// falling log (per-column local query). The old range query returned
-			// the TOPMOST wet cell — a stray spray droplet high in the air would
-			// read as "the surface", and the log would land on it mid-flight.
-			// Clamped by the SOLID GROUND at this column: a dry column otherwise
-			// reads "surface = map bottom" and the log tunnels through the banks.
+			// Splash-robust landing check: scan for the BODY surface AT OR BELOW
+			// the falling log. Two layers of spray-proofing, both earned by
+			// bugs: the scan starts below the log (a droplet high above once
+			// read as "the surface" and the log landed mid-flight), and it only
+			// counts DENSE cells (a droplet below it did the same). Clamped by
+			// the SOLID GROUND at this column: a dry column otherwise reads
+			// "surface = map bottom" and the log tunnels through the banks.
 			float surface = MathHelper.Min(
-				_acid.GetLocalSurfaceLevelAtX(pos.X, pos.Y),
+				_acid.GetBodySurfaceLevelAtX(pos.X, pos.Y),
 				Constants.AcidConfig.GroundYAt(pos.X));
 			if (pos.Y + HullBottomLocal >= surface)
 			{
@@ -234,13 +275,17 @@ namespace GorelordsBrawler.Components.Hazards
 				// FREE-surface samples just OUTSIDE each hull end — spray landing
 				// on the log's own back doesn't poison the query, and the hull's
 				// own displacement doesn't distort the reading (around-the-hull
-				// sampling, per the boat-water model). Acid surface and solid
-				// ground are sampled SEPARATELY: ground decides where a log rests
-				// on a dry bank; the acid decides the waterline it floats at.
+				// sampling, per the boat-water model). BODY-surface query, not
+				// threshold-1 wetness: an end sample drifting into a corner
+				// stream's column (perpetually "wet" from y≈48 down) or into
+				// crest spray fed the spring a phantom waterline and ratcheted
+				// the log to the ceiling. Acid surface and solid ground are
+				// sampled SEPARATELY: ground decides where a log rests on a dry
+				// bank; the acid decides the waterline it floats at.
 				float endOffset = Width * 0.5f + 10f;
 				float ceiling   = pos.Y - Height;
-				float acidL   = _acid.GetLocalSurfaceLevelAtX(pos.X - endOffset, ceiling);
-				float acidR   = _acid.GetLocalSurfaceLevelAtX(pos.X + endOffset, ceiling);
+				float acidL   = _acid.GetBodySurfaceLevelAtX(pos.X - endOffset, ceiling);
+				float acidR   = _acid.GetBodySurfaceLevelAtX(pos.X + endOffset, ceiling);
 				float groundY = MathHelper.Min(
 					Constants.AcidConfig.GroundYAt(pos.X - endOffset),
 					Constants.AcidConfig.GroundYAt(pos.X + endOffset));

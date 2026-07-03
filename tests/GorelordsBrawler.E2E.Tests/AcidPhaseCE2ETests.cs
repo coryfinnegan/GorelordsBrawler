@@ -225,6 +225,19 @@ public class AcidPhaseCE2ETests
 		var midsBroken = await arena.StepUntilAsync(
 			s => s.TiersRemaining <= 2, maxFrames: 4000, batch: 10);
 
+		// Phantom-waterline regression ("logs floating above the acid"): the
+		// storm is the spray-heaviest window with the full log population
+		// alive — sample repeatedly; no float spring may ever hold a log in
+		// air (end samples once read a corner stream's column, or crest spray,
+		// as the waterline and ratcheted logs to the ceiling).
+		for (int i = 0; i < 6; i++)
+		{
+			await arena.StepAsync(60);
+			var s = await arena.StateAsync();
+			s.LogsAirborne.ShouldBe(0,
+				$"log(s) hovering above the acid at storm sample {i} — the float spring is chasing spray again");
+		}
+
 		// ASSERT
 		storm.AcidPhase.ShouldBe("FinalFlood");
 		lowsEaten.TiersRemaining.ShouldBeLessThanOrEqualTo(4, "loop 2's rise must dissolve the LOW tier pair");

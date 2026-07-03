@@ -88,14 +88,17 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 		// ── Surface / damage queries ──────────────────────────────────────────
 		public const int   GridCellSize       = 16;     // px per occupancy cell
 		public const int   WetThreshold       = 1;      // particles needed to mark a cell wet
-		// Erosion contact needs a BODY of liquid, not spray: standing liquid at
-		// rest spacing packs ~8 particles into a 16 px cell, a crest tongue
-		// 4–8, airborne froth 1–3. Threshold 4 lets laps/submersion/crest
-		// washes erode while the corner streams' impact geysers (which chewed
-		// tiers 100+ px above the pool) read as mist. Damage keeps
-		// WetThreshold=1 — getting splashed should hurt players, it just
-		// shouldn't dissolve platforms.
-		public const int   ErosionWetMinCount = 4;
+		// A BODY of liquid vs stray spray: standing liquid at rest spacing
+		// packs ~8 particles into a 16 px cell, a crest tongue 4–8, airborne
+		// froth and falling streams 0–3. Threshold 4 separates them. Used by
+		// EVERYTHING that must not be fooled by droplets: erosion contact
+		// (geysers chewed tiers 100+ px above the pool) and the drop-logs'
+		// waterline/landing queries (a log whose end sample caught the corner
+		// stream's column, or crest spray, chased a phantom waterline all the
+		// way to the CEILING — the "logs floating in air" bug). Damage keeps
+		// WetThreshold=1 — getting splashed should hurt players; it just
+		// shouldn't dissolve platforms or float logs.
+		public const int   BodyWetMinCount = 4;
 		public const float DamageBoundsPadY   = 4f;
 
 		// ── Rendering ─────────────────────────────────────────────────────────
