@@ -49,14 +49,14 @@
 3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,
 3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,
 3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,
-3,2,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,3,
-3,2,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,3,
-3,2,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,3,
-3,2,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,3,
-3,2,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,3,
-3,2,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,3,
-3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,
-3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3
+3,4,6,4,6,4,6,4,6,4,6,4,7,7,0,0,0,0,0,0,0,0,0,0,0,0,7,7,6,4,6,4,6,4,6,4,6,4,6,3,
+3,5,2,5,2,5,2,5,2,5,2,5,2,8,0,0,0,0,0,0,0,0,0,0,0,0,8,5,2,5,2,5,2,5,2,5,2,5,2,3,
+3,2,5,2,5,2,5,2,5,2,5,2,5,8,0,0,0,0,0,0,0,0,0,0,0,0,8,2,5,2,5,2,5,2,5,2,5,2,5,3,
+3,5,2,5,2,5,2,5,2,5,2,5,2,8,0,0,0,0,0,0,0,0,0,0,0,0,8,5,2,5,2,5,2,5,2,5,2,5,2,3,
+3,2,5,2,5,2,5,2,5,2,5,2,5,8,0,0,0,0,0,0,0,0,0,0,0,0,8,2,5,2,5,2,5,2,5,2,5,2,5,3,
+3,5,2,5,2,5,2,5,2,5,2,5,2,8,0,0,0,0,0,0,0,0,0,0,0,0,8,5,2,5,2,5,2,5,2,5,2,5,2,3,
+3,2,5,2,5,2,5,2,5,2,5,2,5,2,7,7,7,7,7,7,7,7,7,7,7,7,5,2,5,2,5,2,5,2,5,2,5,2,5,3,
+3,5,2,5,2,5,2,5,2,5,2,5,2,5,8,8,8,8,8,8,8,8,8,8,8,8,2,5,2,5,2,5,2,5,2,5,2,5,2,3
 </data>
  </layer>
  <layer id="3" name="collision" width="40" height="25">
@@ -115,32 +115,42 @@
   </object>
  </objectgroup>
  <objectgroup id="5" name="tiers">
-  <object id="100" name="tier0" type="Tier" x="128" y="416" width="192" height="32">
+  <object id="100" name="tier0" type="Tier" x="448" y="480" width="96" height="32">
+   <properties>
+    <property name="rank" value="shallow"/>
+   </properties>
+  </object>
+  <object id="101" name="tier1" type="Tier" x="736" y="480" width="96" height="32">
+   <properties>
+    <property name="rank" value="shallow"/>
+   </properties>
+  </object>
+  <object id="102" name="tier2" type="Tier" x="128" y="416" width="192" height="32">
    <properties>
     <property name="rank" value="low"/>
    </properties>
   </object>
-  <object id="101" name="tier1" type="Tier" x="960" y="416" width="192" height="32">
+  <object id="103" name="tier3" type="Tier" x="960" y="416" width="192" height="32">
    <properties>
     <property name="rank" value="low"/>
    </properties>
   </object>
-  <object id="102" name="tier2" type="Tier" x="288" y="288" width="160" height="32">
+  <object id="104" name="tier4" type="Tier" x="352" y="288" width="128" height="32">
    <properties>
     <property name="rank" value="mid"/>
    </properties>
   </object>
-  <object id="103" name="tier3" type="Tier" x="832" y="288" width="160" height="32">
+  <object id="105" name="tier5" type="Tier" x="800" y="288" width="128" height="32">
    <properties>
     <property name="rank" value="mid"/>
    </properties>
   </object>
-  <object id="104" name="tier4" type="Tier" x="416" y="160" width="192" height="32">
+  <object id="106" name="tier6" type="Tier" x="416" y="160" width="160" height="32">
    <properties>
     <property name="rank" value="top"/>
    </properties>
   </object>
-  <object id="105" name="tier5" type="Tier" x="672" y="160" width="192" height="32">
+  <object id="107" name="tier7" type="Tier" x="704" y="160" width="160" height="32">
    <properties>
     <property name="rank" value="top"/>
    </properties>

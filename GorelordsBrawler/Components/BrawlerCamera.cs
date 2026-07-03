@@ -123,6 +123,17 @@ namespace GorelordsBrawler.Components
 				ApplyDynamicTracking();
 			}
 
+			// Telegraph rumble (Phase D): a low shake that BUILDS while the
+			// acid winds up a wave/rise — trauma fed per-frame, scaled by tell
+			// progress, so it swells toward the beat then decays naturally
+			// through the shake system. Subtle by design (juice guidance:
+			// amplitude creep reads as a bug, not a feature).
+			if (_acid != null && _acid.TellActive)
+			{
+				_shake.AddTrauma(
+					Constants.AcidConfig.TellTraumaPerSec * _acid.TellProgress * Time.DeltaTime);
+			}
+
 			ApplyShake();
 		}
 

@@ -125,7 +125,10 @@ namespace GorelordsBrawler.Systems
 			_config.FinishParticleSize = FinishSize;
 
 			float dt = Time.DeltaTime;
-			_spawnAccum += dt * SpawnsPerSec;
+			// Telegraph cue (Phase D): the pool boils harder as a wave winds up
+			// — spawn rate ramps toward TellBubbleMult× with tell progress.
+			float boil = 1f + _acid.TellProgress * (AcidConfig.TellBubbleMult - 1f);
+			_spawnAccum += dt * SpawnsPerSec * boil;
 			while (_spawnAccum >= 1f)
 			{
 				_spawnAccum -= 1f;

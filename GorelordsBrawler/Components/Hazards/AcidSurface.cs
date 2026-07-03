@@ -83,6 +83,28 @@ namespace GorelordsBrawler.Components.Hazards
 		/// <summary>Total surges fired this match — automation oracle.</summary>
 		public int SurgeCount { get; private set; }
 
+		// ── Telegraph channel (Phase D) ───────────────────────────────────────
+		// One tell state that three cues read each frame: the bubble emitter
+		// (boil harder), the liquid post-processor (meniscus pulse quickens and
+		// brightens), and the camera (building rumble). The phase machine arms
+		// it ahead of every surge, storm crest, and rise.
+		private float _tellTimer;
+		private float _tellDuration;
+
+		/// <summary>Arm the telegraph: cues ramp over the next <paramref name="seconds"/>.</summary>
+		public void BeginTell(float seconds)
+		{
+			_tellDuration = Math.Max(seconds, 0.01f);
+			_tellTimer    = _tellDuration;
+		}
+
+		/// <summary>True while a telegraph is running — automation oracle.</summary>
+		public bool TellActive => _tellTimer > 0f;
+
+		/// <summary>0 → 1 as the telegraphed beat approaches (0 when idle).</summary>
+		public float TellProgress =>
+			TellActive ? 1f - (_tellTimer / _tellDuration) : 0f;
+
 		/// <summary>Formula estimate of the pour target (geometry × measured density) — oracle + budget maths.</summary>
 		public int ParticleCap => _particleCap;
 
@@ -337,6 +359,11 @@ namespace GorelordsBrawler.Components.Hazards
 				_surgeBurstTimer -= dt;
 			}
 
+			if (_tellTimer > 0f)
+			{
+				_tellTimer -= dt;
+			}
+
 			// Dry and not pouring — nothing to simulate, skip the per-frame work
 			// (broadphase rebuild + step) entirely.
 			if (_sim.Count == 0)
@@ -544,10 +571,15 @@ namespace GorelordsBrawler.Components.Hazards
 			return _grid?.GetMinSurfaceYInRange(leftX, rightX) ?? _mapHeight;
 		}
 
-		// Probe columns for the standing-surface measurement: across the basin
-		// span, away from the corner inlet streams. Scratch buffer avoids a
-		// per-call allocation (this runs in the pour gate every frame).
-		private static readonly float[] _probeColumns = { 496f, 576f, 640f, 704f, 784f };
+		// Probe columns for the standing-surface measurement: strictly between
+		// the C.2 diving boards (spans 448-544 / 736-832) — a column passing
+		// through a board reads the splash PUDDLE sitting on it as "surface"
+		// and permanently burns one of the percentile guard's two outlier
+		// slots (measured: loop 0 stalled at its safety cap one quantum short
+		// of the ceiling). Keep these inside x 544-736 exclusive if the layout
+		// moves again. Scratch buffer avoids a per-call allocation (this runs
+		// in the pour gate every frame).
+		private static readonly float[] _probeColumns = { 560f, 600f, 640f, 680f, 720f };
 		private readonly float[] _probeScratch = new float[5];
 
 		/// <summary>

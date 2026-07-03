@@ -73,14 +73,22 @@ namespace GorelordsBrawler.Components.Hazards
 		// wherever the metaball actually laps the platform.
 		private float _passAccum;
 
+		// Phase E: optional slab texture. The renderer maps it PROPORTIONALLY
+		// onto the slab's full area (each merged rect samples its own sub-rect),
+		// so erosion reveals holes through a stable image instead of the
+		// pattern swimming as cells vanish. Null → flat baseColor (greybox).
+		private readonly Texture2D _texture;
+		internal Texture2D SlabTexture => _texture;
+
 		public ErodibleSurface(AcidSurface acid, float width, float height, Color baseColor,
-			float passesPerSec)
+			float passesPerSec, Texture2D texture = null)
 		{
 			_acid         = acid;
 			Width         = width;
 			Height        = height;
 			_baseColor    = baseColor;
 			_passesPerSec = passesPerSec;
+			_texture      = texture;
 
 			_cols  = Math.Max(1, (int)MathF.Round(width  / AcidConfig.ErosionCellSize));
 			_rows  = Math.Max(1, (int)MathF.Round(height / AcidConfig.ErosionCellSize));
@@ -387,6 +395,7 @@ namespace GorelordsBrawler.Components.Hazards
 		{
 			var topLeft = Entity.Transform.Position + _surface.LocalTopLeft;
 			var rects = _surface.MergedRects;
+			var tex = _surface.SlabTexture;
 			for (int i = 0; i < rects.Count; i++)
 			{
 				var r = rects[i];
@@ -395,7 +404,22 @@ namespace GorelordsBrawler.Components.Hazards
 					(int)MathF.Floor(topLeft.Y + r.Y * _surface.CellH),
 					(int)MathF.Ceiling(r.Width  * _surface.CellW),
 					(int)MathF.Ceiling(r.Height * _surface.CellH));
-				batcher.DrawRect(rect, _surface.BaseColor);
+
+				if (tex == null)
+				{
+					batcher.DrawRect(rect, _surface.BaseColor);
+					continue;
+				}
+
+				// Phase E: sample the sub-rect of the slab texture that this
+				// merged rect covers (proportional mapping over the WHOLE slab)
+				// — the image stays anchored while the acid carves it.
+				var src = new Rectangle(
+					(int)MathF.Floor(r.X / (float)_surface.Cols * tex.Width),
+					(int)MathF.Floor(r.Y / (float)_surface.Rows * tex.Height),
+					(int)MathF.Ceiling(r.Width  / (float)_surface.Cols * tex.Width),
+					(int)MathF.Ceiling(r.Height / (float)_surface.Rows * tex.Height));
+				batcher.Draw(tex, rect, src, Color.White);
 			}
 		}
 	}

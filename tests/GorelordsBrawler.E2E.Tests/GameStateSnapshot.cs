@@ -22,6 +22,8 @@ public class GameStateSnapshot
 	[JsonPropertyName("acidPhase")]      public string AcidPhase      { get; set; } = "";
 	[JsonPropertyName("acidLoop")]       public int    AcidLoop       { get; set; }
 	[JsonPropertyName("acidSurgeCount")] public int    AcidSurgeCount { get; set; }
+	// Phase D: true while a surge/crest/rise telegraph is running.
+	[JsonPropertyName("acidTellActive")] public bool   AcidTellActive { get; set; }
 	[JsonPropertyName("acidDraining")]   public bool   AcidDraining   { get; set; }
 	[JsonPropertyName("acidFillCap")]    public int    AcidFillCap    { get; set; }
 	[JsonPropertyName("tiersRemaining")] public int    TiersRemaining { get; set; }

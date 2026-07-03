@@ -63,6 +63,16 @@ public class AcidPhaseCE2ETests
 		var surge = await StepUntilPhaseAsync(arena, "Surge", maxFrames: 1200);
 		int surgesBefore = surge.AcidSurgeCount;
 
+		// Phase D: entering Surge opens with a TELEGRAPH — bubbles boil, the
+		// meniscus agitates, the camera rumbles — and the wave lands one tell
+		// lead later, never on the entry frame. Deterministic in stepped mode.
+		surge.AcidTellActive.ShouldBeTrue(
+			"Surge entry must arm the telegraph; the first wave lands one tell-lead later");
+		var firstWave = await arena.StepUntilAsync(
+			s => s.AcidSurgeCount > surgesBefore, maxFrames: 60, batch: 2);
+		firstWave.AcidSurgeCount.ShouldBe(surgesBefore + 1,
+			"the telegraphed wave must land within its lead window");
+
 		var drain = await StepUntilPhaseAsync(arena, "Drain", maxFrames: 1500);
 		drain.AcidSurgeCount.ShouldBeGreaterThan(surgesBefore,
 			"the Surge phase must actually fire surges before handing off");
@@ -173,16 +183,17 @@ public class AcidPhaseCE2ETests
 		await arena.TeleportAsync(player: 1, 768f, 134f);
 		await arena.StepAsync(10);   // settle onto the tier
 		int tiersAtStart = (await arena.StateAsync()).TiersRemaining;
-		tiersAtStart.ShouldBe(6, "the Sump should start with all six dissolvable tiers");
+		tiersAtStart.ShouldBe(8, "the C.2 Sump starts with eight dissolvable tiers (2 boards + 2 lows + 2 mids + 2 tops)");
 
-		// ACT 1 — CONTEST: loop 1's ceiling laps the LOW tier bodies. Contact
-		// erosion chews the wet rows and SELF-LIMITS at the waterline, so the
-		// tiers survive the whole contest loop as fighting ground. Run loop 1
-		// to its end (Drain) and assert nothing fully died.
+		// ACT 1 — loop 1's rise DROWNS the diving boards outright (the first
+		// destruction beat) and then LAPS the LOW tier bodies. Contact erosion
+		// self-limits at the waterline, so the lows survive the whole contest
+		// loop as fighting ground: at loop 1's drain, exactly the two boards
+		// are gone and everything else stands.
 		var loop1Drain = await arena.StepUntilAsync(
 			s => s.AcidPhase == "Drain" && s.AcidLoop == 1, maxFrames: 6000, batch: 10);
 		loop1Drain.TiersRemaining.ShouldBe(6,
-			"loop 1 CONTESTS the low tiers (waterline lap, self-limiting erosion) — nothing may fully dissolve yet");
+			"loop 1 takes the diving boards (fully submerged) but only CONTESTS the lows — 6 of 8 must stand at its drain");
 
 		// ACT 2 — CONSUME: loop 2's rise passes the LOW tier tops; the chewed
 		// remnants shell-erode and fall (functional-test decision: platforms

@@ -29,10 +29,18 @@ public class AcidConfigTests
 		Assert.Equal(AcidConfig.RiseCeilingMinY, AcidConfig.RiseCeilingFor(100), precision: 3);
 
 		// Loop 0: pressure without destruction — banks awash, every tier dry.
+		// The C.2 diving boards are the lowest structure (480–512) and must
+		// stay STANDING-dry through loop 0 (waves may nibble; the board's top
+		// face keeps its feet).
 		Assert.True(AcidConfig.RiseCeilingFor(0) < AcidConfig.LipY,
 			"loop 0 must wash over the banks (below the lip in Y)");
-		Assert.True(AcidConfig.RiseCeilingFor(0) > AcidConfig.LowTierBottomY,
-			"loop 0 must NOT touch the low tiers — the first loop teaches, it doesn't take");
+		Assert.True(AcidConfig.RiseCeilingFor(0) > AcidConfig.ShallowTierBottomY,
+			"loop 0's standing surface must stay under the diving boards — the first loop teaches, it doesn't take");
+
+		// Loop 1's rise DROWNS the boards outright on its way to the low tiers
+		// — the match's first destruction beat, before the low-tier contest.
+		Assert.True(AcidConfig.RiseCeilingFor(1) < AcidConfig.ShallowTierTopY,
+			"loop 1 must fully submerge the diving boards en route to the low-tier lap");
 
 		// Loop 1 CONTESTS the low tiers: waterline across the slab body, top
 		// face dry — players fight on ground that is dissolving under them.

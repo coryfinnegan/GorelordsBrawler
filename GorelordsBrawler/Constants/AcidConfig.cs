@@ -33,8 +33,11 @@ namespace GorelordsBrawler.Constants
 		public const float LipY = 544f;
 
 		// Tier surfaces the schedule is written against (tools/gen_sump_map.py):
-		// LOW tiers span y 416–448, MID 288–320, TOP 160–192. Change the map and
-		// these TOGETHER.
+		// SHALLOW diving boards span y 480–512 (overhanging the pit — the early
+		// risk/reward perch), LOW tiers 416–448, MID 288–320, TOP 160–192.
+		// Change the map and these TOGETHER.
+		public const float ShallowTierTopY    = 480f;
+		public const float ShallowTierBottomY = 512f;
 		public const float LowTierTopY    = 416f;
 		public const float LowTierBottomY = 448f;
 		public const float MidTierTopY    = 288f;
@@ -135,6 +138,21 @@ namespace GorelordsBrawler.Constants
 		/// </summary>
 		public const float FillHoldSeconds = 0.75f;
 
+		// ── Telegraphing (Phase D) ────────────────────────────────────────────
+		// Every dynamic beat announces itself so deaths feel earned, not
+		// ambushed (Brinstar shakes before its acid rises). One tell channel on
+		// AcidSurface (BeginTell/TellProgress) drives three synchronized cues:
+		// bubbles boil harder, the meniscus pulse quickens and brightens, and
+		// the camera builds a low rumble — then the wave. Kept SUBTLE per the
+		// juice guidance (trauma-based shake, brief windows): the tell is a
+		// warning, not its own light show.
+		public const float SurgeTellSeconds = 0.9f;   // lead before every surge/storm crest
+		public const float RiseTellSeconds  = 1.2f;   // rumble before each rise's valves open
+		public const float TellBubbleMult   = 4f;     // bubble spawn multiplier at full tell
+		public const float TellTraumaPerSec = 0.6f;   // camera trauma/sec at full tell progress
+		public const float TellPulseSpeed   = 5.9f;   // Hz — prime-ish ratio vs the 2.5 idle pulse
+		public const float TellPulseBoost   = 2f;     // meniscus pulse strength multiplier at full tell
+
 		/// <summary>
 		/// Drain is a BEAT, not a blink: the sluice rate is derived at drain
 		/// entry so the recession always takes about this long regardless of how
@@ -196,9 +214,15 @@ namespace GorelordsBrawler.Constants
 		public static int ScramblePlatformTargetFor(int loop) =>
 			Math.Min(2 + loop, 4);
 
-		/// <summary>Drop-log X anchors: the former LOW/MID tier centers, per side.</summary>
-		public static readonly float[] LogSpawnXLeft  = { 224f, 368f };
-		public static readonly float[] LogSpawnXRight = { 912f, 1056f };
+		/// <summary>
+		/// Drop-log X anchors: on the former LOW/MID tier spans, per side (C.2).
+		/// The mid anchors sit on the OUTER third of the old mid spans — the
+		/// centers (416/864) are directly under the new top tiers' edges, and a
+		/// falling log clips through anything in its column (DynamicPlatform
+		/// only lands on other logs and the acid).
+		/// </summary>
+		public static readonly float[] LogSpawnXLeft  = { 224f, 376f };
+		public static readonly float[] LogSpawnXRight = { 904f, 1056f };
 		public const float LogSpawnXJitter = 12f;
 
 		// Swiss-cheese erosion (ErodibleSurface): platforms are a grid of solid
@@ -253,10 +277,10 @@ namespace GorelordsBrawler.Constants
 		{
 			new Vector2(200f, 520f),    // left bank
 			new Vector2(1080f, 520f),   // right bank
-			new Vector2(368f, 260f),    // mid-left tier
-			new Vector2(912f, 260f),    // mid-right tier
-			new Vector2(512f, 134f),    // top-left tier (last dry ground in the storm)
-			new Vector2(768f, 134f),    // top-right tier
+			new Vector2(416f, 260f),    // mid-left tier (C.2: pulled inward over the pit edge)
+			new Vector2(864f, 260f),    // mid-right tier
+			new Vector2(496f, 134f),    // top-left tier (last dry ground in the storm)
+			new Vector2(784f, 134f),    // top-right tier
 		};
 		public const float RespawnClearancePx = 48f;
 
