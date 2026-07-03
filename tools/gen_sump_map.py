@@ -69,26 +69,45 @@ fill_rect(solid, 1, W - 2, 23, 24)
 fill_rect(solid, 1, 13, 17, 22)     # left bank
 fill_rect(solid, 26, 38, 17, 22)    # right bank
 
-# ── Refuge tiers (solid). Center cols 19-20 stay clear for the inlet drop. ──
-plat(4, 9, 13)      # low-left
-plat(30, 35, 13)    # low-right
-plat(9, 13, 9)      # mid-left  (sits at the basin's left lip, no overhang)
-plat(26, 30, 9)     # mid-right (sits at the basin's right lip, no overhang)
-plat(13, 18, 5)     # top-left
-plat(21, 26, 5)     # top-right   -> gap at cols 19-20 between the two top tiers
+# ── Refuge tiers — DISSOLVABLE entities, not static tiles ───────────────────
+# The acid consumes the arena tier by tier as it rises, so tiers cannot live in
+# the collision layer (static tiles can't burn). They are emitted as rects on a
+# "tiers" OBJECT layer; ArenaScene turns each into an entity with a collider +
+# a DissolvingPlatform that burns away when the acid reaches its top edge.
+# rank: "low" gates the log spawner (logs only drop once the low pair is eaten).
+TIERS = [
+    # (col0, col1, row, rank)
+    (4, 9, 13, "low"),
+    (30, 35, 13, "low"),
+    (9, 13, 9, "mid"),
+    (26, 30, 9, "mid"),
+    (13, 18, 5, "top"),
+    (21, 26, 5, "top"),
+]
 
-# ── Sanity: the inlet column (col 20) must be clear from ceiling to basin ───
-for y in range(1, 17):
-    assert (20, y) not in solid and (20, y) not in wall, \
-        f"inlet column blocked at (20,{y}) — acid could not fall into the basin"
+# ── Sanity: the corner inlet columns must be clear from ceiling to the banks ─
+# Acid pours from the TOP CORNERS of the map (cols 2 / 37, world x 72/1208),
+# falls onto the banks, and cascades over the lip into the pit. Nothing may
+# obstruct those columns above the bank tops (row 17).
+for col in (2, 37):
+    for y in range(1, 17):
+        assert (col, y) not in solid and (col, y) not in wall, \
+            f"corner inlet column blocked at ({col},{y}) — the corner stream could not reach the bank"
+    for (c0, c1, row, _rank) in TIERS:
+        assert not (c0 <= col <= c1), \
+            f"tier ({c0}-{c1} row {row}) sits under the corner inlet column {col}"
 
-# ── Spawns: on bank tops (world y just above row-17 surface at y=544) ───────
+# ── Spawns: on bank tops, CLEAR of the low refuge tiers ─────────────────────
+# The low tiers occupy x 128-320 (left) and 960-1152 (right); the old outer
+# spawns at x=200/1080 sat directly under them ("spawning under the platforms").
+# Player 1 & 2 (shipping 2-player mode use slots 0/1) go to the FAR OUTER bank
+# corners; the inner pair sits between the lip and the tier, also clear.
 SPAWN_Y = 520
 spawns = [
-    (200, SPAWN_Y),    # 0: left bank, outer
-    (1080, SPAWN_Y),   # 1: right bank, outer
-    (360, SPAWN_Y),    # 2: left bank, inner
-    (920, SPAWN_Y),    # 3: right bank, inner
+    (96,   SPAWN_Y),   # 0: P1 — far left bank corner (left of the low-left tier)
+    (1184, SPAWN_Y),   # 1: P2 — far right bank corner
+    (384,  SPAWN_Y),   # 2: inner left  (between tier-end x320 and lip x448)
+    (896,  SPAWN_Y),   # 3: inner right (between lip x832 and tier-start x960)
 ]
 for i, (sx, _sy) in enumerate(spawns):
     col = sx // TILE
@@ -131,6 +150,24 @@ def object_xml():
     return "\n".join(parts)
 
 
+def tier_object_xml():
+    parts = []
+    oid = 100
+    for i, (c0, c1, row, rank) in enumerate(TIERS):
+        x, y = c0 * TILE, row * TILE
+        w, h = (c1 - c0 + 1) * TILE, TILE
+        parts.append(
+            f'  <object id="{oid}" name="tier{i}" type="Tier" '
+            f'x="{x}" y="{y}" width="{w}" height="{h}">\n'
+            f'   <properties>\n'
+            f'    <property name="rank" value="{rank}"/>\n'
+            f'   </properties>\n'
+            f'  </object>'
+        )
+        oid += 1
+    return "\n".join(parts)
+
+
 def build_tmx():
     return f'''<?xml version="1.0" encoding="UTF-8"?>
 <map version="1.10" tiledversion="1.11.2" orientation="orthogonal" renderorder="right-down" width="{W}" height="{H}" tilewidth="{TILE}" tileheight="{TILE}" infinite="0" nextlayerid="5" nextobjectid="{len(spawns) + 1}">
@@ -152,6 +189,9 @@ def build_tmx():
  </layer>
  <objectgroup id="4" name="spawns">
 {object_xml()}
+ </objectgroup>
+ <objectgroup id="5" name="tiers">
+{tier_object_xml()}
  </objectgroup>
 </map>
 '''

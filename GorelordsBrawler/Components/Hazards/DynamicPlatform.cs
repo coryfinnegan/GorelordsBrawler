@@ -7,40 +7,54 @@ using GorelordsBrawler.Constants;
 namespace GorelordsBrawler.Components.Hazards
 {
 	/// <summary>
-	/// Platform that either falls from the sky (drop-in) or is spawned at the
-	/// acid surface (TMX float-out).
+	/// Drop-in log platform.
 	///
-	/// Drop-in lifecycle:
-	///   FALLING  — gravity until the bottom edge reaches another platform or the acid surface
-	///   FLOATING — underdamped spring; equilibrium is lower platform top or acid surface
-	///   BURNING  — alpha fade, then Entity.Destroy()
+	/// Lifecycle:
+	///   FALLING  — gravity until the hull bottom reaches another platform, the
+	///              acid surface, or dry ground
+	///   FLOATING — Archimedes buoyancy on the SURVIVING hull (see below); the
+	///              sibling ErodibleSurface chews the wetted wood until nothing
+	///              is left and the entity destroys itself
 	///
-	/// TMX lifecycle (skipFall = true):
-	///   Starts in FLOATING directly. AcidPhaseManager drives StartBurning().
+	/// Buoyancy reads the surviving-hull extent from the ErodibleSurface, not
+	/// the nominal Height: with the nominal constant, a bottom-eaten log kept
+	/// floating at full-hull depth — feeding fresh wood to the waterline
+	/// non-stop (logs died in ~5 s) and visually hovering ABOVE the water once
+	/// its wet rows were gone. Hull-tracked, the log rides lower as it thins
+	/// and the visible wood always crosses the waterline.
 	/// </summary>
 	public class DynamicPlatform : Component, IUpdatable
 	{
 		public readonly float Width;
 		public readonly float Height;
 
-		/// <summary>World Y of the top surface of this platform.</summary>
-		public float TopY => Entity != null ? Entity.Transform.Position.Y - Height * 0.5f : 0f;
+		/// <summary>World Y of the top surface of the SURVIVING hull.</summary>
+		public float TopY => Entity != null ? Entity.Transform.Position.Y + HullTopLocal : 0f;
+
+		// Surviving-hull extent (local to the entity center), nominal until the
+		// erodible sibling exists / has eaten something.
+		private float HullTopLocal    => _erodible?.SolidTopLocalY    ?? -Height * 0.5f;
+		private float HullBottomLocal => _erodible?.SolidBottomLocalY ??  Height * 0.5f;
+		private float HullHeight      => Math.Max(4f, _erodible?.SolidHeight ?? Height);
 
 		/// <summary>Invoked just before the entity is destroyed, for spawn-count bookkeeping.</summary>
 		public Action OnDestroyed;
 
-		private readonly float       _burnDuration;
 		private readonly AcidSurface _acid;
-		private readonly float       _autoBurnDelay;  // -1 = no auto-burn (TMX managed externally)
 
-		private PrototypeSpriteRenderer _renderer;
-		private bool  _isBurning;
-		private float _burnTimer;
+		private ErodibleSurface _erodible;
 
 		private bool  _isFloating;
 		private float _velocityY;
 		private float _angularVelocity;
-		private float _autoBurnAccum;
+
+		// Exponentially smoothed end-point surface samples (two-point float).
+		// Raw per-frame samples off a churning particle pool jitter by whole
+		// cells; feeding them straight into the spring made logs "bounce
+		// everywhere" (functional-test bug). NaN = not yet seeded.
+		private float _surfSmoothL = float.NaN;
+		private float _surfSmoothR = float.NaN;
+		private const float SurfaceSmoothing = 0.12f;   // per-frame lerp factor
 
 		private DynamicPlatform _platformBelow;
 
@@ -52,19 +66,12 @@ namespace GorelordsBrawler.Components.Hazards
 		private static readonly Color _baseColor = new Color(139, 90, 43);
 		private const float MaxVelocity = 600f;
 
-		/// <param name="autoBurnDelay">
-		/// Seconds after landing before auto-burn begins. Pass -1 (default) for TMX platforms
-		/// whose burn is triggered externally by AcidPhaseManager.
-		/// </param>
-		public DynamicPlatform(float width, float height, float burnDuration,
-			AcidSurface acid, bool skipFall = false, float autoBurnDelay = -1f)
+		public DynamicPlatform(float width, float height, AcidSurface acid, bool skipFall = false)
 		{
-			Width          = width;
-			Height         = height;
-			_burnDuration  = burnDuration;
-			_acid          = acid;
-			_isFloating    = skipFall;
-			_autoBurnDelay = autoBurnDelay;
+			Width       = width;
+			Height      = height;
+			_acid       = acid;
+			_isFloating = skipFall;
 		}
 
 		/// <summary>Set initial vertical velocity before the first Update fires.</summary>
@@ -75,19 +82,14 @@ namespace GorelordsBrawler.Components.Hazards
 
 		public override void OnAddedToEntity()
 		{
-			_renderer       = Entity.AddComponent(new PrototypeSpriteRenderer(Width, Height));
-			_renderer.Color = _baseColor;
-
-			var collider = Entity.AddComponent(new BoxCollider(Width, Height));
-			collider.PhysicsLayer = PhysicsLayers.Platforms;
-			collider.ShouldColliderScaleAndRotateWithTransform = false;
-		}
-
-		public void StartBurning()
-		{
-			if (_isBurning) return;
-			_isBurning = true;
-			_burnTimer = _burnDuration;
+			// Swiss-cheese erosion + per-cell collision, at the LOG rate: a
+			// floater keeps fresh hull at the waterline forever (no waterline
+			// self-limit like a static tier), so its rate is ~4× slower to give
+			// the late-game footing a ~20 s life (AcidConfig).
+			_erodible = Entity.AddComponent(new ErodibleSurface(
+				_acid, Width, Height, _baseColor,
+				AcidConfig.LogErosionPassesPerSec));
+			_erodible.OnFullyEroded = () => OnDestroyed?.Invoke();
 		}
 
 		/// <summary>External velocity impulse — used when another platform lands on top of this one.</summary>
@@ -101,18 +103,9 @@ namespace GorelordsBrawler.Components.Hazards
 		{
 			float dt = Math.Min(Time.DeltaTime, GameConstants.Physics.MaxDeltaTime);
 
-			if (_isBurning)
-			{
-				_burnTimer -= dt;
-				float t = Math.Max(0f, _burnTimer / _burnDuration);
-				_renderer.Color = Color.Lerp(Color.Transparent, _baseColor, t);
-				if (_burnTimer <= 0)
-				{
-					OnDestroyed?.Invoke();
-					Entity.Destroy();
-					return;
-				}
-			}
+			// No timed burn: the sibling ErodibleSurface eats the log cell-by-cell
+			// where the acid laps it, fires OnFullyEroded → OnDestroyed, and
+			// self-destructs. This component just handles fall + float.
 
 			var pos = Entity.Transform.Position;
 
@@ -134,19 +127,30 @@ namespace GorelordsBrawler.Components.Hazards
 
 			// Check for a floating platform below before checking the acid surface (stacking).
 			var lower = FindPlatformBelow(pos);
-			if (lower != null && pos.Y + Height * 0.5f >= lower.TopY)
+			if (lower != null && pos.Y + HullBottomLocal >= lower.TopY)
 			{
 				LandOnPlatform(lower, ref pos);
 				return;
 			}
 
-			float surface = _acid.GetSurfaceLevelInRange(
-				pos.X - Width * 0.5f, pos.X + Width * 0.5f);
-			if (pos.Y + Height * 0.5f >= surface)
+			// Splash-robust landing check: scan for the surface AT OR BELOW the
+			// falling log (per-column local query). The old range query returned
+			// the TOPMOST wet cell — a stray spray droplet high in the air would
+			// read as "the surface", and the log would land on it mid-flight.
+			// Clamped by the SOLID GROUND at this column: a dry column otherwise
+			// reads "surface = map bottom" and the log tunnels through the banks.
+			float surface = MathHelper.Min(
+				_acid.GetLocalSurfaceLevelAtX(pos.X, pos.Y),
+				Constants.AcidConfig.GroundYAt(pos.X));
+			if (pos.Y + HullBottomLocal >= surface)
 			{
 				_isFloating = true;
-				pos.Y       = surface - Height * 0.5f;
+				pos.Y       = surface - HullBottomLocal;
 				_acid.Disturb(pos.X, Width, _velocityY);
+				// The splash absorbs most of the fall energy — keep only a
+				// fraction of the plunge velocity for the float spring, so the
+				// log dips, bobs once, and settles instead of rocketing back out.
+				_velocityY *= GameConstants.Hazards.WaterEntryVelocityRetention;
 			}
 		}
 
@@ -181,7 +185,7 @@ namespace GorelordsBrawler.Components.Hazards
 		{
 			_isFloating    = true;
 			_platformBelow = lower;
-			pos.Y          = lower.TopY - Height * 0.5f;
+			pos.Y          = lower.TopY - HullBottomLocal;
 
 			// Transfer a fraction of the impact velocity into the lower platform.
 			float offsetX = pos.X - lower.Entity.Transform.Position.X;
@@ -205,29 +209,94 @@ namespace GorelordsBrawler.Components.Hazards
 
 		private void UpdateFloat(ref Vector2 pos, float dt)
 		{
-			float equilibriumY;
+			// All equilibria are written against the SURVIVING hull: as the acid
+			// eats the bottom rows the hull bottom rises in local space, so the
+			// log settles deeper (less freeboard) instead of hovering where the
+			// eaten wood used to be.
+			float hullBottom = HullBottomLocal;
+			float hullH      = HullHeight;
+			float targetTiltDeg = 0f;
+
 			if (_platformBelow != null)
 			{
-				// Stacked: sit on top of the lower platform.
-				equilibriumY = _platformBelow.TopY - Height * 0.5f;
+				// Stacked on another platform: stiff flat spring to its top.
+				float eqY  = _platformBelow.TopY - hullBottom;
+				float disp = pos.Y - eqY;
+				float force = -GameConstants.Hazards.SpringK  * disp
+				              - GameConstants.Hazards.Damping * _velocityY;
+				_velocityY += force * dt;
 			}
 			else
 			{
-				equilibriumY = _acid.GetSurfaceLevelInRange(
-					pos.X - Width * 0.5f - Fluid.FluidConfig.SurfacePadding,
-					pos.X + Width * 0.5f + Fluid.FluidConfig.SurfacePadding) - Height * 0.5f;
+				// FREE-surface samples just OUTSIDE each hull end — spray landing
+				// on the log's own back doesn't poison the query, and the hull's
+				// own displacement doesn't distort the reading (around-the-hull
+				// sampling, per the boat-water model). Acid surface and solid
+				// ground are sampled SEPARATELY: ground decides where a log rests
+				// on a dry bank; the acid decides the waterline it floats at.
+				float endOffset = Width * 0.5f + 10f;
+				float ceiling   = pos.Y - Height;
+				float acidL   = _acid.GetLocalSurfaceLevelAtX(pos.X - endOffset, ceiling);
+				float acidR   = _acid.GetLocalSurfaceLevelAtX(pos.X + endOffset, ceiling);
+				float groundY = MathHelper.Min(
+					Constants.AcidConfig.GroundYAt(pos.X - endOffset),
+					Constants.AcidConfig.GroundYAt(pos.X + endOffset));
+
+				if (float.IsNaN(_surfSmoothL))
+				{
+					_surfSmoothL = acidL;
+					_surfSmoothR = acidR;
+				}
+				_surfSmoothL = MathHelper.Lerp(_surfSmoothL, acidL, SurfaceSmoothing);
+				_surfSmoothR = MathHelper.Lerp(_surfSmoothR, acidR, SurfaceSmoothing);
+				float waterline = (_surfSmoothL + _surfSmoothR) * 0.5f;
+
+				// Floating when the acid would hold the log ABOVE the ground it
+				// would otherwise rest on (the buoyant equilibrium sits higher
+				// than the dry-rest equilibrium).
+				float restDepth   = hullH * GameConstants.Hazards.BuoyancyRestFraction;
+				float buoyantEqY  = waterline + restDepth - hullBottom;   // center Y at rest, hull partly under
+				float groundEqY   = groundY - hullBottom;
+				bool  floating    = buoyantEqY < groundEqY - 1f;
+
+				if (floating)
+				{
+					// ── Archimedes buoyancy ──────────────────────────────────
+					// Buoyant force ∝ submerged depth; gravity balances it at
+					// restDepth submerged, so the log settles PARTIALLY UNDER the
+					// waterline (it crosses the hull) instead of perched on top.
+					// Damped so it dips on entry, bobs once, and comes to rest.
+					float depth = (pos.Y + hullBottom) - waterline;   // >0 = hull bottom below surface
+					float k     = GameConstants.Hazards.BuoyancyGravity / restDepth;
+					float accel = k * (restDepth - depth)
+					            - GameConstants.Hazards.BuoyancyDamping * _velocityY;
+					_velocityY += accel * dt;
+
+					// Tilt rides the acid slope while afloat.
+					targetTiltDeg = MathHelper.ToDegrees(
+						MathF.Atan2(_surfSmoothR - _surfSmoothL, endOffset * 2f));
+				}
+				else
+				{
+					// Rest flat ON dry ground (stiff spring to the ground top).
+					float disp = pos.Y - groundEqY;
+					float force = -GameConstants.Hazards.SpringK  * disp
+					              - GameConstants.Hazards.Damping * _velocityY;
+					_velocityY += force * dt;
+				}
+
+				targetTiltDeg = MathHelper.Clamp(targetTiltDeg,
+					-GameConstants.Hazards.MaxTiltDegrees,
+					 GameConstants.Hazards.MaxTiltDegrees);
 			}
 
-			float displacement = pos.Y - equilibriumY;
-			float force        = -GameConstants.Hazards.SpringK  * displacement
-			                     - GameConstants.Hazards.Damping * _velocityY;
-			_velocityY += force * dt;
-			_velocityY  = MathHelper.Clamp(_velocityY, -MaxVelocity, MaxVelocity);
-			pos.Y      += _velocityY * dt;
+			_velocityY = MathHelper.Clamp(_velocityY, -MaxVelocity, MaxVelocity);
+			pos.Y     += _velocityY * dt;
 
-			// Angular tilt (visual only — collider stays axis-aligned)
+			// Angular spring toward the SURFACE SLOPE (not toward level) —
+			// visual only, the collider stays axis-aligned.
 			float rotDeg = Entity.Transform.RotationDegrees;
-			_angularVelocity += (-GameConstants.Hazards.AngularSpringK * rotDeg
+			_angularVelocity += (GameConstants.Hazards.AngularSpringK * (targetTiltDeg - rotDeg)
 			                     - GameConstants.Hazards.AngularDamping * _angularVelocity) * dt;
 			rotDeg += _angularVelocity * dt;
 			rotDeg  = MathHelper.Clamp(rotDeg,
@@ -236,14 +305,6 @@ namespace GorelordsBrawler.Components.Hazards
 			Entity.Transform.RotationDegrees = rotDeg;
 
 			CheckPlayerContacts(pos);
-
-			// Drop-in auto-burn: count from first landing moment.
-			if (_autoBurnDelay >= 0 && !_isBurning)
-			{
-				_autoBurnAccum += dt;
-				if (_autoBurnAccum >= _autoBurnDelay)
-					StartBurning();
-			}
 		}
 
 		// ── Player contact / landing impulse ─────────────────────────────────
@@ -255,7 +316,7 @@ namespace GorelordsBrawler.Components.Hazards
 			_currContacts = tmp;
 			_currContacts.Clear();
 
-			float topY = pos.Y - Height * 0.5f;
+			float topY = pos.Y + HullTopLocal;
 			var sensor = new RectangleF(pos.X - Width * 0.5f, topY - 3f, Width, 6f);
 			int count  = Physics.OverlapRectangleAll(ref sensor, _playerSensor, PhysicsLayers.Player);
 

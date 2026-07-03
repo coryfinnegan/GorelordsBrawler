@@ -39,7 +39,7 @@ namespace Fluid.Tests
 				return;
 			}
 
-			int[] counts = { 500, 1000, 1223, 2000, 3000, 5000, 8000, 10000 };
+			int[] counts = { 500, 1000, 1223, 2000, 3000, 5000, 8000, 10000, 15000, 18000 };
 			const float dt      = 1f / 60f;
 			const int   warmup  = 60;
 			const int   measure = 300;

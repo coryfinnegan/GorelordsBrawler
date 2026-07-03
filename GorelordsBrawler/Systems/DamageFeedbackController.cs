@@ -39,8 +39,11 @@ namespace GorelordsBrawler.Systems
 	public class DamageFeedbackController : Component, IUpdatable
 	{
 		// ── Shake (per acid damage tick) ──────────────────────────────────
+		// 0.10 (was 0.30): with the Phase-C flood both players tick damage
+		// near-constantly, and per-tick trauma at 0.30 compounded into a
+		// permanent heavy shake (functional-test: "way too intense").
 		[Inspectable, Range(0f, 1f)]
-		public float AcidTickShakeIntensity = 0.30f;
+		public float AcidTickShakeIntensity = 0.10f;
 
 		// ── Vignette ──────────────────────────────────────────────────────
 		[Inspectable, Range(0.3f, 1.5f)]
@@ -49,11 +52,16 @@ namespace GorelordsBrawler.Systems
 		[Inspectable, Range(0.01f, 1.0f)]
 		public float VignetteSoftness = 0.40f;
 
+		// 0.45 / 0.40 (were 0.85 / 0.60): under flood pressure someone is
+		// almost always low, so the old values kept the screen ringed in
+		// near-opaque red for whole stretches (functional-test: "too
+		// intense"). Engage later, peak softer — danger reads, play stays
+		// visible.
 		[Inspectable, Range(0f, 1f)]
-		public float VignetteMaxIntensity = 0.85f;
+		public float VignetteMaxIntensity = 0.45f;
 
 		[Inspectable, Range(0f, 1f)]
-		public float VignetteEngagesBelowHpRatio = 0.60f;
+		public float VignetteEngagesBelowHpRatio = 0.40f;
 
 		[Inspectable]
 		public Color VignetteColorAtEngage = Color.Black;

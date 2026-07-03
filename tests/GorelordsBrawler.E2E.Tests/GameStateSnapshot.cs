@@ -9,10 +9,22 @@ public class GameStateSnapshot
 	[JsonPropertyName("time")]              public float Time              { get; set; }
 	[JsonPropertyName("acidActive")]        public bool  AcidActive        { get; set; }
 	[JsonPropertyName("acidLevel")]         public int   AcidLevel         { get; set; }
+	// MEASURED standing surface (median basin-center probes) — assert fill
+	// ceilings against THIS; acidLevel above is the legacy volumetric estimate,
+	// geometry-blind for a basin-shaped pool.
+	[JsonPropertyName("acidSurfaceY")]      public int   AcidSurfaceY      { get; set; }
 	[JsonPropertyName("acidSpeed")]         public float AcidSpeed         { get; set; }
 	[JsonPropertyName("acidParticleCount")] public int   AcidParticleCount { get; set; }
 	[JsonPropertyName("acidFinite")]        public bool  AcidFinite        { get; set; } = true;
 	[JsonPropertyName("hitstopActive")]     public bool  HitstopActive     { get; set; }
+
+	// Phase C: the phase machine's observable state.
+	[JsonPropertyName("acidPhase")]      public string AcidPhase      { get; set; } = "";
+	[JsonPropertyName("acidLoop")]       public int    AcidLoop       { get; set; }
+	[JsonPropertyName("acidSurgeCount")] public int    AcidSurgeCount { get; set; }
+	[JsonPropertyName("acidDraining")]   public bool   AcidDraining   { get; set; }
+	[JsonPropertyName("acidFillCap")]    public int    AcidFillCap    { get; set; }
+	[JsonPropertyName("tiersRemaining")] public int    TiersRemaining { get; set; }
 
 	// Phase B: the live damage-AABB of the acid (the ContactHazard broadphase).
 	// Lets tests prove a player was INSIDE the box while dry — the phantom-damage

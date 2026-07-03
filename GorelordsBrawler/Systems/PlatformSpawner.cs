@@ -6,28 +6,30 @@ using GorelordsBrawler.Constants;
 namespace GorelordsBrawler.Systems
 {
 	/// <summary>
-	/// Spawns log platforms from above once the acid has reached the top platform.
-	/// Drops exactly one new log whenever only one (or zero) logs remain, after a
-	/// brief interval so the player always has a landing target.
+	/// Spawns log platforms from above once the acid has mostly eaten the LOW
+	/// tier pair. Keeps the live-log population at the PER-LOOP target
+	/// (AcidConfig.ScramblePlatformTargetFor — 2 early, up to 4 late, so the
+	/// arena transforms into a debris field as static footing dissolves), with
+	/// a sporadic stagger between replacement drops.
 	/// </summary>
 	public class PlatformSpawner : SceneComponent
 	{
-		private readonly float _minX;
-		private readonly float _maxX;
 		private readonly float _platWidth;
 		private readonly float _platHeight;
+
+		/// <summary>Live escalation loop (wired to AcidPhaseManager.Loop by ArenaScene).</summary>
+		public System.Func<int> LoopProvider;
 
 		private AcidSurface _acid;
 		private bool  _active;
 		private int   _totalTrackedCount;
 		private bool  _spawnPending;
 		private float _spawnTimer;
+		private bool  _nextDropLeft = true;   // alternate sides so logs never clump
 
 		public PlatformSpawner(int mapWidth, int mapHeight)
 		{
-			_minX       = GameConstants.Hazards.PlatformSpawnMinX * mapWidth;
-			_maxX       = GameConstants.Hazards.PlatformSpawnMaxX * mapWidth;
-			_platWidth  = GameConstants.Hazards.PlatformWidth     * mapWidth;
+			_platWidth  = GameConstants.Hazards.PlatformWidth * mapWidth;
 			_platHeight = GameConstants.Hazards.PlatformHeight;
 		}
 
@@ -53,11 +55,19 @@ namespace GorelordsBrawler.Systems
 		{
 			if (!_active) return;
 
-			// Queue a new drop whenever only one (or zero) logs are alive.
-			if (_totalTrackedCount <= 1 && !_spawnPending)
+			// Keep the platform population at the PER-LOOP target: 2 logs the
+			// loop the tiers start falling, growing to 4 by the storm — the
+			// late game gains moving footing as the static footing dies
+			// (subtraction → transformation). Replacements queue with a
+			// SPORADIC stagger (functional-test decision) so drops feel like
+			// debris falling in, not a metronome.
+			int target = AcidConfig.ScramblePlatformTargetFor(LoopProvider?.Invoke() ?? 0);
+			if (_totalTrackedCount < target && !_spawnPending)
 			{
 				_spawnPending = true;
-				_spawnTimer   = GameConstants.Hazards.PlatformSpawnInterval;
+				_spawnTimer   = Random.Range(
+					AcidConfig.PlatformDropStaggerMin,
+					AcidConfig.PlatformDropStaggerMax) * AcidConfig.TimeScale();
 			}
 
 			if (!_spawnPending) return;
@@ -71,16 +81,21 @@ namespace GorelordsBrawler.Systems
 
 		private void SpawnPlatform()
 		{
-			float x = Random.Range(_minX, _maxX);
+			// Side-alternating drops anchored at the dissolved tiers' former X
+			// positions (functional-test correction: random full-width spawns
+			// clumped logs mid-air; the logs should arrive where platforms used
+			// to live, one side then the other).
+			var slots = _nextDropLeft ? AcidConfig.LogSpawnXLeft : AcidConfig.LogSpawnXRight;
+			_nextDropLeft = !_nextDropLeft;
+			float x = slots[Random.Range(0, slots.Length)]
+			        + Random.Range(-AcidConfig.LogSpawnXJitter, AcidConfig.LogSpawnXJitter);
 			float y = GameConstants.Hazards.PlatformFallSpawnY;
 
 			var entity = Scene.CreateEntity("platform-drop");
 			entity.Transform.Position = new Vector2(x, y);
 
 			var platform = entity.AddComponent(
-				new DynamicPlatform(_platWidth, _platHeight,
-					GameConstants.Hazards.PlatformBurnDuration, _acid,
-					autoBurnDelay: GameConstants.Hazards.PlatformBurnDelay));
+				new DynamicPlatform(_platWidth, _platHeight, _acid));
 
 			Track(platform);
 		}

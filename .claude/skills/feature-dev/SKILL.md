@@ -100,7 +100,8 @@ Honest-test rules (each learned the hard way):
 ## 5. E2E recipes — the write channel
 
 The debug server drives REAL gameplay (Debug builds, `DebugAutomation: true` —
-`GameDriver` writes the right appsettings next to the exe automatically):
+`GameDriver` injects this and the other debug flags as `GLB_*` env vars on the
+game's child process automatically; `AppSettings` overlays them on its config):
 `POST /input` (per-player buttons/axes), `POST /step` (exactly N fixed-dt frames),
 `POST /run` (free|stepped), `POST /teleport`, `POST /damage`. Tests go through the
 Page Object Model — `ArenaPage` / `PlayerObject` — with Shouldly + ARRANGE/ACT/ASSERT.
@@ -156,9 +157,10 @@ pwsh .claude/skills/smoke-test/smoke_test.ps1 -Feature acid [-NoBuild] [-OpenIde
 Gotchas: changed arena geometry or movement/hazard mechanics ⇒ **run the full E2E
 assembly**, not just your new class (Phase A skipped it and silently broke a
 legacy test whose scenario the new geometry made impossible). The smoke harness
-and `GameDriver` both overwrite the *output-dir* `appsettings.json`; the tracked
-source file must stay clean — `git diff GorelordsBrawler/appsettings.json` before
-committing.
+and `GameDriver` inject debug flags as `GLB_*` env vars on the game's child
+process — neither writes `appsettings.json`, so a manual run always reads the
+player's own (keyboard-default) config and `git diff GorelordsBrawler/appsettings.json`
+stays clean on its own (`AppSettings.Load()` overlays the env vars on top of the file).
 
 ## 7. Definition of done (the pre-PR checklist)
 

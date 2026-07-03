@@ -16,7 +16,43 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 		public const float ParticleMass       = 1f;
 		public const float Gravity            = 1200f; // px/s²
 		public const int   SolverIterations   = 3;     // paper
-		public const int   MaxParticles       = 5000;
+		// 18000: sized for the terminal storm-flood, which SUBMERGES the mid
+		// tiers — the closed-loop fill holds the real surface at y=272, which
+		// takes ~15.3k particles at the real storm-depth density incl. airborne
+		// spray (measured 2026-07-02: a 15.3k safety stop was hit exactly and
+		// starved the far mid tier). 0.9 × 18k = 16.2k pour headroom + solver
+		// margin above that. Parallel solver cost is ~linear in N — measured
+		// (Release, i9-13900K) 10k = 12% of a 60 fps frame; the FluidBenchmark
+		// table includes a 17000 row; a real-speed Debug session held 12.2k at
+		// 60 fps with no sag (2026-07-01 capture) and the storm capture
+		// re-verifies at true peak. AcidConfigTests pins the budget invariant
+		// so retuning can't silently blow it.
+		public const int   MaxParticles       = 18000;
+
+		/// <summary>
+		/// MEASURED standing area per particle (px²) of the settled pool — the
+		/// single source of truth for every particles↔fill-height conversion
+		/// (pour caps, inlet flow, pre-fill packing).
+		///
+		/// Why it is neither of the two "theoretical" values previously used:
+		///   hex-pack at 2r  → 55.4 px²  (what ParticleCapForCeiling assumed)
+		///   π·r²            → 50.3 px²  (what the pour conversion assumed)
+		/// The solver CALIBRATES ρ₀ on a hex grid at spacing 2r, but the DYNAMIC
+		/// equilibrium under gravity settles ~2× denser (3 constraint iterations
+		/// leave residual hydrostatic compression; sCorr changes effective
+		/// spacing). With the old 55.4 assumption every fill ceiling landed ~½
+		/// its intended height above the lip — in a real-speed match the acid
+		/// never reached a single platform (2026-07-01 timeline capture).
+		///
+		/// 31.0 = the arena-width, mid-depth settled value (headless measurement,
+		/// FluidCalibrationTests). Density varies ±10% with pool depth (35.4 at
+		/// 80 px deep → 28.3 at 220 px — residual hydrostatic compression), so
+		/// AcidConfig's lap/delete ceilings carry 16–24 px margins to stay
+		/// correct across the spread. Pinned by Settled_Pool_Stands_At_The_
+		/// Calibrated_Density; re-measure with FLUID_CALIB=1 after solver
+		/// retunes.
+		/// </summary>
+		public const float EffectiveParticleArea = 31.0f;
 
 		// ── PBF tuning ────────────────────────────────────────────────────────
 		// NOTE: these are calibrated for the NORMALIZED kernels used by
@@ -52,6 +88,14 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 		// ── Surface / damage queries ──────────────────────────────────────────
 		public const int   GridCellSize       = 16;     // px per occupancy cell
 		public const int   WetThreshold       = 1;      // particles needed to mark a cell wet
+		// Erosion contact needs a BODY of liquid, not spray: standing liquid at
+		// rest spacing packs ~8 particles into a 16 px cell, a crest tongue
+		// 4–8, airborne froth 1–3. Threshold 4 lets laps/submersion/crest
+		// washes erode while the corner streams' impact geysers (which chewed
+		// tiers 100+ px above the pool) read as mist. Damage keeps
+		// WetThreshold=1 — getting splashed should hurt players, it just
+		// shouldn't dissolve platforms.
+		public const int   ErosionWetMinCount = 4;
 		public const float DamageBoundsPadY   = 4f;
 
 		// ── Rendering ─────────────────────────────────────────────────────────
@@ -104,9 +148,13 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 		// which only did a weak additive green tint and didn't actually read
 		// as "underwater" (review feedback: "looks like you are just
 		// rendering the sprite on top of the acid").
-		public const float LiquidPlayerDesaturation = 0.5f;  // 50% toward grey
-		public const float LiquidPlayerCast         = 0.9f;  // strong green pull
-		public const float LiquidPlayerDarken       = 0.75f; // 25% darker (depth absorption)
+		// Softened after functional testing: at 0.5/0.9/0.75 a submerged sprite
+		// read as near-invisible green mush whenever field noise brushed it.
+		// The deep-field gate in liquid.fx fixes WHERE the filter applies;
+		// these fix HOW HARD it hits when it legitimately does.
+		public const float LiquidPlayerDesaturation = 0.35f; // toward grey
+		public const float LiquidPlayerCast         = 0.6f;  // green pull
+		public const float LiquidPlayerDarken       = 0.85f; // 15% darker (depth absorption)
 
 		// ── Surface "alive" pulse (Phase 1 of acid-deadly-polish-plan) ────────
 		// Animates the brightness of the surface highlight in liquid.fx so the
@@ -140,11 +188,8 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 		/// <summary>Despawn particles whose Y exceeds mapHeight + this value.</summary>
 		public const float DespawnBelowMargin = 100f;
 
-		/// <summary>
-		/// Once CurrentLevel passes (above) this Y the inlet stops spawning. Used to
-		/// cap the working-set particle count when the acid mechanic is effectively
-		/// complete (top platform submerged).
-		/// </summary>
-		public const float InletStopMargin    = 32f;    // px above topPlatformY
+		// (InletStopMargin removed — the volumetric inlet-stop it served was
+		// replaced by geometry-derived particle caps in Phase A, now ceiling-
+		// parametric via AcidConfig.ParticleCapForCeiling.)
 	}
 }

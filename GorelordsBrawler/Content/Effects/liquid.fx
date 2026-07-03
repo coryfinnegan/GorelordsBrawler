@@ -110,13 +110,19 @@ float4 LiquidPS(float2 uv : TEXCOORD0) : COLOR
     float bodyMaskAfterPlayer = bodyMask * lerp(1.0, 1.0 - PlayerMaskStrength, playerMask);
 
     // UNDERWATER color filter applied to the scene where the player is
-    // SUBMERGED — gated by `playerMask * bodyMask` so dry players (no acid
-    // above them) are not tinted green. Three composable steps modelled on
-    // real underwater photography:
+    // SUBMERGED — gated by the player mask AND a DEEP-field test. Gating on
+    // bodyMask alone made flying spray count as "underwater": with the corner
+    // streams, stray droplets crossing a player's upper body flickered the
+    // full tint on/off and the above-surface half of the sprite vanished into
+    // green mush (functional-test bug). deepField only reaches 1 well past
+    // the solid threshold — i.e. inside the risen BODY of acid — so spray
+    // never tints, and a half-submerged sprite keeps its dry half readable.
+    // Three composable steps modelled on real underwater photography:
     //   1. Desaturate toward luminance grey (water bleeds colors uniform)
     //   2. Multiplicative green CAST (acid's hue dyes everything green)
     //   3. Darken (light is absorbed with depth)
-    float submerged = playerMask * bodyMask;
+    float deepField = smoothstep(ThresholdMax, ThresholdMax + 0.30, fieldA);
+    float submerged = playerMask * deepField;
     float lum = dot(scene.rgb, float3(0.299, 0.587, 0.114));
     float3 desat = lerp(scene.rgb, float3(lum, lum, lum), submerged * PlayerDesaturation);
     // Cast: scale toward a green-dominant multiplier (R↓, G↑ slightly, B↓).

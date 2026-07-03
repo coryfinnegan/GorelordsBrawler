@@ -608,6 +608,29 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 		// External effects (called by AcidSurface façade)
 		// ──────────────────────────────────────────────────────────────────────
 
+		/// <summary>
+		/// Despawn up to <paramref name="maxCount"/> particles inside the rect —
+		/// the drain sluice (Phase C). SERIAL, main-thread only: Despawn swaps
+		/// with the last alive particle and mutates Count, exactly like
+		/// DespawnOffscreen. Gravity/pressure feed the hole, so removing the
+		/// bottom layer makes the whole pool visibly recede with no fake forces.
+		/// Returns how many were removed.
+		/// </summary>
+		public int DespawnInRect(float left, float top, float width, float height, int maxCount)
+		{
+			float right = left + width, bottom = top + height;
+			int removed = 0;
+			for (int i = Count - 1; i >= 0 && removed < maxCount; i--)
+			{
+				if (Px[i] >= left && Px[i] <= right && Py[i] >= top && Py[i] <= bottom)
+				{
+					Despawn(i);
+					removed++;
+				}
+			}
+			return removed;
+		}
+
 		/// <summary>Add downward (or arbitrary) velocity impulse to particles within radius of worldPos.</summary>
 		public void ApplyImpulseInRadius(Vector2 worldPos, float radius, Vector2 impulse)
 		{

@@ -60,23 +60,49 @@ namespace GorelordsBrawler.Components.Hazards
 		private FluidOccupancyGrid  _grid;
 		private FluidRenderer       _renderer;
 
-		// Inlet geometry (derived in ctor from GameConstants.Hazards.Platforms)
-		private readonly float _inletX;
-		private readonly float _topPlatformY;
-		private readonly float _flowRatePerSec;       // pixel-area / sec
-		private float          _inletAccum;          // fractional carry for spawn rate
-		private float          _smoothedLevelY;       // exponentially smoothed CurrentLevel
+		// Pour plumbing. Inlet positions/velocities live in AcidConfig.Inlets
+		// (dual ceiling-corner streams); the TOTAL flow (particles/sec) is split
+		// evenly across them so adding inlets never adds volume. The rate is
+		// re-targeted per loop by AcidPhaseManager (AcidConfig.InletFlowFor) so
+		// every rise lands in ~30 s despite the caps growing loop over loop.
+		private float _particlesPerSec = AcidConfig.InletFlowFor(0);
+		private float _inletAccum;            // fractional carry for spawn rate
+		private float _smoothedLevelY;        // exponentially smoothed CurrentLevel
+
+		// Phase-C state driven by AcidPhaseManager.
+		private float _fillCeilingY;
+		private int   _particleCap;       // formula estimate for the ceiling (oracle + budget maths)
+		private int   _safetyCap;         // hard pour stop — the closed loop's overrun guard
+		private float _surgeBurstTimer;   // pour burst window after TriggerSurge
+		private float _drainAccum;        // fractional carry for drain rate
+		private float _drainRatePerSec;   // derived at BeginDrain for a fixed-duration recession
+
+		/// <summary>While true, the drain sluice removes particles each frame (pour should be off).</summary>
+		public bool Draining;
+
+		/// <summary>Total surges fired this match — automation oracle.</summary>
+		public int SurgeCount { get; private set; }
+
+		/// <summary>Formula estimate of the pour target (geometry × measured density) — oracle + budget maths.</summary>
+		public int ParticleCap => _particleCap;
+
+		/// <summary>
+		/// True once the pool stands at its target: the fill is CLOSED-LOOP on
+		/// the MEASURED standing surface, because the settled density varies
+		/// ~±10% with pool depth and any fixed count target chronically under-
+		/// or over-shoots deep ceilings (the storm missed its mid-tier mark by
+		/// 30–50 px at every constant we tried). The count-based safety cap
+		/// still backstops a broken surface probe.
+		/// </summary>
+		public bool AtFillCap => _sim != null
+			&& (_sim.Count >= _safetyCap
+				|| (_sim.Count > 0 && GetStandingSurfaceY() <= _fillCeilingY));
 
 		private readonly System.Random _rng = new System.Random(0xACED);
 
 		// Pre-fill request (deferred until OnAddedToEntity, when _sim exists).
 		private bool  _preFillRequested;
 		private float _pfLeft, _pfRight, _pfTop, _pfBottom;
-
-		// Inlet fill cap: max live particles the inlet will pour up to, derived
-		// from basin geometry in OnAddedToEntity. Bounds the working set so the
-		// basin fills to ~the lip and stops, instead of running to MaxParticles.
-		private int _inletParticleCap;
 
 		private static readonly Color _acidColor = new Color((byte)60, (byte)180, (byte)40, (byte)200);
 
@@ -85,33 +111,18 @@ namespace GorelordsBrawler.Components.Hazards
 			_mapWidth  = mapWidth;
 			_mapHeight = mapHeight;
 
-			// Find top platform (min cy) — inlet goes above its center.
-			float minCy = float.MaxValue;
-			(float cx, float cy, float w) top = (0.5f, 0.5f, 0.25f);
-			foreach (var p in GameConstants.Hazards.Platforms)
-			{
-				if (p.cy < minCy)
-				{
-					minCy = p.cy;
-					top = p;
-				}
-			}
-
-			_inletX        = top.cx * mapWidth;
-			_topPlatformY  = top.cy * mapHeight - GameConstants.Hazards.PlatformHeight * 0.5f;
-
-			// Flow rate (px²/sec) to match the legacy renderer's nominal rise speed.
-			// With AcidRiseSpeed=0.0025 and the 1280×800 map (× DebugFastAcid×4):
-			//   risePxSec = 0.0025 * 800 * speedMult = 2 (or 8) px/s
-			//   flowRate  = risePxSec * mapWidth     = 2560 (or 10240) px²/s
-			// Translated to particles/sec by dividing by π·r² area per particle.
-			float speedMult  = AppSettings.DebugFastAcid
-				? GameConstants.Hazards.AcidDebugRiseMultiplier : 1f;
-			float risePxSec  = GameConstants.Hazards.AcidRiseSpeed * mapHeight * speedMult;
-			_flowRatePerSec  = risePxSec * mapWidth;
-
 			_smoothedLevelY = mapHeight;
 			CurrentLevel    = mapHeight;
+		}
+
+		/// <summary>
+		/// Re-target the pour rate (particles/sec, split across the inlets).
+		/// Driven per loop by AcidPhaseManager from AcidConfig.InletFlowFor —
+		/// the flow escalates with the caps so every rise lands in ~30 s.
+		/// </summary>
+		public void SetInletFlow(float particlesPerSec)
+		{
+			_particlesPerSec = particlesPerSec;
 		}
 
 		public override void OnAddedToEntity()
@@ -133,17 +144,10 @@ namespace GorelordsBrawler.Components.Hazards
 
 			_grid = new FluidOccupancyGrid(_mapWidth, _mapHeight, FluidConfig.GridCellSize);
 
-			// Geometry-derived inlet cap: how many particles fill the basin from
-			// its floor up to the fill ceiling. PBF settles to ~hex packing, so
-			// each particle's footprint is (2r)²·(√3/2). This REPLACES the old
-			// volumetric inlet-stop (CurrentLevel < topPlatformY + margin), which
-			// assumed the acid spreads across the full map width — wrong by ~3×
-			// for the narrow basin, so it never tripped and the pool ran to the
-			// 5000 hard cap, flooding the arena and tanking FPS.
-			float fillArea    = (GameConstants.Hazards.BasinRightX - GameConstants.Hazards.BasinLeftX)
-			                  * (GameConstants.Hazards.BasinFloorY  - GameConstants.Hazards.BasinFillCeilingY);
-			float perParticle = 4f * FluidConfig.ParticleRadius * FluidConfig.ParticleRadius * 0.8660254f;
-			_inletParticleCap = (int)(fillArea / perParticle);
+			// Geometry-derived pour cap (the Phase-A fix, now ceiling-parametric):
+			// AcidPhaseManager re-targets the ceiling per phase/loop; until it
+			// does, default to the Phase-A basin rest target.
+			SetFillCeiling(GameConstants.Hazards.BasinFillCeilingY);
 
 			_renderer = Entity.AddComponent(new FluidRenderer(_sim, _mapWidth, _mapHeight, _acidColor));
 
@@ -157,6 +161,94 @@ namespace GorelordsBrawler.Components.Hazards
 		}
 
 		public void Activate() => IsRising = true;
+
+		/// <summary>Stop the inlets (used by the Drain phase; Draining handles removal).</summary>
+		public void StopPour() => IsRising = false;
+
+		/// <summary>
+		/// Start a fixed-DURATION drain toward <paramref name="ceilingY"/>: the
+		/// sluice rate is derived from the live surplus so the recession always
+		/// takes ~<paramref name="durationSeconds"/> (already time-scaled by the
+		/// caller) regardless of how much the loop poured — a fixed rate made
+		/// loop 0's "relief beat" a 2.7 s blink while loop 2's would have taken
+		/// nearly a minute.
+		/// </summary>
+		public void BeginDrain(float ceilingY, float durationSeconds)
+		{
+			int target       = AcidConfig.ParticleCapForCeiling(ceilingY);
+			int surplus      = Math.Max(0, ParticleCount - target);
+			_drainRatePerSec = surplus / Math.Max(0.1f, durationSeconds);
+			Draining         = true;
+		}
+
+		/// <summary>
+		/// Re-target how high the pour fills the vessel. The pour then runs
+		/// closed-loop on the MEASURED standing surface (see AtFillCap /
+		/// SpawnInlet); the geometry-derived count (AcidConfig.
+		/// ParticleCapForCeiling) becomes the estimate the oracle reports and,
+		/// ×1.25 (clamped to 90% of MaxParticles), the hard safety stop.
+		/// Driven per phase/loop by AcidPhaseManager.
+		/// </summary>
+		public void SetFillCeiling(float ceilingY)
+		{
+			_fillCeilingY = ceilingY;
+			_particleCap  = AcidConfig.ParticleCapForCeiling(ceilingY);
+			_safetyCap    = Math.Min(
+				(int)(_particleCap * 1.25f),
+				(int)(FluidConfig.MaxParticles * 0.9f));
+		}
+
+		/// <summary>
+		/// Throw a surge: an upward impulse swept across the LIVE WET SPAN at
+		/// the surface (the wave) plus a brief pour burst at the valves (the
+		/// volume spike). Strength comes from the per-loop escalation curve.
+		///
+		/// The sweep follows the pool, not the basin: once the level is above
+		/// the lip the pool spans the whole arena, and a basin-only sweep
+		/// (the original) erupted crests over the tier-free CENTER — the storm
+		/// could never actually break the mid/top refuges sitting over the
+		/// banks. Main-thread only — ApplyImpulseInRadius is the serial sim API.
+		/// </summary>
+		public void TriggerSurge(float strength)
+		{
+			if (_sim == null)
+			{
+				return;
+			}
+
+			SurgeCount++;
+			_surgeBurstTimer = AcidConfig.SurgeBurstSeconds;
+
+			float left  = GameConstants.Hazards.BasinLeftX  + 40f;
+			float right = GameConstants.Hazards.BasinRightX - 40f;
+			if (_grid != null && _grid.HasWetCells)
+			{
+				var wet = _grid.GetWetBounds();
+				left  = Math.Max(wet.X, GameConstants.Arena.InnerLeft) + 40f;
+				right = Math.Min(wet.X + wet.Width, GameConstants.Arena.InnerRight) - 40f;
+				if (right <= left)
+				{
+					left  = GameConstants.Hazards.BasinLeftX  + 40f;
+					right = GameConstants.Hazards.BasinRightX - 40f;
+				}
+			}
+			// Impulses belong in the POOL: the per-column topmost-wet query can
+			// return stray spray far above the body (the corner geysers, storm
+			// mist), and an impulse placed there detonates mist instead of
+			// launching a dense crest tongue. Clamp every point to at or below
+			// the measured standing surface.
+			float standing = GetStandingSurfaceY();
+			int n = AcidConfig.SurgeImpulsePoints;
+			for (int k = 0; k < n; k++)
+			{
+				float x = MathHelper.Lerp(left, right, n > 1 ? (float)k / (n - 1) : 0.5f);
+				float surfaceY = Math.Max(GetSurfaceLevelAtX(x), standing - 24f);
+				_sim.ApplyImpulseInRadius(
+					new Vector2(x, surfaceY),
+					AcidConfig.SurgeImpulseRadius,
+					new Vector2(0f, -strength));
+			}
+		}
 
 		/// <summary>
 		/// Request a resting block of acid filling the world-space rectangle
@@ -177,10 +269,13 @@ namespace GorelordsBrawler.Components.Hazards
 
 		private void ExecutePreFill()
 		{
-			// Lay particles on a grid at rest spacing (2·radius). PBF relaxes them
-			// toward hex packing over the first few Steps; the tiny initial settle
+			// Lay particles on a square grid at the MEASURED rest density
+			// (EffectiveParticleArea) so the pool actually stands at the
+			// requested fill height. The old 2r spacing packed ~½ as dense as
+			// the solver's true equilibrium, so the "resting pool" immediately
+			// slumped to half its intended depth. The tiny remaining settle
 			// reads as the pool "finding its level."
-			float spacing = 2f * FluidConfig.ParticleRadius;
+			float spacing = MathF.Sqrt(FluidConfig.EffectiveParticleArea);
 			for (float y = _pfBottom - spacing; y > _pfTop; y -= spacing)
 			{
 				for (float x = _pfLeft + spacing; x < _pfRight - spacing; x += spacing)
@@ -211,13 +306,35 @@ namespace GorelordsBrawler.Components.Hazards
 
 			float dt = Math.Min(Time.DeltaTime, GameConstants.Physics.MaxDeltaTime);
 
-			// Pour from the inlet only while rising. Pre-filled acid (the Calm
-			// phase) has particles but isn't "rising" yet — it must still simulate
-			// so it settles, stays contained by the basin, and damages anyone
-			// knocked into it. Only the inlet pour is gated on IsRising.
-			if (IsRising)
+			// Pour from the inlets only while rising (and never while draining).
+			// Pre-filled acid (the Calm phase) has particles but isn't "rising"
+			// yet — it must still simulate so it settles, stays contained, and
+			// damages anyone knocked into it. Only the pour is gated.
+			if (IsRising && !Draining)
 			{
 				SpawnInlet(dt);
+			}
+
+			// Drain sluice (Phase C): remove particles at the basin-floor sluice
+			// at the rate BeginDrain derived for a fixed-duration recession; the
+			// pool above feeds the hole under its own gravity/pressure so the
+			// level visibly recedes. (DebugFastAcid compression rides in via the
+			// caller's time-scaled duration.)
+			if (Draining && _sim.Count > 0)
+			{
+				_drainAccum += _drainRatePerSec * dt;
+				int toRemove = (int)_drainAccum;
+				if (toRemove > 0)
+				{
+					_drainAccum -= toRemove;
+					var sluice = AcidConfig.DrainSluice;
+					_sim.DespawnInRect(sluice.X, sluice.Y, sluice.Width, sluice.Height, toRemove);
+				}
+			}
+
+			if (_surgeBurstTimer > 0f)
+			{
+				_surgeBurstTimer -= dt;
 			}
 
 			// Dry and not pouring — nothing to simulate, skip the per-frame work
@@ -228,48 +345,114 @@ namespace GorelordsBrawler.Components.Hazards
 			}
 
 			// Refresh dynamic collider list — picks up newly spawned platforms.
-			// Query area = wet bounds expanded by 2·h, or the full map if dry.
+			// Query area = wet bounds expanded by 2·h, or the basin region if dry
+			// (where the first poured/pre-filled particles will land).
 			var queryArea = _grid.HasWetCells
 				? Expand(_grid.GetWetBounds(), 2f * FluidConfig.SmoothingRadius)
-				: new RectangleF(0, _topPlatformY - 32f, _mapWidth, _mapHeight - _topPlatformY + 96f);
+				: new RectangleF(
+					GameConstants.Hazards.BasinLeftX - 64f,
+					AcidConfig.LipY - 96f,
+					(GameConstants.Hazards.BasinRightX - GameConstants.Hazards.BasinLeftX) + 128f,
+					(GameConstants.Hazards.BasinFloorY - AcidConfig.LipY) + 160f);
 			_colliders.RebuildFromPhysics(queryArea);
 
 			_sim.Step(dt, _colliders);
+
+			// Post-step hard containment (the "leaking out of the pit corners"
+			// fix). The per-iteration AABB projection occasionally loses a
+			// particle at concave seams (bank wall ∧ floor) under surge
+			// pressure — a known SPH/PBF failure mode whose accepted game-grade
+			// remedy is artificial repositioning at the boundary (cf.
+			// DualSPHysics guidance). Push anything inside the three static
+			// solids back to the nearest legal spot. O(n), serial, cheap.
+			ClampIntoVessel();
+
 			_grid.RebuildFrom(_sim);
 
 			UpdateCurrentLevel();
 		}
 
+		private void ClampIntoVessel()
+		{
+			float r        = FluidConfig.ParticleRadius;
+			float lipY     = AcidConfig.LipY;
+			float floorY   = GameConstants.Hazards.BasinFloorY;
+			float basinL   = GameConstants.Hazards.BasinLeftX;
+			float basinR   = GameConstants.Hazards.BasinRightX;
+
+			for (int i = 0; i < _sim.Count; i++)
+			{
+				float x = _sim.Px[i];
+				float y = _sim.Py[i];
+
+				if (y > lipY + r)
+				{
+					// At bank depth: only the basin channel is legal. Push
+					// anything inside a bank body horizontally back into it.
+					if (x < basinL + r)
+					{
+						_sim.Px[i] = basinL + r;
+						if (_sim.Vx[i] < 0f) _sim.Vx[i] = 0f;
+					}
+					else if (x > basinR - r)
+					{
+						_sim.Px[i] = basinR - r;
+						if (_sim.Vx[i] > 0f) _sim.Vx[i] = 0f;
+					}
+				}
+
+				// Never below the basin floor.
+				if (_sim.Py[i] > floorY - r && _sim.Px[i] > basinL && _sim.Px[i] < basinR)
+				{
+					_sim.Py[i] = floorY - r;
+					if (_sim.Vy[i] > 0f) _sim.Vy[i] = 0f;
+				}
+			}
+		}
+
 		private void SpawnInlet(float dt)
 		{
-			// Stop pouring once the basin is filled to its target level. This is a
-			// COUNT cap (not the old CurrentLevel test): CurrentLevel is a
-			// volumetric estimate assuming full-map-width spreading, which is wrong
-			// by ~3× for the narrow basin and never tripped — so the inlet used to
-			// pour to MaxParticles (5000), overflow the arena, and tank FPS. The
-			// count cap is derived from basin geometry in OnAddedToEntity.
-			if (_sim.Count >= _inletParticleCap)
+			// CLOSED-LOOP pour: stop when the MEASURED standing surface reaches
+			// the fill ceiling (resuming if it recedes — the pool actively holds
+			// its level through splash losses), with the count-based safety cap
+			// as the overrun guard. A pure count target chronically missed deep
+			// ceilings because settled density varies with depth.
+			if (_sim.Count >= _safetyCap
+				|| (_sim.Count > 0 && GetStandingSurfaceY() <= _fillCeilingY))
 			{
 				return;
 			}
 
-			float particleArea = MathHelper.Pi * FluidConfig.ParticleRadius * FluidConfig.ParticleRadius;
-			float spawnRate    = _flowRatePerSec / particleArea;
-			_inletAccum       += spawnRate * dt;
+			// Direct particles/sec (AcidConfig.InletFlowFor via SetInletFlow) —
+			// the old px²→particles conversion used π·r², a THIRD density
+			// assumption disagreeing with both the cap formula and the real
+			// settled pool. DebugFastAcid keeps its ×4 pour here.
+			float spawnRate = _particlesPerSec *
+				(AppSettings.DebugFastAcid ? GameConstants.Hazards.AcidDebugRiseMultiplier : 1f);
+			if (_surgeBurstTimer > 0f)
+			{
+				// Surge: the valves visibly gush for a beat on top of the wave.
+				spawnRate *= AcidConfig.SurgeBurstFlowMult;
+			}
+			_inletAccum += spawnRate * dt;
 
 			int toSpawn = (int)_inletAccum;
 			_inletAccum -= toSpawn;
 
+			// Split the TOTAL flow evenly across the inlets — dual valves change
+			// where the acid arrives, never how much arrives.
+			var inlets = AcidConfig.Inlets;
 			for (int i = 0; i < toSpawn; i++)
 			{
-				float jx = ((float)_rng.NextDouble() * 2f - 1f) * FluidConfig.InletJitterX;
-				float jy = ((float)_rng.NextDouble() * 2f - 1f) * FluidConfig.InletJitterY;
+				var inlet = inlets[i % inlets.Length];
+				float jx  = ((float)_rng.NextDouble() * 2f - 1f) * FluidConfig.InletJitterX;
+				float jy  = ((float)_rng.NextDouble() * 2f - 1f) * FluidConfig.InletJitterY;
 				float jvx = ((float)_rng.NextDouble() * 2f - 1f) * FluidConfig.InletJitterVx;
 				_sim.Spawn(
-					_inletX + jx,
-					FluidConfig.InletYOffset + jy,
-					jvx,
-					FluidConfig.InletDownVelocity);
+					inlet.x + jx,
+					inlet.y + jy,
+					inlet.vx + jvx,
+					inlet.vy);
 			}
 		}
 
@@ -328,6 +511,22 @@ namespace GorelordsBrawler.Components.Hazards
 			return _grid?.GetSurfaceYAt(worldX) ?? _mapHeight;
 		}
 
+		/// <summary>True if acid occupies the cell at this world point (contact test).</summary>
+		public bool IsAcidAt(float worldX, float worldY)
+		{
+			return _grid?.IsWetAt(worldX, worldY) ?? false;
+		}
+
+		/// <summary>
+		/// True if a BODY of acid (not stray spray) occupies the cell at this
+		/// world point — the erosion contact test. See
+		/// <see cref="FluidConfig.ErosionWetMinCount"/> for the density story.
+		/// </summary>
+		public bool IsAcidBodyAt(float worldX, float worldY)
+		{
+			return _grid?.IsDenselyWetAt(worldX, worldY, FluidConfig.ErosionWetMinCount) ?? false;
+		}
+
 		/// <summary>
 		/// Topmost wet cell at <paramref name="worldX"/> at or below
 		/// <paramref name="ceilingWorldY"/>. Use this for "the acid surface
@@ -343,6 +542,36 @@ namespace GorelordsBrawler.Components.Hazards
 		public float GetSurfaceLevelInRange(float leftX, float rightX)
 		{
 			return _grid?.GetMinSurfaceYInRange(leftX, rightX) ?? _mapHeight;
+		}
+
+		// Probe columns for the standing-surface measurement: across the basin
+		// span, away from the corner inlet streams. Scratch buffer avoids a
+		// per-call allocation (this runs in the pour gate every frame).
+		private static readonly float[] _probeColumns = { 496f, 576f, 640f, 704f, 784f };
+		private readonly float[] _probeScratch = new float[5];
+
+		/// <summary>
+		/// The MEASURED standing surface: five probe columns over the basin,
+		/// 75th-percentile toward the floor (2nd-LARGEST reading) — so up to
+		/// two splash-contaminated columns (whose topmost-wet reads far above
+		/// the bulk) can't fake a high surface. A 3-column median fired the
+		/// closed-loop fill's "target reached" on wave transients mid-pour and
+		/// truncated whole Rise phases. This is the oracle tests assert fill
+		/// ceilings against — unlike <see cref="CurrentLevel"/>, the legacy
+		/// full-width volumetric ESTIMATE, geometry-blind for a basin pool.
+		/// </summary>
+		public float GetStandingSurfaceY()
+		{
+			if (_grid == null)
+			{
+				return _mapHeight;
+			}
+			for (int i = 0; i < _probeColumns.Length; i++)
+			{
+				_probeScratch[i] = _grid.GetSurfaceYAt(_probeColumns[i]);
+			}
+			Array.Sort(_probeScratch);
+			return _probeScratch[3];   // 2nd-largest of five
 		}
 
 		public RectangleF GetDamageBounds()
