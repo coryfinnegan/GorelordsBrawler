@@ -121,27 +121,18 @@ public class GameConstantsTests
 		Assert.True(GameConstants.Hazards.SwimBreachDepth < GameConstants.Hazards.AcidFullSubmergeDepth / 2f);
 	}
 
-	[Fact]
-	public void SpringDamping_IsPositive()
-	{
-		Assert.True(GameConstants.Hazards.Damping > 0f);
-	}
-
-	// (PlatformSpawnMinX/MaxX are gone — drop-logs now spawn at the dissolved
-	// tiers' former X anchors, side-alternating; see AcidConfigTests for the
-	// slot-placement coverage.)
-
-	// (The PlatformTable_* tests are gone with the normalized Platforms array —
-	// the pre-Sump geometry it described is retired. Its replacement, AcidConfig,
-	// is covered by AcidConfigTests: escalation curves, particle-budget invariant,
-	// inlet placement, and flood-safe respawn candidates.)
+	// (The float-spring/buoyancy/impact constants are gone with the drop-logs —
+	// the ROCKFALL replaced them (docs/rockfall-proposal.md): rocks rest on
+	// solid ground and pile into cairns, no float physics to tune. Rockfall
+	// geometry/cadence/sizing coverage lives in AcidConfigTests.)
 
 	[Fact]
-	public void PlatformImpactFactor_IsInValidRange()
+	public void RockFall_ConstantsAreSane()
 	{
-		float f = GameConstants.Hazards.PlatformImpactFactor;
-		Assert.True(f > 0f,  "PlatformImpactFactor must be positive to transfer any energy.");
-		Assert.True(f <= 1f, "PlatformImpactFactor > 1 would violate energy conservation.");
+		Assert.True(GameConstants.Hazards.RockFallGravity > 0f);
+		Assert.True(GameConstants.Hazards.RockFallMaxSpeed > 0f);
+		Assert.True(GameConstants.Hazards.RockFallSpawnY < 0f,
+			"rocks must spawn above the map top edge so the telegraph precedes any visible boulder");
 	}
 
 	// ── Arena bounds ──────────────────────────────────────────────────────────

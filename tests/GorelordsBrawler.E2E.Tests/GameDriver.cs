@@ -95,7 +95,14 @@ public sealed class GameDriver : IDisposable, IAsyncDisposable
 			try
 			{
 				var state = await GetStateAsync();
-				if (state.Players.Count >= 2 && state.Players.TrueForAll(p => p.Grounded))
+				// time < 5 s proves the /state answering on :7777 is OUR fresh
+				// boot: a LINGERING previous test's game also serves grounded
+				// players instantly, and a driver that accepts it steers a
+				// battle-worn match (players pre-damaged, phase mid-storm) —
+				// the "hp wasn't full at onset" suite-order flake.
+				if (state.Time < 5f
+					&& state.Players.Count >= 2
+					&& state.Players.TrueForAll(p => p.Grounded))
 				{
 					return;
 				}
@@ -104,7 +111,7 @@ public sealed class GameDriver : IDisposable, IAsyncDisposable
 			await Task.Delay(100);
 		}
 		throw new TimeoutException(
-			$"Game did not reach a live, grounded state within {StartupTimeout}ms.");
+			$"Game did not reach a live, grounded, FRESH state (time < 5s) within {StartupTimeout}ms.");
 	}
 
 	/// <summary>Query the current game state from /state.</summary>

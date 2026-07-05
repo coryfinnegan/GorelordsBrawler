@@ -202,28 +202,89 @@ namespace GorelordsBrawler.Constants
 		public const float SurgeBurstSeconds    = 0.6f;
 		public const float SurgeBurstFlowMult   = 1.5f;
 
-		// Scramble platforms: how many drop-in logs the spawner keeps alive —
-		// GROWING with the loop, so as static footing dissolves the arena
-		// transforms into a bobbing debris field instead of emptying out
-		// (subtraction → transformation; cf. Brinstar returning its platforms).
-		// Drops keep the SPORADIC stagger (functional-test decision: irregular,
-		// not metronomic), one per SIDE at the dissolved tiers' former X spots.
-		public const float PlatformDropStaggerMin = 2.5f;
-		public const float PlatformDropStaggerMax = 7f;
-
-		public static int ScramblePlatformTargetFor(int loop) =>
-			Math.Min(2 + loop, 4);
+		// ── Rockfall (docs/rockfall-proposal.md — replaced the drop-logs) ────
+		// Rocks REST on ground/each other and protrude from the acid when tall
+		// enough — no buoyancy, no waterline queries, no float bug class. They
+		// pile into cairns; a tall-enough cairn breaches the surface and forms
+		// a temporary island (the recovery route back to the fight), and the
+		// acid chews the submerged base so the archipelago keeps churning.
+		public const float RockWidth = 96f;
+		/// <summary>Two heights → varied silhouettes and pile arithmetic.</summary>
+		public static readonly float[] RockHeights = { 96f, 128f };
 
 		/// <summary>
-		/// Drop-log X anchors: on the former LOW/MID tier spans, per side (C.2).
-		/// The mid anchors sit on the OUTER third of the old mid spans — the
-		/// centers (416/864) are directly under the new top tiers' edges, and a
-		/// falling log clips through anything in its column (DynamicPlatform
-		/// only lands on other logs and the acid).
+		/// Drop columns — GHOST columns only, unlocked as their tiers die:
+		/// rock falls exactly where the acid ate the arena's supports, never
+		/// anywhere else. Three constraints meet in this policy:
+		///   1. a falling rock must never clip a LIVING platform;
+		///   2. the center channel (576-704) must stay rock-free — a cairn
+		///      breaching there sat in the standing-surface probe's columns,
+		///      its cap-puddles corrupted the reading, and the closed-loop
+		///      fill over-poured until every island drowned (2026-07-05
+		///      probe);
+		///   3. bank-ground cairns (3 rocks to breach the storm) beat pit
+		///      cairns (5) as recovery footing anyway.
+		/// Column bands are (slot ± jitter ± half rock width); the mids' outer
+		/// anchor points (344/936) clear the living top tiers where their
+		/// centers would not.
 		/// </summary>
-		public static readonly float[] LogSpawnXLeft  = { 224f, 376f };
-		public static readonly float[] LogSpawnXRight = { 904f, 1056f };
-		public const float LogSpawnXJitter = 12f;
+		public static readonly float[] RockSlotLowGhostX = { 224f, 1056f };
+		public static readonly float[] RockSlotMidGhostX = { 344f, 936f };
+		public const float RockSlotJitter = 12f;
+
+		/// <summary>
+		/// Chance a drop AIMS at a random living rock's column instead of a
+		/// random slot — the pile bias (user decision: structured randomness).
+		/// Pure random scatter rarely builds the 3-rock cairns the storm needs
+		/// (bank ground 544 → a 96+96+128 pile tops at 224, 48 px proud of the
+		/// 272 storm surface); 40% herding makes islands reliable while drops
+		/// still read as chaos.
+		/// </summary>
+		public const float RockPileBias = 0.4f;
+
+		// Cadence: no rocks until the arena starts LOSING footing — loop 1 is
+		// the pure contest beat (debris arrives because the acid took the
+		// ground, not before: with rocks from loop 1, every drop went down the
+		// only unlocked column and built one pit tower whose collapses pumped
+		// piston waves that killed both lapped lows — E2E caught it). From
+		// loop 2 a rock every ~12 s, tightening per loop; the storm is a
+		// rockfall. The telegraph (a marker at the drop column + rumble on
+		// impact) makes the chaos readable — dodge or be hit.
+		public const float RockIntervalBaseSeconds = 12f;
+		public const float RockIntervalDecay       = 0.7f;
+		public const float RockIntervalMinSeconds  = 6f;
+		public const float StormRockIntervalSeconds = 3.5f;
+		public const int   RockMaxAlive             = 10;
+		public const float RockTelegraphSeconds     = 0.8f;
+
+		public static float RockIntervalFor(int loop) =>
+			loop <= 1
+				? float.PositiveInfinity
+				: MathF.Max(RockIntervalMinSeconds,
+					RockIntervalBaseSeconds * MathF.Pow(RockIntervalDecay, loop - 2));
+
+		/// <summary>
+		/// Descent speed for a pile rock whose support eroded away. A full
+		/// gravity re-plunge made every tower collapse a hydraulic piston (the
+		/// collider sweeping down displaces the pool violently — waves the
+		/// splash scale can't touch); a settling pile slumps.
+		/// </summary>
+		public const float RockSettleSinkSpeed = 70f;
+
+		// Impact: a falling rock that lands on a player hurts and shoves them
+		// aside — the chaos has teeth, but the telegraph makes it fair.
+		public const float RockImpactDamage     = 12f;
+		public const float RockImpactKnockbackX = 220f;
+		public const float RockImpactKnockbackY = -240f;
+
+		/// <summary>
+		/// Splash impulse scale for a rock plunging into the pool. At full
+		/// fall speed every center-channel drop threw a tier-killing tsunami:
+		/// dense crests over the lapped lows' 16 px freeboard, several drops
+		/// per loop — one low tier fully died during the CONTEST loop (E2E
+		/// caught it). A boulder jets on entry; it doesn't detonate.
+		/// </summary>
+		public const float RockSplashScale = 0.35f;
 
 		// Swiss-cheese erosion (ErodibleSurface): platforms are a grid of solid
 		// cells the acid eats by CONTACT — every pass, perimeter cells whose
@@ -246,24 +307,18 @@ namespace GorelordsBrawler.Constants
 		// PassesPerSec = how fast the eaten front advances. With the dwell
 		// filter each exposed shell needs DwellPasses before it falls, so the
 		// rates are scaled up from the pre-dwell values to keep macro timings.
-		// PER SURFACE, because the two platform kinds live in opposite regimes:
-		//   TIERS sit still — a LAPPED tier erodes to the waterline and stops
-		//   (self-limiting), a SUBMERGED one shell-erodes in
+		// PER SURFACE, because the two destructible kinds live in different
+		// regimes:
+		//   TIERS are thin slabs — a LAPPED tier erodes to the waterline and
+		//   stops (self-limiting), a SUBMERGED one shell-erodes in
 		//   ~(rows/2)·dwell/rate s. 3.0 → a submerged 32 px tier dies in ~4 s,
 		//   the consume beat.
-		//   LOGS float — buoyancy holds fresh hull at the waterline forever, so
-		//   a log erodes CONTINUOUSLY while afloat (~8 rows bottom-up, dwell
-		//   per row). 1.2 → ~20 s of life, long enough to outlive the surge
-		//   volley it drops into (at tier-rate the late-game footing lived ~5 s).
+		//   ROCKS are stone — slow chew so cairn islands persist about a loop
+		//   before the sea reclaims them: at 0.6, a submerged 96 px rock
+		//   (24 rows, shells from both faces) lasts ~60 s.
 		public const float ErosionCellSize         = 4f;
 		public const float TierErosionPassesPerSec = 3.0f;
-		public const float LogErosionPassesPerSec  = 1.2f;
-
-		// The log spawner opens once the LOW tier pair is MOSTLY eaten (not
-		// fully — full consumption of the last crumbs can lag well behind the
-		// visible destruction, and the debris should start falling while the
-		// chewing is still on screen).
-		public const float TierMostlyEatenFraction = 0.5f;
+		public const float RockErosionPassesPerSec = 0.6f;
 
 		// ── Respawn safety (flood-aware) ──────────────────────────────────────
 		/// <summary>

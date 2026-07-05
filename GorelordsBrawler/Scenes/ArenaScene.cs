@@ -127,16 +127,11 @@ namespace GorelordsBrawler.Scenes
 			// via the closure below. (Replaced the old flat 4 dps drip.)
 			contactHazard.DamagePerSecond = GameConstants.Hazards.AcidSurfaceDps;
 			contactHazard.GetBounds = acidSurface.GetDamageBounds;
-			var spawner = AddSceneComponent(new PlatformSpawner(mw, mh));
 			// Phase C: the looping Calm→Rise→Scramble→Surge→Drain machine with
 			// per-loop escalation and the terminal FinalFlood at the time cap.
 			// Geometry/timing all live in AcidConfig (the Phase-A hand-sync debt
 			// paid: nothing derives from the old normalized platform array).
 			var phaseManager = AddSceneComponent(new AcidPhaseManager(acidSurface));
-			// The log population target escalates with the loop (2 → 4): as the
-			// static tiers dissolve, the arena transforms into a debris field
-			// instead of emptying out.
-			spawner.LoopProvider = () => phaseManager.Loop;
 			// Phase D telegraph: the liquid's meniscus pulse reads the tell so
 			// the surface visibly agitates before every surge/crest/rise (the
 			// bubble emitter and camera read AcidSurface.TellProgress directly).
@@ -144,11 +139,11 @@ namespace GorelordsBrawler.Scenes
 
 			// Dissolvable refuge tiers (functional-test decision: the acid EATS
 			// the arena as it climbs). Each TMX "tiers" object becomes a solid
-			// ledge that burns away when the rising surface reaches it. The LOW
-			// pair gates the log spawner: drop-logs begin the moment the first
-			// footing is eaten — platforms arrive BECAUSE the acid took the
-			// ground, not on a timer.
-			int tiersAlive = 0, lowTiersAlive = 0;
+			// ledge that burns away when the rising surface reaches it. The
+			// per-rank alive counts drive the ROCKFALL's drop-column unlocks:
+			// a ghost column only opens once its tier pair is gone, so a
+			// falling rock never clips through a living platform.
+			int tiersAlive = 0, lowTiersAlive = 0, midTiersAlive = 0;
 			var tierGroup = tiledMap.GetObjectGroup("tiers");
 			if (tierGroup != null)
 			{
@@ -167,27 +162,39 @@ namespace GorelordsBrawler.Scenes
 
 					tiersAlive++;
 					bool isLow = rank == "low";
+					bool isMid = rank == "mid";
 					if (isLow)
 					{
 						lowTiersAlive++;
 					}
-					tier.OnDissolved = () => tiersAlive--;
-					// Debris starts falling once the low pair is MOSTLY chewed —
-					// full erosion of the last crumbs lags the visible
-					// destruction, and the logs should arrive while the acid is
-					// still visibly eating the first footing.
-					if (isLow)
+					if (isMid)
 					{
-						tier.OnMostlyEroded = () =>
-						{
-							if (--lowTiersAlive == 0)
-							{
-								spawner.StartSpawning(acidSurface);
-							}
-						};
+						midTiersAlive++;
 					}
+					tier.OnDissolved = () =>
+					{
+						tiersAlive--;
+						if (isLow)
+						{
+							lowTiersAlive--;
+						}
+						if (isMid)
+						{
+							midTiersAlive--;
+						}
+					};
 				}
 			}
+
+			// The ROCKFALL (docs/rockfall-proposal.md — replaced the drop-logs):
+			// from loop 1, telegraphed boulders shed down unlocked columns and
+			// pile into cairn islands — the recovery route back to the fight.
+			var rockfall = AddSceneComponent(new RockfallSpawner());
+			rockfall.Initialize(acidSurface);
+			rockfall.LoopProvider = () => phaseManager.Loop;
+			rockfall.IsStorm      = () => phaseManager.Phase == AcidPhaseManager.AcidPhase.FinalFlood;
+			rockfall.LowsDead     = () => lowTiersAlive == 0;
+			rockfall.MidsDead     = () => midTiersAlive == 0;
 			// Phase 1 deadly-polish: ambient bubbles rising from the surface.
 			// Hosted on its own entity (rather than as a SceneComponent) so
 			// the [Inspectable] tuning knobs (SpawnsPerSec, StartSize, etc.)
@@ -299,22 +306,14 @@ namespace GorelordsBrawler.Scenes
 				exporter.RegisterProvider("acidDraining",   () => phaseManager.IsDraining);
 				exporter.RegisterProvider("acidFillCap",    () => acidSurface.ParticleCap);
 				exporter.RegisterProvider("tiersRemaining", () => tiersAlive);
-				// Phantom-waterline regression oracle: count of drop-logs whose
-				// float spring is holding them in AIR (hull bottom well above
-				// the measured surface, no acid body beneath). Must always be 0.
-				exporter.RegisterProvider("logsAirborne", () =>
-				{
-					int hovering = 0;
-					var logs = FindComponentsOfType<DynamicPlatform>();
-					for (int i = 0; i < logs.Count; i++)
-					{
-						if (logs[i].IsHoveringAboveAcid())
-						{
-							hovering++;
-						}
-					}
-					return hovering;
-				});
+				// Rockfall oracles: live boulders, islands (resting caps proud
+				// of the measured surface — the recovery-route metric), and the
+				// first falling rock's position (E2E stages the impact-damage
+				// scenario under it).
+				exporter.RegisterProvider("rocksAlive",   () => rockfall.RocksAlive);
+				exporter.RegisterProvider("rockIslands",  () => rockfall.RockIslands);
+				exporter.RegisterProvider("rockFallingX", () => (int)rockfall.FirstFallingRockPos.X);
+				exporter.RegisterProvider("rockFallingY", () => (int)rockfall.FirstFallingRockPos.Y);
 				// Combat: true during a hit freeze (TimeScale=0). Lets the acid-survives-a-hit
 				// regression prove it actually drove the game through the dt=0 window.
 				exporter.RegisterProvider("hitstopActive",     () => combatEffects.IsHitstopActive);

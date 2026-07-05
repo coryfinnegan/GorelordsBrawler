@@ -368,7 +368,8 @@ namespace Nez
 
 			public static class Hazards
 			{
-				public const string Log_wood = @"Content\Sprites\hazards\log_wood.png";
+				public const string Rock_128 = @"Content\Sprites\hazards\rock_128.png";
+				public const string Rock_96 = @"Content\Sprites\hazards\rock_96.png";
 				public const string Tier_metal = @"Content\Sprites\hazards\tier_metal.png";
 			}
 

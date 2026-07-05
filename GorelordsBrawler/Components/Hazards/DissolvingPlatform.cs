@@ -13,11 +13,11 @@ namespace GorelordsBrawler.Components.Hazards
 	/// swiss-cheese erosion + per-cell collision lives in
 	/// <see cref="ErodibleSurface"/>.
 	///
-	/// The "low"-rank pair gates the log spawner (functional-test decision:
-	/// drop-logs only start once the acid has eaten the first set of platforms)
-	/// — ArenaScene subscribes to <see cref="OnDissolved"/> for that.
+	/// Per-rank death counts drive the ROCKFALL's drop-column unlocks
+	/// (ArenaScene subscribes to <see cref="OnDissolved"/>): a ghost column
+	/// only opens once its tier pair is gone.
 	/// </summary>
-	public class DissolvingPlatform : Component, IUpdatable
+	public class DissolvingPlatform : Component
 	{
 		/// <summary>Tier rank from the TMX ("low" / "mid" / "top").</summary>
 		public readonly string Rank;
@@ -25,20 +25,10 @@ namespace GorelordsBrawler.Components.Hazards
 		/// <summary>Fired once when the tier is fully eaten (entity about to be destroyed).</summary>
 		public Action OnDissolved;
 
-		/// <summary>
-		/// Fired once when the tier is MOSTLY eaten (solid fraction below
-		/// <see cref="AcidConfig.TierMostlyEatenFraction"/>). The log spawner
-		/// gates on the low pair's mostly-eaten signal, not full erosion —
-		/// the last crumbs can outlive the visible destruction by many
-		/// seconds, and the debris should fall while the chewing is on screen.
-		/// </summary>
-		public Action OnMostlyEroded;
-
 		private readonly AcidSurface _acid;
 		private readonly float _width;
 		private readonly float _height;
 		private ErodibleSurface _erodible;
-		private bool _mostlyFired;
 
 		// Greybox tier color (matches the old static-tile look until Phase E).
 		private static readonly Color _tierColor = new Color(110, 110, 115);
@@ -62,16 +52,6 @@ namespace GorelordsBrawler.Components.Hazards
 				_acid, _width, _height, _tierColor,
 				AcidConfig.TierErosionPassesPerSec, texture));
 			_erodible.OnFullyEroded = () => OnDissolved?.Invoke();
-		}
-
-		public void Update()
-		{
-			if (!_mostlyFired && _erodible != null
-				&& _erodible.SolidFraction <= AcidConfig.TierMostlyEatenFraction)
-			{
-				_mostlyFired = true;
-				OnMostlyEroded?.Invoke();
-			}
 		}
 	}
 }

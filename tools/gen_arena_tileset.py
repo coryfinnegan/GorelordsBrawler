@@ -45,10 +45,9 @@ WALL_FRAME  = (23, 26, 31)
 RIVET_HI    = (150, 160, 172)
 RIVET_LO    = (20, 23, 28)
 ACID_STAIN  = (63, 174, 63)
-WOOD_MID    = (139, 90, 43)
-WOOD_LO     = (104, 66, 30)
-WOOD_HI     = (172, 118, 62)
-WOOD_DARK   = (78, 49, 22)
+ROCK_MID    = (96, 92, 88)
+ROCK_HI     = (146, 142, 134)
+ROCK_DARK   = (52, 50, 47)
 
 
 def lerp(a, b, t):
@@ -208,26 +207,27 @@ def build_tier_texture(out_path):
     img.save(out_path)
 
 
-def build_log_texture(out_path):
-    """128×32 rough-sawn timber, horizontal grain + end rings."""
-    rng = random.Random(SEED + 2)
-    img = Image.new("RGB", (128, 32), WOOD_MID)
-    px = img.load()
-    # horizontal grain: per-row waviness between wood shades
-    for y in range(32):
-        band = rng.choice([WOOD_LO, WOOD_MID, WOOD_MID, WOOD_HI])
-        for x in range(128):
-            wob = rng.random()
-            c = band if wob > 0.15 else WOOD_DARK
-            px[x, y] = lerp(px[x, y][:3], c, 0.6)
+def build_rock_texture(out_path, w, h, seed_offset):
+    """Boulder for the rockfall (docs/rockfall-proposal.md): weathered granite
+    — coarse patina, jagged cracks, a lit top face — so a resting cairn reads
+    as stone the acid is gnawing, not a gray box."""
+    rng = random.Random(SEED + seed_offset)
+    img = Image.new("RGB", (w, h), ROCK_MID)
+    img = patina(img, rng, strength=0.55, scale=5, shades=5)
     d = ImageDraw.Draw(img)
-    # end-grain rings
-    for cx in (6, 121):
-        for r in (3, 7, 11):
-            d.ellipse([cx - r, 16 - r, cx + r, 16 + r], outline=WOOD_DARK)
-    d.line([(0, 0), (127, 0)], fill=WOOD_HI)
-    d.line([(0, 31), (127, 31)], fill=WOOD_DARK)
-    img = edge_darken(img, depth=2, amount=0.35)
+    # jagged cracks: random-walk polylines from near the top
+    for _ in range(3):
+        x, y = rng.randint(8, w - 8), rng.randint(2, h // 3)
+        for _ in range(rng.randint(4, 8)):
+            nx = max(2, min(w - 3, x + rng.randint(-6, 6)))
+            ny = min(h - 3, y + rng.randint(3, 9))
+            d.line([(x, y), (nx, ny)], fill=ROCK_DARK)
+            x, y = nx, ny
+    # lit top face + settled shadow at the base
+    d.line([(0, 0), (w - 1, 0)], fill=ROCK_HI)
+    d.line([(0, 1), (w - 1, 1)], fill=lerp(ROCK_HI, ROCK_MID, 0.5))
+    d.line([(0, h - 1), (w - 1, h - 1)], fill=ROCK_DARK)
+    img = edge_darken(img, depth=3, amount=0.45)
     img.save(out_path)
 
 
@@ -239,8 +239,10 @@ if __name__ == "__main__":
 
     png, tsx = build_tileset(tileset_dir)
     build_tier_texture(os.path.join(hazards_dir, "tier_metal.png"))
-    build_log_texture(os.path.join(hazards_dir, "log_wood.png"))
+    build_rock_texture(os.path.join(hazards_dir, "rock_96.png"), 96, 96, seed_offset=2)
+    build_rock_texture(os.path.join(hazards_dir, "rock_128.png"), 96, 128, seed_offset=3)
     print(f"Wrote {png}")
     print(f"Wrote {tsx}")
     print(f"Wrote {os.path.join(hazards_dir, 'tier_metal.png')}")
-    print(f"Wrote {os.path.join(hazards_dir, 'log_wood.png')}")
+    print(f"Wrote {os.path.join(hazards_dir, 'rock_96.png')}")
+    print(f"Wrote {os.path.join(hazards_dir, 'rock_128.png')}")
