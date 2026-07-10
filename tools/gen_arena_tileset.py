@@ -45,9 +45,6 @@ WALL_FRAME  = (23, 26, 31)
 RIVET_HI    = (150, 160, 172)
 RIVET_LO    = (20, 23, 28)
 ACID_STAIN  = (63, 174, 63)
-ROCK_MID    = (96, 92, 88)
-ROCK_HI     = (146, 142, 134)
-ROCK_DARK   = (52, 50, 47)
 
 
 def lerp(a, b, t):
@@ -208,27 +205,165 @@ def build_tier_texture(out_path):
 
 
 def build_rock_texture(out_path, w, h, seed_offset):
-    """Boulder for the rockfall (docs/rockfall-proposal.md): weathered granite
-    — coarse patina, jagged cracks, a lit top face — so a resting cairn reads
-    as stone the acid is gnawing, not a gray box."""
+    """Pixel-art BOULDER for the rockfall (docs/implemented/rockfall-proposal.md).
+
+    Authored at QUARTER scale and upscaled x4 nearest-neighbor, so one art pixel
+    is exactly one 4px erosion cell — the acid eats the boulder pixel-by-pixel.
+    The ALPHA CHANNEL is load-bearing: ErodibleSurface initializes its cell mask
+    from it, so render, collision, and erosion all follow this exact shape.
+
+    Technique per the pixel-art rock idiom (Lospec / SLYNYRD Pixelblog 13,
+    hue-shifting tutorials): big FLAT facet clusters instead of per-pixel
+    shading, a 5-shade hue-shifted ramp (highlights lean yellow, shadows lean
+    purple), a hard dark outline, and crease lines on the shadow side of facet
+    boundaries. Light is screen-fixed top-left — that constancy is what makes
+    the tumble read while the boulder spins."""
+    import math
+
     rng = random.Random(SEED + seed_offset)
-    img = Image.new("RGB", (w, h), ROCK_MID)
-    img = patina(img, rng, strength=0.55, scale=5, shades=5)
-    d = ImageDraw.Draw(img)
-    # jagged cracks: random-walk polylines from near the top
-    for _ in range(3):
-        x, y = rng.randint(8, w - 8), rng.randint(2, h // 3)
-        for _ in range(rng.randint(4, 8)):
-            nx = max(2, min(w - 3, x + rng.randint(-6, 6)))
-            ny = min(h - 3, y + rng.randint(3, 9))
-            d.line([(x, y), (nx, ny)], fill=ROCK_DARK)
-            x, y = nx, ny
-    # lit top face + settled shadow at the base
-    d.line([(0, 0), (w - 1, 0)], fill=ROCK_HI)
-    d.line([(0, 1), (w - 1, 1)], fill=lerp(ROCK_HI, ROCK_MID, 0.5))
-    d.line([(0, h - 1), (w - 1, h - 1)], fill=ROCK_DARK)
-    img = edge_darken(img, depth=3, amount=0.45)
-    img.save(out_path)
+    lw, lh = w // 4, h // 4
+
+    # Warm oxidized-stone ramp (matches the toy-line reference boulders).
+    RAMP = [
+        (246, 210, 172),  # 0 highlight
+        (224, 164, 130),  # 1 light
+        (188, 122, 102),  # 2 mid
+        (138, 82, 78),    # 3 dark
+        (82, 48, 52),     # 4 outline / crease (deep plum)
+    ]
+
+    # ── Silhouette: an irregular convex POLYGON, not a smoothed blob ────────
+    # Straight edge runs and visible corners are what make it read as chipped
+    # stone; radial wobble reads as a ball. 7–9 vertices, jittered angles,
+    # radius 82–100% of the ellipse.
+    cx, cy = (lw - 1) / 2.0, (lh - 1) / 2.0
+    rx, ry = lw * 0.47, lh * 0.47
+    nv = 7 + rng.randrange(3)
+    verts = []
+    for i in range(nv):
+        a = (i + rng.random() * 0.55) * 2 * math.pi / nv
+        rr = 0.82 + rng.random() * 0.18
+        verts.append((cx + math.cos(a) * rx * rr, cy + math.sin(a) * ry * rr))
+    mask_img = Image.new("L", (lw, lh), 0)
+    ImageDraw.Draw(mask_img).polygon(verts, fill=255)
+    m = mask_img.load()
+    solid = [[m[x, y] > 0 for x in range(lw)] for y in range(lh)]
+
+    # Despeckle: drop 1px nubs, fill 1px holes — clean chunky pixels only.
+    for y in range(lh):
+        for x in range(lw):
+            n = sum(1 for ax, ay in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1))
+                    if 0 <= ax < lw and 0 <= ay < lh and solid[ay][ax])
+            if solid[y][x] and n <= 1:
+                solid[y][x] = False
+            elif not solid[y][x] and n == 4:
+                solid[y][x] = True
+
+    # ── Facets: straight CHORD cuts, not Voronoi — chiseled planes that meet
+    # at dead-straight creases (Voronoi boundaries arc, which reads soft).
+    # Four cuts at spread base angles, each offset from center along its
+    # normal, so the stone splits into comparable planes with no monster
+    # facet. Each pixel's facet is its side-of-line signature.
+    r_avg = (rx + ry) / 2.0
+    cuts = []
+    for base_a in (0.0, math.pi / 4, math.pi / 2, 3 * math.pi / 4):
+        a = base_a + (rng.random() - 0.5) * 0.5
+        off = (0.05 + rng.random() * 0.30) * (1 if rng.random() < 0.5 else -1)
+        qx = cx - math.sin(a) * off * r_avg
+        qy = cy + math.cos(a) * off * r_avg
+        cuts.append((qx, qy, math.cos(a), math.sin(a)))
+
+    def facet_at(x, y):
+        sig = 0
+        for i, (qx, qy, ux, uy) in enumerate(cuts):
+            if (x - qx) * -uy + (y - qy) * ux > 0:
+                sig |= 1 << i
+        return sig
+
+    # Shade bands by AREA QUANTILE down the light direction: facets sorted by
+    # their centroid's dot with the top-left light, then the brightest ~20% of
+    # AREA gets the highlight band, ~32% light, ~32% mid, ~16% dark. Area
+    # quantiles (not direction thresholds) are what keep the value balance of
+    # the reference on every roll — direction alone let one lucky plane flood
+    # the whole stone with highlight.
+    cells = {}
+    for y in range(lh):
+        for x in range(lw):
+            if solid[y][x]:
+                cells.setdefault(facet_at(x, y), []).append((x, y))
+    lit_of = {}
+    for f, pts in cells.items():
+        mx = sum(p[0] for p in pts) / len(pts)
+        my = sum(p[1] for p in pts) / len(pts)
+        vx, vy = mx - cx, my - cy
+        norm = math.hypot(vx, vy) or 1.0
+        lit_of[f] = (-0.55 * vx - 0.83 * vy) / norm
+    total = sum(len(pts) for pts in cells.values())
+    band_of, acc = {}, 0
+    for f in sorted(cells, key=lambda f: -lit_of[f]):
+        frac = (acc + len(cells[f]) / 2.0) / total  # facet's area midpoint
+        band_of[f] = 0 if frac < 0.20 else 1 if frac < 0.52 else 2 if frac < 0.84 else 3
+        acc += len(cells[f])
+
+    img = Image.new("RGBA", (lw, lh), (0, 0, 0, 0))
+    px = img.load()
+    fmap = [[-1] * lw for _ in range(lh)]
+    bmap = [[0] * lw for _ in range(lh)]
+    for y in range(lh):
+        for x in range(lw):
+            if not solid[y][x]:
+                continue
+            f = facet_at(x, y)
+            fmap[y][x] = f
+            bmap[y][x] = band_of[f]
+
+    # Creases: where the up/left neighbor is a different facet of EQUAL or
+    # brighter value, darken this pixel one band — a thin chisel line on the
+    # shadow side of every plane boundary (equal-value planes would otherwise
+    # merge into one blob). Compared against a frozen copy so creases don't
+    # cascade off each other.
+    orig = [row[:] for row in bmap]
+    for y in range(lh):
+        for x in range(lw):
+            if fmap[y][x] < 0:
+                continue
+            for ax, ay in ((x - 1, y), (x, y - 1)):
+                if (0 <= ax < lw and 0 <= ay < lh and fmap[ay][ax] >= 0
+                        and fmap[ay][ax] != fmap[y][x] and orig[ay][ax] <= orig[y][x]):
+                    bmap[y][x] = min(3, orig[y][x] + 1)
+                    break
+
+    # Specks: a little surface grain, one band up or down.
+    interior = [(x, y) for y in range(1, lh - 1) for x in range(1, lw - 1)
+                if solid[y][x] and all(solid[y + dy][x + dx]
+                                       for dx in (-1, 0, 1) for dy in (-1, 0, 1))]
+    for x, y in rng.sample(interior, min(5, len(interior))):
+        bmap[y][x] = max(0, min(3, bmap[y][x] + rng.choice((-1, 1))))
+
+    for y in range(lh):
+        for x in range(lw):
+            if solid[y][x]:
+                c = RAMP[bmap[y][x]]
+                px[x, y] = (c[0], c[1], c[2], 255)
+
+    # Hard 1px (art pixel) outline, plus a doubled dark rim along the bottom
+    # half — grounds the boulder and pops it off acid and background alike.
+    o = RAMP[4]
+    for y in range(lh):
+        for x in range(lw):
+            if not solid[y][x]:
+                continue
+            at_edge = (x == 0 or y == 0 or x == lw - 1 or y == lh - 1
+                       or not solid[y][x - 1] or not solid[y][x + 1]
+                       or not solid[y - 1][x] or not solid[y + 1][x])
+            if at_edge:
+                px[x, y] = (o[0], o[1], o[2], 255)
+            elif (y > cy and y + 1 < lh and solid[y + 1][x]
+                  and (y + 2 >= lh or not solid[y + 2][x])):
+                c = RAMP[3]
+                px[x, y] = (c[0], c[1], c[2], 255)
+
+    img.resize((w, h), Image.NEAREST).save(out_path)
 
 
 if __name__ == "__main__":

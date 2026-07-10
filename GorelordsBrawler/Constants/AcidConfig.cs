@@ -286,6 +286,24 @@ namespace GorelordsBrawler.Constants
 		/// </summary>
 		public const float RockSplashScale = 0.35f;
 
+		// ── Tumble (visual spin; collision stays the axis-aligned cell mask) ──
+		// A boulder must be UPRIGHT at rest (the erosion mask and colliders are
+		// axis-aligned to the texture), so the airborne spin is STEERED: every
+		// frame the fall projects its time-to-impact and adjusts the rate so a
+		// whole number of turns completes exactly at touchdown. On landing the
+		// remaining angular momentum feeds a damped spring around the rest pose
+		// — the rock tips past upright and rocks back. Without the steer, the
+		// residual angle has to be unwound after impact, which either rewinds
+		// the tumble or whip-spins it (both read as broken physics).
+		public const float RockSpinMinRadPerSec = 2.2f; // preferred (seeded) rate band
+		public const float RockSpinMaxRadPerSec = 4.6f;
+		public const float RockSpinSteerMinRadPerSec = 1.6f; // hard rate bounds the steer may use
+		public const float RockSpinSteerMaxRadPerSec = 7.2f;
+		/// <summary>Below this projected time-to-impact, hold the plan (the division destabilizes).</summary>
+		public const float RockSpinSteerCutoffSeconds = 0.12f;
+		public const float RockSettleOmega   = 14f;   // settle spring natural frequency (rad/s)
+		public const float RockSettleDamping = 0.55f; // damping ratio < 1: one small overshoot, then rest
+
 		// Swiss-cheese erosion (ErodibleSurface): platforms are a grid of solid
 		// cells the acid eats by CONTACT — every pass, perimeter cells whose
 		// world position overlaps the acid metaball are removed, so holes carve

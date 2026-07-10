@@ -28,6 +28,28 @@ rounds of waterline fixes).
    platform-fighter recovery-route pattern: a path back that the opponent
    can contest).
 
+## Shape & tumble (follow-up user direction: "rock-shaped boulders so they can
+tumble", then "good rock physics — tumble, settle, interact with the acid")
+
+The boulder texture's ALPHA CHANNEL is load-bearing: ErodibleSurface
+initializes its cell mask from it, so render, collision, and erosion all
+share the exact silhouette. The art is pixel art authored at quarter scale
+and upscaled x4 nearest — one art pixel == one 4px erosion cell, so the acid
+eats the stone pixel-by-pixel. Silhouette = irregular convex polygon (straight
+edges read as chipped stone); facets = straight chord cuts (planes meet at
+dead-straight chisel creases); shading = 5-shade hue-shifted ramp with bands
+assigned by AREA QUANTILE down the light direction, which keeps the reference
+value balance on every roll.
+
+The tumble is STEERED (the animator's pre-timed-rotation trick): each falling
+frame projects time-to-impact from closed-form kinematics (gravity, terminal
+speed — halved in liquid; growing piles refresh the estimate) and adjusts the
+spin rate so a whole number of turns completes exactly at touchdown. The
+leftover angular velocity feeds a damped spring around the rest pose — the
+boulder tips past upright and rocks back to settle, never rewinding. Spin is
+visual-only; collision stays the axis-aligned cell mask; rates are seeded per
+drop, so the stepped E2E stays deterministic.
+
 ## Sizing math (against the C.1 rise schedule)
 
 Rock: 96 wide, height 96 or 128 (varied silhouettes). Bank ground y=544.

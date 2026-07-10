@@ -80,8 +80,16 @@ namespace GorelordsBrawler.Components.Hazards
 		private readonly Texture2D _texture;
 		internal Texture2D SlabTexture => _texture;
 
+		/// <summary>
+		/// Visual-only spin (radians) applied by a FALLING host: the intact
+		/// hull draws as one rotated sprite while tumbling, then eases to 0 on
+		/// landing where the axis-aligned cell mask takes over. Collision is
+		/// never rotated — the mask IS the resting shape.
+		/// </summary>
+		public float RenderRotation;
+
 		public ErodibleSurface(AcidSurface acid, float width, float height, Color baseColor,
-			float passesPerSec, Texture2D texture = null)
+			float passesPerSec, Texture2D texture = null, bool maskFromTextureAlpha = false)
 		{
 			_acid         = acid;
 			Width         = width;
@@ -97,12 +105,41 @@ namespace GorelordsBrawler.Components.Hazards
 			_solid = new bool[_cols * _rows];
 			_eaten = new bool[_cols * _rows];
 			_wetStreak = new byte[_cols * _rows];
+
+			if (maskFromTextureAlpha && texture != null)
+			{
+				// The texture's ALPHA is the shape (boulders): a cell starts
+				// solid only where its center texel is opaque, so render,
+				// collision, and erosion all share one irregular silhouette.
+				var texels = new Color[texture.Width * texture.Height];
+				texture.GetData(texels);
+				for (int row = 0; row < _rows; row++)
+				{
+					for (int col = 0; col < _cols; col++)
+					{
+						int tx = (int)((col + 0.5f) / _cols * texture.Width);
+						int ty = (int)((row + 0.5f) / _rows * texture.Height);
+						_solid[row * _cols + col] = texels[ty * texture.Width + tx].A > 128;
+					}
+				}
+			}
+			else
+			{
+				for (int i = 0; i < _solid.Length; i++)
+				{
+					_solid[i] = true;
+				}
+			}
+
+			_totalCells = _solid.Length;
+			_solidCount = 0;
 			for (int i = 0; i < _solid.Length; i++)
 			{
-				_solid[i] = true;
+				if (_solid[i])
+				{
+					_solidCount++;
+				}
 			}
-			_totalCells = _solid.Length;
-			_solidCount = _totalCells;
 			SolidTopLocalY    = -height * 0.5f;
 			SolidBottomLocalY =  height * 0.5f;
 		}
@@ -393,9 +430,29 @@ namespace GorelordsBrawler.Components.Hazards
 
 		public override void Render(Batcher batcher, Camera camera)
 		{
+			var tex = _surface.SlabTexture;
+
+			// Tumbling (FALLING host, intact hull): one rotated sprite around
+			// the center — the visual spin. Collision stays axis-aligned; on
+			// landing the host eases RenderRotation to 0 and the cell-mask
+			// path below takes over seamlessly.
+			if (tex != null && MathF.Abs(_surface.RenderRotation) > 0.001f)
+			{
+				batcher.Draw(
+					tex,
+					Entity.Transform.Position,
+					null,
+					Color.White,
+					_surface.RenderRotation,
+					new Vector2(tex.Width * 0.5f, tex.Height * 0.5f),
+					new Vector2(_surface.Width / tex.Width, _surface.Height / tex.Height),
+					SpriteEffects.None,
+					0f);
+				return;
+			}
+
 			var topLeft = Entity.Transform.Position + _surface.LocalTopLeft;
 			var rects = _surface.MergedRects;
-			var tex = _surface.SlabTexture;
 			for (int i = 0; i < rects.Count; i++)
 			{
 				var r = rects[i];

@@ -21,6 +21,7 @@ namespace GorelordsBrawler.DevTools
 	/// POST /step       — { frames } advance N fixed-dt frames; blocks until they've run
 	/// POST /teleport   — { player, x, y } place a player (setup helper)
 	/// POST /damage     — { player, amount } apply raw damage to a player (setup helper)
+	/// POST /quit       — exit the game process (the E2E launcher's stale-game sweep)
 	/// </summary>
 	public static class GameDebugServer
 	{
@@ -204,6 +205,11 @@ namespace GorelordsBrawler.DevTools
 					DebugControl.EnqueueDamage(
 						GetInt(body, "player", 0),
 						GetInt(body, "amount", 0));
+					await WriteOkAsync(resp);
+				}
+				else if (req.HttpMethod == "POST" && path == "/quit")
+				{
+					DebugControl.EnqueueQuit();
 					await WriteOkAsync(resp);
 				}
 				else

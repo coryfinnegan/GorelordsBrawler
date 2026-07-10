@@ -188,6 +188,17 @@ namespace GorelordsBrawler.DevTools
 		}
 
 		/// <summary>
+		/// Exit the game process cleanly. The E2E launcher posts this to clear a stale game
+		/// (a previous run's leftover) squatting on the port before starting its own. Enqueued
+		/// like every other command, so it works even on a game frozen in stepped mode — the
+		/// queue drains BEFORE the stepping gate in <c>GorelordsBrawlerGame.Update</c>.
+		/// </summary>
+		public static void EnqueueQuit()
+		{
+			Enqueue(() => Core.Exit());
+		}
+
+		/// <summary>
 		/// Apply raw damage to a player's <see cref="Health"/>. Setup-only — used to stage a
 		/// scenario deterministically (e.g. drive a player to 0 HP to exercise the death/respawn
 		/// cycle) without leaning on a hazard's timing or geometry, which would couple the test to
