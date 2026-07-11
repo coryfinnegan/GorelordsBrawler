@@ -188,10 +188,8 @@ public class AcidPhaseCE2ETests
 		// ACT 1 — loop 1's rise DROWNS the diving boards outright (the first
 		// destruction beat) and then LAPS the LOW tier bodies. Contact erosion
 		// self-limits at the waterline, so the lows survive the whole contest
-		// loop as fighting ground — STRICTLY: the rockfall doesn't start until
-		// loop 2 precisely so nothing (acid or boulder wave) can break the
-		// contest beat. At loop 1's drain: both boards gone, everything else
-		// standing.
+		// loop as fighting ground. At loop 1's drain: both boards gone,
+		// everything else standing.
 		var loop1Drain = await arena.StepUntilAsync(
 			s => s.AcidPhase == "Drain" && s.AcidLoop == 1, maxFrames: 6000, batch: 10);
 		loop1Drain.TiersRemaining.ShouldBe(6,
@@ -227,13 +225,6 @@ public class AcidPhaseCE2ETests
 		var midsBroken = await arena.StepUntilAsync(
 			s => s.TiersRemaining <= 2, maxFrames: 4000, batch: 10);
 
-		// ROCKFALL in its element: the storm rains boulders (3.5 s cadence);
-		// with the pile bias and the seeded spawner rng, a cairn whose cap
-		// breaches the sea — an ISLAND, the recovery route — must form within
-		// a generous window.
-		var island = await arena.StepUntilAsync(
-			s => s.RockIslands >= 1, maxFrames: 6000, batch: 20);
-
 		// ASSERT
 		storm.AcidPhase.ShouldBe("FinalFlood");
 		lowsEaten.TiersRemaining.ShouldBeLessThanOrEqualTo(4, "loop 2's rise must dissolve the LOW tier pair");
@@ -245,49 +236,6 @@ public class AcidPhaseCE2ETests
 			"above the mid tops, below the top tiers");
 		midsBroken.TiersRemaining.ShouldBeLessThanOrEqualTo(2,
 			"the storm sea must consume the MID tiers — otherwise two campers make the match unendable");
-		island.RockIslands.ShouldBeGreaterThanOrEqualTo(1,
-			"a cairn island must breach the storm sea — the recovery route has to exist when it matters most");
 	}
 
-	// ── The rockfall: gating, landing, and the impact hazard ─────────────────
-
-	[SkippableFact]
-	public async Task Rockfall_StartsAtLoopTwo_RocksRest_AndFallingRocksHurt()
-	{
-		Skip.IfNot(ArenaPage.IsEnabled, $"Set {ArenaPage.EnableEnvVar}=1 to run E2E tests.");
-
-		// ARRANGE — park players on the top tiers, out of the early hazards.
-		await using var arena = await ArenaPage.LaunchAsync();
-		await arena.EnterSteppedModeAsync();
-		await arena.TeleportAsync(player: 0, 512f, 134f);
-		await arena.TeleportAsync(player: 1, 768f, 134f);
-		await arena.StepAsync(10);
-
-		// ACT/ASSERT 1 — no rocks until the arena starts LOSING footing: Calm,
-		// loop 0, and the loop-1 CONTEST are rock-free (debris arrives because
-		// the acid took the ground — and loop-1 pit towers' collapse waves
-		// were killing the contested lows before this gate existed).
-		var loop1Drain = await arena.StepUntilAsync(
-			s => s.AcidPhase == "Drain" && s.AcidLoop == 1, maxFrames: 6000, batch: 10);
-		loop1Drain.RocksAlive.ShouldBe(0, "no rocks may fall before loop 2 — loops 0-1 teach and contest");
-
-		// ACT/ASSERT 2 — from loop 2 the facility sheds rock: a boulder spawns,
-		// falls, and comes to REST (rocks cannot float by construction).
-		var firstRock = await arena.StepUntilAsync(
-			s => s.AcidLoop >= 2 && s.RocksAlive >= 1,
-			maxFrames: 6000, batch: 10);
-		firstRock.RocksAlive.ShouldBeGreaterThanOrEqualTo(1, "loop 2 must begin the rockfall");
-
-		// ACT/ASSERT 3 — the impact hazard: catch a telegraphed drop mid-fall
-		// and teleport P0 into its path below it. The boulder must hurt on the
-		// way through (12 dmg + shove — the telegraph is what makes this fair).
-		var falling = await arena.StepUntilAsync(
-			s => s.RockFallingY > -1 && s.RockFallingY < 200, maxFrames: 6000, batch: 5);
-		int hpBefore = (await arena.StateAsync()).Players[0].Hp;
-		await arena.TeleportAsync(player: 0, falling.RockFallingX, 340f);
-		var hurt = await arena.StepUntilAsync(
-			s => s.Players[0].Hp < hpBefore, maxFrames: 240, batch: 5);
-		hurt.Players[0].Hp.ShouldBeLessThan(hpBefore,
-			"a falling boulder must damage the player it lands on");
-	}
 }

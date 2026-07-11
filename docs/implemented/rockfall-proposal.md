@@ -1,6 +1,11 @@
 # Rockfall — tumbling rocks replace the drop-logs
 
-**Status: APPROVED ("yep do it", 2026-07-05) — implementing.**
+**Status: REMOVED (2026-07-11). Functional testing verdict: "The rocks arent
+working. Remove them." Superseded by telegraphed platform respawns
+(docs/platform-respawn-proposal.md) — the recovery-footing job moved from
+falling debris to the platforms themselves. This doc stays as the record of
+what was tried and what the verification found (probe-corruption, piston
+waves, tsunami splash — findings that still inform the acid systems).**
 
 ## The problem (functional-test findings)
 
@@ -36,15 +41,26 @@ initializes its cell mask from it, so render, collision, and erosion all
 share the exact silhouette. The art is pixel art authored at quarter scale
 and upscaled x4 nearest — one art pixel == one 4px erosion cell, so the acid
 eats the stone pixel-by-pixel. Silhouette = irregular convex polygon (straight
-edges read as chipped stone); facets = straight chord cuts (planes meet at
-dead-straight chisel creases); shading = 5-shade hue-shifted ramp with bands
-assigned by AREA QUANTILE down the light direction, which keeps the reference
-value balance on every roll.
+edges read as chipped stone); facets = straight chord cuts, count scaled to
+the canvas, offset well off-center (near-center chords converge into a
+pinwheel); shading = FORM + FACET, the pixel-artist hybrid: each pixel's base
+band comes from its own position dotted with the top-left light (guarantees
+the bright-cap/dark-underside read on every stone), and each facet shifts its
+whole plane ±1 band with the offsets respecting the light (shadow-side facets
+may only darken). Ramp = 5 hue-shifted GREYS (user feedback), highlights
+warm-neutral, shadows blue-leaning, kept lighter than the arena tiles.
+
+FOUR size variants — 64x96 chip, 96x96 block, 96x128 standing stone, 128x128
+big one — and the spawner never repeats a size twice in a row, so the fall
+visibly alternates (user feedback). Every height ≥ 96 keeps the cairn
+arithmetic intact.
 
 The tumble is STEERED (the animator's pre-timed-rotation trick): each falling
 frame projects time-to-impact from closed-form kinematics (gravity, terminal
 speed — halved in liquid; growing piles refresh the estimate) and adjusts the
-spin rate so a whole number of turns completes exactly at touchdown. The
+spin rate so a whole number of turns completes exactly at touchdown. A tier
+ricochet re-plans mid-air: the spin direction flips to follow the deflection
+(the rolling cue) and the turn count re-solves for the new landing. The
 leftover angular velocity feeds a damped spring around the rest pose — the
 boulder tips past upright and rocks back to settle, never rewinding. Spin is
 visual-only; collision stays the axis-aligned cell mask; rates are seeded per
@@ -52,7 +68,8 @@ drop, so the stepped E2E stays deterministic.
 
 ## Sizing math (against the C.1 rise schedule)
 
-Rock: 96 wide, height 96 or 128 (varied silhouettes). Bank ground y=544.
+Rock sizes: 64x96 / 96x96 / 96x128 / 128x128 (alternating; min height 96 is
+what the pile arithmetic below is computed from). Bank ground y=544.
 
 | Water | Surface y | Footing that breaches |
 |---|---|---|
@@ -65,25 +82,33 @@ Pit-floor piles (floor 736) need ~5 rocks — pit islands are rare jackpots;
 bank cairns are the reliable route, which matches where knocked-in players
 breach.
 
-## Drop columns (as implemented: GHOST columns only)
+## Drop columns (final: ANYWHERE, with tier ricochet — v2 after user feedback)
 
-Rocks fall exclusively where the acid ate the arena's supports — each column
-activates when its tier pair dies:
+**v1 shipped ghost-columns-only** (drops confined to x 224/1056/344/936,
+unlocking as tier pairs died) because two verification findings forced it:
+a center pit tower's collapse waves killed the contested lows in loop 1
+(so rockfall starts at loop 2, protecting the contest beat — still true),
+and a center cairn breaching the surface sat in the standing-surface probe's
+columns — its cap puddles corrupted the closed-loop fill, which over-poured
+and drowned every island.
 
-- **x 224 / 1056** (low-tier ghosts): unlock when the LOW pair dies (early
-  loop 2 — the rockfall's real start).
-- **x 344 / 936** (mid-tier ghosts): unlock when the MID pair dies (storm).
+**v2 (functional-test feedback: "spawn in more random ways so they can hit
+the platforms and tumble down") removes the placement restriction** and fixes
+both original findings at their real roots instead:
 
-The originally-proposed always-open center channel was CUT during
-verification, twice over: a center pit tower's collapse waves killed the
-contested lows in loop 1 (so rockfall now starts at loop 2, protecting the
-contest beat), and a center cairn breaching the surface sat in the
-standing-surface probe's columns — its cap puddles corrupted the closed-loop
-fill, which over-poured and drowned every island. Ghost-only placement solves
-both structurally, and bank cairns (3 rocks to breach the storm) make better
-recovery footing than pit towers (5) anyway. Collapsing piles also SETTLE
-(slow sink) rather than re-plunging — a gravity re-fall made the collider a
-hydraulic piston.
+- **Tier ricochet.** A rock over a living platform BOUNCES off its top
+  (restitution 0.3 with a floor on the pop, so it never grinds) and deflects
+  toward the tier's near edge, so it always tumbles off and continues down —
+  rocks never clip a platform and never rest on one. Deflection is derived
+  from seed + bounce count: stepped E2E replays identical ricochets.
+- **The probe defends itself.** GetStandingSurfaceY skips columns occupied by
+  a near-surface rock (the RockfallSpawner exposes the occupancy check), and
+  falls back to the volumetric level if every column is blocked. The
+  corruption mechanism that forced ghost-only placement is gone, so cairns
+  may now form anywhere — including the center channel.
+
+Collapsing piles still SETTLE (slow sink) rather than re-plunging — a gravity
+re-fall made the collider a hydraulic piston.
 
 ## Cadence
 
@@ -104,8 +129,9 @@ splash-on-entry all carry over unchanged.
 
 ## Verification plan
 
-- Unit: drop columns clear of live tier spans + inlet columns; cadence
-  monotonic; the sizing invariant (a 3-pile must breach the storm surface).
+- Unit: size variants alternate visibly (distinct areas) and the widest rock
+  stays on-arena at the drop-range edges; cadence monotonic; the sizing
+  invariant (a 3-pile of the SHORTEST variant must breach the storm surface).
 - E2E (seeded spawner RNG → deterministic in stepped mode): no rocks before
   loop 1; rocks land and rest; **≥1 island forms during the storm**; falling
   rocks damage a parked player under a column.

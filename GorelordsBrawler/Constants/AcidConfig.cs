@@ -202,108 +202,6 @@ namespace GorelordsBrawler.Constants
 		public const float SurgeBurstSeconds    = 0.6f;
 		public const float SurgeBurstFlowMult   = 1.5f;
 
-		// ── Rockfall (docs/rockfall-proposal.md — replaced the drop-logs) ────
-		// Rocks REST on ground/each other and protrude from the acid when tall
-		// enough — no buoyancy, no waterline queries, no float bug class. They
-		// pile into cairns; a tall-enough cairn breaches the surface and forms
-		// a temporary island (the recovery route back to the fight), and the
-		// acid chews the submerged base so the archipelago keeps churning.
-		public const float RockWidth = 96f;
-		/// <summary>Two heights → varied silhouettes and pile arithmetic.</summary>
-		public static readonly float[] RockHeights = { 96f, 128f };
-
-		/// <summary>
-		/// Drop columns — GHOST columns only, unlocked as their tiers die:
-		/// rock falls exactly where the acid ate the arena's supports, never
-		/// anywhere else. Three constraints meet in this policy:
-		///   1. a falling rock must never clip a LIVING platform;
-		///   2. the center channel (576-704) must stay rock-free — a cairn
-		///      breaching there sat in the standing-surface probe's columns,
-		///      its cap-puddles corrupted the reading, and the closed-loop
-		///      fill over-poured until every island drowned (2026-07-05
-		///      probe);
-		///   3. bank-ground cairns (3 rocks to breach the storm) beat pit
-		///      cairns (5) as recovery footing anyway.
-		/// Column bands are (slot ± jitter ± half rock width); the mids' outer
-		/// anchor points (344/936) clear the living top tiers where their
-		/// centers would not.
-		/// </summary>
-		public static readonly float[] RockSlotLowGhostX = { 224f, 1056f };
-		public static readonly float[] RockSlotMidGhostX = { 344f, 936f };
-		public const float RockSlotJitter = 12f;
-
-		/// <summary>
-		/// Chance a drop AIMS at a random living rock's column instead of a
-		/// random slot — the pile bias (user decision: structured randomness).
-		/// Pure random scatter rarely builds the 3-rock cairns the storm needs
-		/// (bank ground 544 → a 96+96+128 pile tops at 224, 48 px proud of the
-		/// 272 storm surface); 40% herding makes islands reliable while drops
-		/// still read as chaos.
-		/// </summary>
-		public const float RockPileBias = 0.4f;
-
-		// Cadence: no rocks until the arena starts LOSING footing — loop 1 is
-		// the pure contest beat (debris arrives because the acid took the
-		// ground, not before: with rocks from loop 1, every drop went down the
-		// only unlocked column and built one pit tower whose collapses pumped
-		// piston waves that killed both lapped lows — E2E caught it). From
-		// loop 2 a rock every ~12 s, tightening per loop; the storm is a
-		// rockfall. The telegraph (a marker at the drop column + rumble on
-		// impact) makes the chaos readable — dodge or be hit.
-		public const float RockIntervalBaseSeconds = 12f;
-		public const float RockIntervalDecay       = 0.7f;
-		public const float RockIntervalMinSeconds  = 6f;
-		public const float StormRockIntervalSeconds = 3.5f;
-		public const int   RockMaxAlive             = 10;
-		public const float RockTelegraphSeconds     = 0.8f;
-
-		public static float RockIntervalFor(int loop) =>
-			loop <= 1
-				? float.PositiveInfinity
-				: MathF.Max(RockIntervalMinSeconds,
-					RockIntervalBaseSeconds * MathF.Pow(RockIntervalDecay, loop - 2));
-
-		/// <summary>
-		/// Descent speed for a pile rock whose support eroded away. A full
-		/// gravity re-plunge made every tower collapse a hydraulic piston (the
-		/// collider sweeping down displaces the pool violently — waves the
-		/// splash scale can't touch); a settling pile slumps.
-		/// </summary>
-		public const float RockSettleSinkSpeed = 70f;
-
-		// Impact: a falling rock that lands on a player hurts and shoves them
-		// aside — the chaos has teeth, but the telegraph makes it fair.
-		public const float RockImpactDamage     = 12f;
-		public const float RockImpactKnockbackX = 220f;
-		public const float RockImpactKnockbackY = -240f;
-
-		/// <summary>
-		/// Splash impulse scale for a rock plunging into the pool. At full
-		/// fall speed every center-channel drop threw a tier-killing tsunami:
-		/// dense crests over the lapped lows' 16 px freeboard, several drops
-		/// per loop — one low tier fully died during the CONTEST loop (E2E
-		/// caught it). A boulder jets on entry; it doesn't detonate.
-		/// </summary>
-		public const float RockSplashScale = 0.35f;
-
-		// ── Tumble (visual spin; collision stays the axis-aligned cell mask) ──
-		// A boulder must be UPRIGHT at rest (the erosion mask and colliders are
-		// axis-aligned to the texture), so the airborne spin is STEERED: every
-		// frame the fall projects its time-to-impact and adjusts the rate so a
-		// whole number of turns completes exactly at touchdown. On landing the
-		// remaining angular momentum feeds a damped spring around the rest pose
-		// — the rock tips past upright and rocks back. Without the steer, the
-		// residual angle has to be unwound after impact, which either rewinds
-		// the tumble or whip-spins it (both read as broken physics).
-		public const float RockSpinMinRadPerSec = 2.2f; // preferred (seeded) rate band
-		public const float RockSpinMaxRadPerSec = 4.6f;
-		public const float RockSpinSteerMinRadPerSec = 1.6f; // hard rate bounds the steer may use
-		public const float RockSpinSteerMaxRadPerSec = 7.2f;
-		/// <summary>Below this projected time-to-impact, hold the plan (the division destabilizes).</summary>
-		public const float RockSpinSteerCutoffSeconds = 0.12f;
-		public const float RockSettleOmega   = 14f;   // settle spring natural frequency (rad/s)
-		public const float RockSettleDamping = 0.55f; // damping ratio < 1: one small overshoot, then rest
-
 		// Swiss-cheese erosion (ErodibleSurface): platforms are a grid of solid
 		// cells the acid eats by CONTACT — every pass, perimeter cells whose
 		// world position overlaps the acid metaball are removed, so holes carve
@@ -336,7 +234,6 @@ namespace GorelordsBrawler.Constants
 		//   (24 rows, shells from both faces) lasts ~60 s.
 		public const float ErosionCellSize         = 4f;
 		public const float TierErosionPassesPerSec = 3.0f;
-		public const float RockErosionPassesPerSec = 0.6f;
 
 		// ── Respawn safety (flood-aware) ──────────────────────────────────────
 		/// <summary>

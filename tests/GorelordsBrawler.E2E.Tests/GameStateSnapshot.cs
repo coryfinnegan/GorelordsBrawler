@@ -27,13 +27,6 @@ public class GameStateSnapshot
 	[JsonPropertyName("acidDraining")]   public bool   AcidDraining   { get; set; }
 	[JsonPropertyName("acidFillCap")]    public int    AcidFillCap    { get; set; }
 	[JsonPropertyName("tiersRemaining")] public int    TiersRemaining { get; set; }
-	// Rockfall oracles: live boulders, islands (resting caps proud of the
-	// measured surface — the recovery-route metric), and the first falling
-	// rock's position for staging the impact-damage scenario.
-	[JsonPropertyName("rocksAlive")]     public int    RocksAlive     { get; set; }
-	[JsonPropertyName("rockIslands")]    public int    RockIslands    { get; set; }
-	[JsonPropertyName("rockFallingX")]   public int    RockFallingX   { get; set; } = -1;
-	[JsonPropertyName("rockFallingY")]   public int    RockFallingY   { get; set; } = -1;
 
 	// Phase B: the live damage-AABB of the acid (the ContactHazard broadphase).
 	// Lets tests prove a player was INSIDE the box while dry — the phantom-damage

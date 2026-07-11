@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using GorelordsBrawler.Components.Hazards.Fluid;
 using GorelordsBrawler.Constants;
@@ -240,102 +241,6 @@ public class AcidConfigTests
 			}
 		}
 		Assert.True(anyDry, "no respawn candidate survives the deepest regular rise — mid-match deaths would respawn into acid");
-	}
-
-	// ── Rockfall (docs/rockfall-proposal.md) ─────────────────────────────────
-
-	[Fact]
-	public void RockDropColumns_NeverClipLivingPlatforms()
-	{
-		// A falling rock must never pass through a LIVING platform. Each
-		// column's full band (slot ± jitter ± half rock width) is checked
-		// against the spans still standing when that column unlocks (C.2:
-		// boards 448-544/736-832 die before any rockfall; lows 128-320 &
-		// 960-1152 unlock their own columns by dying; mids likewise; TOPS
-		// 416-576/704-864 outlive everything, so EVERY band must clear them).
-		float half = AcidConfig.RockSlotJitter + AcidConfig.RockWidth * 0.5f;
-
-		static bool Intersects(float lo, float hi, float a, float b) => lo < b && hi > a;
-
-		void AssertClearOfTops(float x, string name)
-		{
-			Assert.False(Intersects(x - half, x + half, 416f, 576f),
-				$"{name} column {x} (band ±{half}) clips the living top-left tier (416-576)");
-			Assert.False(Intersects(x - half, x + half, 704f, 864f),
-				$"{name} column {x} (band ±{half}) clips the living top-right tier (704-864)");
-		}
-
-		foreach (var x in AcidConfig.RockSlotLowGhostX)
-		{
-			AssertClearOfTops(x, "low-ghost");
-			// Low ghosts open while the MIDS still live too.
-			Assert.False(Intersects(x - half, x + half, 352f, 480f),
-				$"low-ghost column {x} clips the living mid-left tier");
-			Assert.False(Intersects(x - half, x + half, 800f, 928f),
-				$"low-ghost column {x} clips the living mid-right tier");
-		}
-
-		foreach (var x in AcidConfig.RockSlotMidGhostX)
-		{
-			AssertClearOfTops(x, "mid-ghost");
-		}
-
-		// Every band must stay clear of the corner stream/spawn columns AND
-		// the CENTER CHANNEL — the standing-surface probe lives at x 560-720,
-		// and a cairn breaching there corrupts the closed-loop fill (its cap
-		// puddles read as "surface"; the fill over-poured and drowned every
-		// island — 2026-07-05 probe).
-		foreach (var x in AcidConfig.RockSlotLowGhostX.Concat(AcidConfig.RockSlotMidGhostX))
-		{
-			Assert.True(x - half > 96f && x + half < 1184f,
-				$"drop column {x} reaches the corner stream/spawn columns");
-			Assert.False(Intersects(x - half, x + half, 544f, 736f),
-				$"drop column {x} intrudes on the standing-surface probe lane (544-736)");
-		}
-	}
-
-	[Fact]
-	public void RockCadence_StartsAtLoopTwo_EscalatesAndTheStormIsARockfall()
-	{
-		// Loops 0-1 are rock-free: loop 0 teaches, loop 1 is the pure contest
-		// beat (with rocks from loop 1, every drop built one pit tower whose
-		// collapse waves killed the contested lows — the rockfall belongs to
-		// the part of the match that is LOSING footing).
-		Assert.True(float.IsPositiveInfinity(AcidConfig.RockIntervalFor(0)));
-		Assert.True(float.IsPositiveInfinity(AcidConfig.RockIntervalFor(1)),
-			"loop 1 must stay rock-free — the contest beat is protected");
-		float prev = AcidConfig.RockIntervalFor(2);
-		for (int loop = 3; loop <= 8; loop++)
-		{
-			float cur = AcidConfig.RockIntervalFor(loop);
-			Assert.True(cur <= prev, $"rock interval grew at loop {loop}");
-			prev = cur;
-		}
-		Assert.Equal(AcidConfig.RockIntervalMinSeconds, AcidConfig.RockIntervalFor(100), precision: 3);
-		Assert.True(AcidConfig.StormRockIntervalSeconds < AcidConfig.RockIntervalMinSeconds,
-			"the storm must rain rocks faster than any regular loop");
-	}
-
-	[Fact]
-	public void CairnArithmetic_AThreeRockPileBreachesTheStorm()
-	{
-		// The recovery-route sizing invariant: on bank ground, a pile of the
-		// two smallest rocks plus one more must stand proud of the storm's
-		// standing surface with real freeboard — otherwise islands can never
-		// form when they matter most.
-		float minH = float.MaxValue;
-		foreach (var h in AcidConfig.RockHeights)
-		{
-			minH = MathF.Min(minH, h);
-		}
-		float threePileTop = AcidConfig.LipY - 3f * minH;
-		Assert.True(threePileTop <= AcidConfig.StormCeilingY - 16f,
-			$"a 3-rock pile on the banks tops at y={threePileTop} — not proud of the storm surface ({AcidConfig.StormCeilingY})");
-
-		// And a single rock must already matter in loop 0's awash (early feel).
-		float oneRockTop = AcidConfig.LipY - minH;
-		Assert.True(oneRockTop < AcidConfig.RiseCeilingFor(0),
-			"a single bank rock must protrude from the loop-0 awash");
 	}
 
 	[Fact]

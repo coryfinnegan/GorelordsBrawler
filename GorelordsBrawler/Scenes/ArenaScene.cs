@@ -139,11 +139,8 @@ namespace GorelordsBrawler.Scenes
 
 			// Dissolvable refuge tiers (functional-test decision: the acid EATS
 			// the arena as it climbs). Each TMX "tiers" object becomes a solid
-			// ledge that burns away when the rising surface reaches it. The
-			// per-rank alive counts drive the ROCKFALL's drop-column unlocks:
-			// a ghost column only opens once its tier pair is gone, so a
-			// falling rock never clips through a living platform.
-			int tiersAlive = 0, lowTiersAlive = 0, midTiersAlive = 0;
+			// ledge that burns away when the rising surface reaches it.
+			int tiersAlive = 0;
 			var tierGroup = tiledMap.GetObjectGroup("tiers");
 			if (tierGroup != null)
 			{
@@ -161,40 +158,13 @@ namespace GorelordsBrawler.Scenes
 						acidSurface, obj.Width, obj.Height, rank));
 
 					tiersAlive++;
-					bool isLow = rank == "low";
-					bool isMid = rank == "mid";
-					if (isLow)
-					{
-						lowTiersAlive++;
-					}
-					if (isMid)
-					{
-						midTiersAlive++;
-					}
 					tier.OnDissolved = () =>
 					{
 						tiersAlive--;
-						if (isLow)
-						{
-							lowTiersAlive--;
-						}
-						if (isMid)
-						{
-							midTiersAlive--;
-						}
 					};
 				}
 			}
 
-			// The ROCKFALL (docs/rockfall-proposal.md — replaced the drop-logs):
-			// from loop 1, telegraphed boulders shed down unlocked columns and
-			// pile into cairn islands — the recovery route back to the fight.
-			var rockfall = AddSceneComponent(new RockfallSpawner());
-			rockfall.Initialize(acidSurface);
-			rockfall.LoopProvider = () => phaseManager.Loop;
-			rockfall.IsStorm      = () => phaseManager.Phase == AcidPhaseManager.AcidPhase.FinalFlood;
-			rockfall.LowsDead     = () => lowTiersAlive == 0;
-			rockfall.MidsDead     = () => midTiersAlive == 0;
 			// Phase 1 deadly-polish: ambient bubbles rising from the surface.
 			// Hosted on its own entity (rather than as a SceneComponent) so
 			// the [Inspectable] tuning knobs (SpawnsPerSec, StartSize, etc.)
@@ -306,14 +276,6 @@ namespace GorelordsBrawler.Scenes
 				exporter.RegisterProvider("acidDraining",   () => phaseManager.IsDraining);
 				exporter.RegisterProvider("acidFillCap",    () => acidSurface.ParticleCap);
 				exporter.RegisterProvider("tiersRemaining", () => tiersAlive);
-				// Rockfall oracles: live boulders, islands (resting caps proud
-				// of the measured surface — the recovery-route metric), and the
-				// first falling rock's position (E2E stages the impact-damage
-				// scenario under it).
-				exporter.RegisterProvider("rocksAlive",   () => rockfall.RocksAlive);
-				exporter.RegisterProvider("rockIslands",  () => rockfall.RockIslands);
-				exporter.RegisterProvider("rockFallingX", () => (int)rockfall.FirstFallingRockPos.X);
-				exporter.RegisterProvider("rockFallingY", () => (int)rockfall.FirstFallingRockPos.Y);
 				// Combat: true during a hit freeze (TimeScale=0). Lets the acid-survives-a-hit
 				// regression prove it actually drove the game through the dt=0 window.
 				exporter.RegisterProvider("hitstopActive",     () => combatEffects.IsHitstopActive);

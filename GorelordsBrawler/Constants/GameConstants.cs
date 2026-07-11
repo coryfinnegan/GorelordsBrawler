@@ -381,13 +381,6 @@ namespace GorelordsBrawler.Constants
 			// Acid start — normalized Y just below map bottom
 			public const float AcidStartNormalizedY = 1.02f;
 
-			// Rock fall-from-sky physics (the rockfall replaced the drop-logs —
-			// docs/rockfall-proposal.md; rocks rest on ground/each other, so the
-			// old float-spring/buoyancy/tilt constants are gone with them).
-			public const float RockFallGravity  = 800f;   // px/s²
-			public const float RockFallMaxSpeed = 500f;   // terminal velocity cap, px/s
-			public const float RockFallSpawnY   = -64f;   // spawn above the map top edge
-
 			// (The old normalized Platforms array is gone — it described the
 			// pre-Sump arena and was only consumed to derive acid inlet/trigger
 			// geometry. Phase C replaced every consumer with explicit world-space

@@ -121,19 +121,9 @@ public class GameConstantsTests
 		Assert.True(GameConstants.Hazards.SwimBreachDepth < GameConstants.Hazards.AcidFullSubmergeDepth / 2f);
 	}
 
-	// (The float-spring/buoyancy/impact constants are gone with the drop-logs —
-	// the ROCKFALL replaced them (docs/rockfall-proposal.md): rocks rest on
-	// solid ground and pile into cairns, no float physics to tune. Rockfall
-	// geometry/cadence/sizing coverage lives in AcidConfigTests.)
-
-	[Fact]
-	public void RockFall_ConstantsAreSane()
-	{
-		Assert.True(GameConstants.Hazards.RockFallGravity > 0f);
-		Assert.True(GameConstants.Hazards.RockFallMaxSpeed > 0f);
-		Assert.True(GameConstants.Hazards.RockFallSpawnY < 0f,
-			"rocks must spawn above the map top edge so the telegraph precedes any visible boulder");
-	}
+	// (The float-spring/buoyancy/impact constants went with the drop-logs, and
+	// the rockfall that briefly replaced them went too — functional testing
+	// chose telegraphed platform respawns over falling debris.)
 
 	// ── Arena bounds ──────────────────────────────────────────────────────────
 
