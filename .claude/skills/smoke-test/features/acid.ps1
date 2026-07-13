@@ -155,6 +155,28 @@ return @{
         # full-height-minus-HUD scan is robust to spawn-position changes.
         $Ctx.Check('player sprites are still rendered (regression for player invisibility)', {
             param($c)
+            # STAGE the sample: the footing-cycle map is all hazard, so idle
+            # smoke players die and respawn constantly — "whenever this check
+            # happens to run" stopped being a valid sample moment (both dead =
+            # zero red pixels = a false invisibility alarm; hit twice on
+            # -OpenIde runs, whose IDE launch delays the schedule). Wait out
+            # the respawn window, then teleport whoever is alive to a fixed
+            # mid-air spot over the pit (above the storm ceiling, inside the
+            # scan band, clear of every platform column) and snapshot at once.
+            $deadline = (Get-Date).AddSeconds(12)
+            do {
+                $s = Invoke-RestMethod "$($c.ServerUrl)/state" -TimeoutSec 3
+                $alive = @($s.players | Where-Object { -not $_.dead }).Count
+                if ($alive -ge 2) { break }
+                Start-Sleep -Milliseconds 250
+            } while ((Get-Date) -lt $deadline)
+            foreach ($i in 0, 1) {
+                $body = @{ player = $i; x = 576 + $i * 128; y = 200 } | ConvertTo-Json -Compress
+                Invoke-RestMethod -Method Post -Uri "$($c.ServerUrl)/teleport" `
+                    -Body $body -ContentType 'application/json' -TimeoutSec 3 | Out-Null
+            }
+            Start-Sleep -Milliseconds 150   # let a frame render with them in place
+
             $repoRoot = (Get-Item $PSScriptRoot).Parent.Parent.Parent.Parent.FullName
             $tmp = Join-Path $repoRoot '.smoke-test-spawn-screenshot.acid.jpg'
             Invoke-WebRequest -Uri "$($c.ServerUrl)/screenshot" `
