@@ -6,16 +6,17 @@ using GorelordsBrawler.Constants;
 namespace GorelordsBrawler.Components.Hazards
 {
 	/// <summary>
-	/// A static refuge tier that the acid EATS hole-by-hole. Spawned by
-	/// ArenaScene from the TMX "tiers" object layer (tiers can't be static
-	/// collision tiles — tiles can't erode). This is a thin host: it owns the
-	/// tier's identity (rank) and forwards the "fully eaten" event; the actual
-	/// swiss-cheese erosion + per-cell collision lives in
-	/// <see cref="ErodibleSurface"/>.
+	/// A refuge platform that the acid EATS hole-by-hole. Hosts come from two
+	/// places: ArenaScene spawns the STARTING PAIR from the TMX "tiers" object
+	/// layer (platforms can't be static collision tiles — tiles can't erode),
+	/// and PlatformRespawner materializes every later one at the end of a
+	/// ghost telegraph. This is a thin host: it owns the platform's identity
+	/// (rank) and forwards the "fully eaten" event; the actual swiss-cheese
+	/// erosion + per-cell collision lives in <see cref="ErodibleSurface"/>.
 	///
-	/// Per-rank death counts drive the ROCKFALL's drop-column unlocks
-	/// (ArenaScene subscribes to <see cref="OnDissolved"/>): a ghost column
-	/// only opens once its tier pair is gone.
+	/// <see cref="OnDissolved"/> is the footing cycle's heartbeat: the
+	/// respawner subscribes, and every death schedules the next ghost
+	/// (docs/platform-respawn-proposal.md).
 	/// </summary>
 	public class DissolvingPlatform : Component
 	{
@@ -50,7 +51,7 @@ namespace GorelordsBrawler.Components.Hazards
 				Nez.Content.Sprites.Hazards.Tier_metal);
 			_erodible = Entity.AddComponent(new ErodibleSurface(
 				_acid, _width, _height, _tierColor,
-				AcidConfig.TierErosionPassesPerSec, texture));
+				AcidConfig.PlatformErosionPassesPerSec, texture));
 			_erodible.OnFullyEroded = () => OnDissolved?.Invoke();
 		}
 	}

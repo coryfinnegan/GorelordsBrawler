@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Generate the Sump's Phase-E art: the vessel tileset (arena.png / arena.tsx)
-plus the destructible-platform textures (tier_metal.png, log_wood.png).
+plus the destructible-platform texture (tier_metal.png).
 
 Why a generator instead of hand-drawn art:
   Same philosophy as gen_sump_map.py — the art is a SPEC (palette, tile

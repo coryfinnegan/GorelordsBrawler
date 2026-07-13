@@ -69,46 +69,31 @@ fill_rect(solid, 1, W - 2, 23, 24)
 fill_rect(solid, 1, 13, 17, 22)     # left bank
 fill_rect(solid, 26, 38, 17, 22)    # right bank
 
-# ── Refuge tiers — DISSOLVABLE entities, not static tiles ───────────────────
-# The acid consumes the arena tier by tier as it rises, so tiers cannot live in
-# the collision layer (static tiles can't burn). They are emitted as rects on a
-# "tiers" OBJECT layer; ArenaScene turns each into an entity with a collider +
-# a DissolvingPlatform that burns away when the acid reaches its top edge.
-# rank: "low" gates the log spawner (logs only drop once the low pair is eaten).
+# ── The starting platform pair — DISSOLVABLE entities, not static tiles ─────
+# Platforms cannot live in the collision layer (static tiles can't burn). They
+# are emitted as rects on a "tiers" OBJECT layer; ArenaScene turns each into an
+# entity with a collider + a DissolvingPlatform that burns away when the acid
+# reaches it.
 #
-# C.2 layout (docs/sump-layout-redesign-proposal.md) — four bands, placed
-# against the C.1 rise schedule (AcidConfig keeps the matching Y constants):
-#   shallow (row 15, y 480): DIVING BOARDS overhanging the pit edges — the
-#       early risk/reward perch and the first destruction beat (standing-dry
-#       under loop 0's 528 ceiling, fully drowned by loop 1's 432).
-#   low     (row 13, y 416): contested loop 1, consumed loop 2 — unchanged.
-#   mid     (row 9,  y 288): pulled INWARD to overhang the pit (a committed
-#       32 px gap-jump from the lows — the old layout was a zero-risk
-#       staircase) and narrowed 5→4 tiles. Storm territory.
-#   top     (row 5,  y 160): narrowed 6→5 tiles, center gap widened to 128 px
-#       so the final perches are a real jump apart, not one choke.
+# Map v3 (docs/platform-respawn-proposal.md — user: "instead of a three tier
+# platform, we have just the one tier"): ONE starting row, a symmetric pair at
+# the old lows' geometry (row 13, y 416 — a known-fair 128 px hop up from the
+# banks). Loop 0 teaches, loop 1 contests this pair, loop 2 eats it — and from
+# then on footing comes from the RESPAWN CYCLE: every death flashes a ghost
+# telegraph somewhere else (PlatformRespawner's lattice) and materializes a
+# fresh platform there. The higher bands that used to be map geometry are now
+# runtime spawn rows (AcidConfig.PlatformSlotTopY).
 TIERS = [
     # (col0, col1, row, rank)
-    (14, 16, 15, "shallow"),   # x 448-544, over the pit's left lip
-    (23, 25, 15, "shallow"),   # x 736-832, over the pit's right lip
-    (4, 9, 13, "low"),         # x 128-320
-    (30, 35, 13, "low"),       # x 960-1152
-    (11, 14, 9, "mid"),        # x 352-480 (32 px gap-jump from the low tier)
-    (25, 28, 9, "mid"),        # x 800-928
-    (13, 17, 5, "top"),        # x 416-576
-    (22, 26, 5, "top"),        # x 704-864 (128 px center gap)
+    (4, 9, 13, "start"),       # x 128-320
+    (30, 35, 13, "start"),     # x 960-1152
 ]
 
-# The diving boards must genuinely OVERHANG the basin mouth (cols 14-25) —
-# that's their whole job — while every other band stays out of the two center
-# columns (19-20) the original design keeps clear.
+# The pair must stay out of the two center columns (19-20) the design keeps
+# clear, and out of the standing-surface probe lane (see AcidConfig notes).
 for (c0, c1, row, rank) in TIERS:
-    if rank == "shallow":
-        assert c0 <= 25 and c1 >= 14, \
-            f"shallow board ({c0}-{c1}) does not overhang the basin mouth"
-    else:
-        assert not (c0 <= 20 and c1 >= 19), \
-            f"tier ({c0}-{c1} row {row}) blocks the center columns 19-20"
+    assert not (c0 <= 20 and c1 >= 19), \
+        f"platform ({c0}-{c1} row {row}) blocks the center columns 19-20"
 
 # ── Sanity: the corner inlet columns must be clear from ceiling to the banks ─
 # Acid pours from the TOP CORNERS of the map (cols 2 / 37, world x 72/1208),

@@ -225,22 +225,85 @@ public class AcidConfigTests
 	// ── Flood-safe respawn ────────────────────────────────────────────────────
 
 	[Fact]
-	public void AtLeastOneRespawnCandidate_StaysDry_ThroughEveryRegularLoop()
+	public void ADryRespawnRung_ExistsThroughEveryRegularLoop()
 	{
-		// Through every NON-terminal rise (the deepest being RiseCeilingMinY) a
-		// dry respawn must exist, or a mid-match death becomes a respawn-melt
-		// loop. (The terminal storm has its own guarantee: the picker's
-		// fallback spawns ABOVE the live surface — ArenaScene.PickSafeSpawn.)
-		bool anyDry = false;
-		foreach (var p in AcidConfig.RespawnPoints)
+		// Footing above the banks is DYNAMIC now (the respawn picker's higher
+		// rungs are the living platforms), so the dry-respawn guarantee is a
+		// chain: every loop's ceiling must leave a SPAWNABLE lattice row whose
+		// stand point (feet on the platform top) also clears the ceiling by
+		// the respawn margin — then the picker can always land a death on dry
+		// footing. (The terminal storm additionally has the picker's fallback:
+		// spawn ABOVE the live surface — ArenaScene.PickSafeSpawn.)
+		Assert.True(AcidConfig.PlatformSpawnClearance >= AcidConfig.RespawnClearancePx,
+			"a platform viable to SPAWN must also be dry enough to RESPAWN onto — " +
+			"the spawn clearance may not undercut the respawn clearance");
+		for (int loop = 0; loop <= 10; loop++)
 		{
-			float feetY = p.Y + 24f;   // FutureAxe body height 48 — feet below center
-			if (feetY + AcidConfig.RespawnClearancePx <= AcidConfig.RiseCeilingMinY)
-			{
-				anyDry = true;
-			}
+			float ceiling = AcidConfig.RiseCeilingFor(loop);
+			Assert.Contains(AcidConfig.PlatformSlotTopY,
+				y => y + AcidConfig.RespawnClearancePx <= ceiling);
 		}
-		Assert.True(anyDry, "no respawn candidate survives the deepest regular rise — mid-match deaths would respawn into acid");
+		Assert.Contains(AcidConfig.PlatformSlotTopY,
+			y => y + AcidConfig.RespawnClearancePx <= AcidConfig.StormCeilingY);
+	}
+
+	// ── The footing cycle (docs/platform-respawn-proposal.md) ────────────────
+
+	[Fact]
+	public void PlatformLattice_StaysOnArena_ClearOfInletsAndTheProbeLane()
+	{
+		float half = AcidConfig.PlatformW * 0.5f;
+		foreach (var x in AcidConfig.PlatformSlotX)
+		{
+			Assert.True(x - half >= GameConstants.Arena.InnerLeft + 16f
+				&& x + half <= GameConstants.Arena.InnerRight - 16f,
+				$"slot {x} hangs a slab off the arena");
+			// Corner inlet streams fall at x 72 / 1208 — a slab under one
+			// would catch the pour mid-air.
+			Assert.False(x - half <= 72f && x + half >= 72f,
+				$"slot {x} blocks the left inlet stream");
+			Assert.False(x - half <= 1208f && x + half >= 1208f,
+				$"slot {x} blocks the right inlet stream");
+			// The standing-surface probe lane (x 544-736): a slab breaching
+			// the surface there puts splash puddles under the probe columns
+			// and corrupts the closed-loop fill — the rockfall era hit exactly
+			// this with center cairns (fill over-poured, islands drowned).
+			Assert.False(x - half < 736f && x + half > 544f,
+				$"slot {x} intrudes on the standing-surface probe lane (544-736)");
+		}
+	}
+
+	[Fact]
+	public void GhostTiming_IsInsideTheUserBand()
+	{
+		// User requirement: "flash for maybe 2-5 seconds".
+		Assert.InRange(AcidConfig.GhostSeconds, 2f, 5f);
+	}
+
+	[Fact]
+	public void PlatformRows_AreReachable_AndEveryPhaseKeepsASpawnableRow()
+	{
+		// Reachability: the lowest row within the known bank→platform hop
+		// (128 px — the old lows), and no adjacent-row gap beyond it.
+		var rows = AcidConfig.PlatformSlotTopY.OrderByDescending(y => y).ToArray();
+		Assert.True(AcidConfig.LipY - rows[0] <= 128f,
+			$"lowest row (top y={rows[0]}) is more than a hop above the bank lip");
+		for (int i = 1; i < rows.Length; i++)
+		{
+			Assert.True(rows[i - 1] - rows[i] <= 128f,
+				$"row gap {rows[i - 1]}→{rows[i]} exceeds the jump");
+		}
+
+		// The cycle can never stall: every regular loop AND the storm must
+		// leave at least one row that clears the ceiling by the spawn margin.
+		for (int loop = 0; loop <= 10; loop++)
+		{
+			float ceiling = AcidConfig.RiseCeilingFor(loop);
+			Assert.Contains(AcidConfig.PlatformSlotTopY,
+				y => y <= ceiling - AcidConfig.PlatformSpawnClearance);
+		}
+		Assert.Contains(AcidConfig.PlatformSlotTopY,
+			y => y <= AcidConfig.StormCeilingY - AcidConfig.PlatformSpawnClearance);
 	}
 
 	[Fact]
