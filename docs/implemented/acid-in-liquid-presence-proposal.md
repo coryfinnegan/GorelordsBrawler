@@ -1,5 +1,14 @@
 # Phase 3 — "In-acid presence" — visibility silhouette + low-grav physics
 
+> **Post-ship revision (July 2026):** the reduced-gravity submerged physics
+> described here (`SubmergedGravityScale = 0.45`) was later replaced by true
+> buoyancy — while submerged, gravity is replaced by an upward acceleration
+> (`GameConstants.Hazards.AcidBuoyancyAccel`) so a body floats to the surface
+> on its own, per the Smash-style escape rework. `SubmersionFeel` also now
+> reads the dense-body surface query (`GetBodySurfaceLevelAtX`), not the
+> threshold-1 droplet query named below. The drag, silhouette, and visibility
+> halves of this phase are unchanged.
+
 ## Why
 
 Functional-test feedback after Phase 2 (PR #6 merged): once the player is submerged in the green metaball acid, you can't tell where they are, and the movement still feels like dry-land platforming. Two pieces:

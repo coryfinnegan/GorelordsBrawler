@@ -158,36 +158,33 @@ public class CombatMathTests
 	}
 
 	[Fact]
-	public void Swim_StrokeIsMeaningful_AndOutclimbsMidDepthAcid()
+	public void Buoyancy_PassiveFloatFromFullDepth_BeatsTheDeepMelt()
 	{
-		// What's a CLEAN closed-form invariant (and so belongs in a unit test):
-		// the swim stroke must be a real fraction of a normal jump, and a mashing
-		// player's sustained rise must out-climb the acid's downward pull at
-		// mid-depth — otherwise "escapable" is a lie. The stroke clamp is the
-		// sustainable ascent speed.
-		float riseSpeed   = GameConstants.Hazards.SwimMaxRiseSpeed;
-		float strokeImp   = GameConstants.Hazards.SwimStrokeImpulse;
+		// The core "escapable" guarantee under the Smash-style water model
+		// (jump = full-strength exit, buoyancy = passive float-to-surface):
+		// even a player who provides NO input must surface from FULL submersion
+		// comfortably before the deep melt can KO a fresh fighter. Closed-form
+		// worst case: spin up from rest to the rise cap (v/a), then cover the
+		// whole full-submerge depth at the cap — while burning at the deep DPS
+		// the entire way (the real curve eases off as they rise, so this
+		// over-counts the damage; the margin is conservative).
+		float accel   = GameConstants.Hazards.AcidBuoyancyAccel;
+		float riseCap = GameConstants.Hazards.AcidBuoyantMaxRiseSpeed;
 
-		// A stroke is a meaningful push — at least half a normal jump's launch
-		// speed (so it reads as "clawing up", not a twitch).
-		Assert.True(strokeImp >= 0.5f * 250f /* baseline JumpSpeed */,
-			$"swim stroke too weak to feel like an escape: {strokeImp}");
+		float spinUp        = riseCap / accel;
+		float timeToSurface = spinUp + FullDepth / riseCap;
+		float deepKoTime    = 100f / (GameConstants.Hazards.AcidSurfaceDps * DeepMult);
 
-		// Mid-depth escape: climbing out is comfortably faster than the acid can
-		// KO a fresh fighter there. This is the core "escapable" guarantee.
-		float timeToEscapeFromMid = (FullDepth * 0.5f) / riseSpeed;
-		float midDps = GameConstants.Hazards.AcidSurfaceDps
-		             * CombatMath.AcidDpsMultiplier(FullDepth * 0.5f, DeepMult, FullDepth);
-		float koTimeMid = 100f / midDps;
-		Assert.True(timeToEscapeFromMid < koTimeMid * 0.5f,
-			$"mid-depth not comfortably escapable: escape {timeToEscapeFromMid:F2}s vs KO {koTimeMid:F2}s");
+		Assert.True(timeToSurface < deepKoTime * 0.5f,
+			$"passive buoyant surfacing not comfortably survivable: surface {timeToSurface:F2}s vs deep KO {deepKoTime:F2}s");
 	}
 
-	// NOTE on the deep end: whether a frame-perfect mash can escape a deep knock-in
-	// at low HP is deliberately NOT asserted here. The real lethality window is the
-	// HITSTUN period (you eat deep damage before you can swim at all) plus reaction
+	// NOTE on the deep end: whether a deep knock-in at low HP is survivable is
+	// deliberately NOT asserted here. The real lethality window is the HITSTUN
+	// period (you eat deep damage before the jump press is honored) plus reaction
 	// lag — both runtime dynamics a pure formula can't model. That balance is
 	// verified in the functional smoke/playtest, consistent with how this codebase
 	// splits pure-math tests from feel. What IS pinned above: fresh-fighter deep
-	// melt is ~1.5-2s, surface chip is survivable, and mid-depth is escapable.
+	// melt is ~1.5-2s, surface chip is survivable, and even a no-input float-out
+	// beats the melt.
 }

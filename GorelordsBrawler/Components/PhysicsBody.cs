@@ -61,6 +61,22 @@ namespace GorelordsBrawler.Components
 		/// </summary>
 		public float LinearDrag = 0f;
 
+		/// <summary>
+		/// Upward acceleration (px/s²) while immersed in a fluid. When &gt; 0 it
+		/// REPLACES gravity entirely (including the fall/short-hop/fast-fall
+		/// multipliers — those are air-feel rules): the body decelerates a plunge
+		/// and then floats upward, Smash-style. Set each frame by
+		/// <c>SubmersionFeel</c>; 0 (default) = dry land, normal gravity.
+		/// </summary>
+		public float BuoyancyAccel = 0f;
+
+		/// <summary>
+		/// Cap on the upward speed the buoyancy itself can produce. Faster
+		/// upward motion from another source (a jump) is left untouched —
+		/// buoyancy simply stops contributing above the cap, it never brakes.
+		/// </summary>
+		public float BuoyancyMaxRiseSpeed = 0f;
+
 		private Mover _mover;
 		private MovementStats _movement;
 
@@ -108,31 +124,46 @@ namespace GorelordsBrawler.Components
 				Velocity *= dampen;
 			}
 
-			// Gravity with variable multipliers for game feel:
-			// - Fast falling: even higher gravity for aggressive aerial approaches
-			// - Falling: higher gravity for snappy descent
-			// - Rising with jump released: higher gravity for short hops
-			// - Rising with jump held: normal gravity for full jump arc
-			var gravity = _movement.Gravity;
-			if (FastFalling)
+			if (BuoyancyAccel > 0f)
 			{
-				gravity *= _movement.FallMultiplier * _movement.FastFallMultiplier;
+				// Fluid medium: buoyancy replaces gravity outright. Accelerate
+				// upward only while below the rise cap (up is negative Y), and
+				// never past it — but a faster ascent from a jump passes through
+				// untouched, so a submerged jump keeps its full launch speed.
+				if (Velocity.Y > -BuoyancyMaxRiseSpeed)
+				{
+					Velocity.Y = MathHelper.Max(
+						-BuoyancyMaxRiseSpeed, Velocity.Y - BuoyancyAccel * dt);
+				}
 			}
-			else if (Velocity.Y > 0)
+			else
 			{
-				gravity *= _movement.FallMultiplier;
-			}
-			else if (Velocity.Y < 0 && !JumpHeld)
-			{
-				gravity *= _movement.ShortHopMultiplier;
-			}
+				// Gravity with variable multipliers for game feel:
+				// - Fast falling: even higher gravity for aggressive aerial approaches
+				// - Falling: higher gravity for snappy descent
+				// - Rising with jump released: higher gravity for short hops
+				// - Rising with jump held: normal gravity for full jump arc
+				var gravity = _movement.Gravity;
+				if (FastFalling)
+				{
+					gravity *= _movement.FallMultiplier * _movement.FastFallMultiplier;
+				}
+				else if (Velocity.Y > 0)
+				{
+					gravity *= _movement.FallMultiplier;
+				}
+				else if (Velocity.Y < 0 && !JumpHeld)
+				{
+					gravity *= _movement.ShortHopMultiplier;
+				}
 
-			// GravityScale is the LAST multiplier — composes after the
-			// game-feel multipliers above so e.g. fast-falling underwater
-			// still fast-falls (just from a smaller base).
-			gravity *= GravityScale;
+				// GravityScale is the LAST multiplier — composes after the
+				// game-feel multipliers above so e.g. fast-falling underwater
+				// still fast-falls (just from a smaller base).
+				gravity *= GravityScale;
 
-			Velocity.Y += gravity * dt;
+				Velocity.Y += gravity * dt;
+			}
 
 			// Move with collision
 			var motion = Velocity * dt;
