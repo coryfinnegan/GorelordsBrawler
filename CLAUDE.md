@@ -126,7 +126,7 @@ Feature development follows a plan → review → implement → archive cycle:
 Active proposals live in `docs/`. Completed features have their docs in `docs/implemented/`.
 
 ### Current Proposals
-- *(none — the acid arena arc is complete; both docs live in `docs/implemented/`)*
+- `platform-respawn-proposal.md` — the footing cycle: the acid eats a platform → a ghost telegraph flashes the next spawn spot (3 s) → a fresh platform materializes there; map v3 has a single starting pair and all higher footing is runtime spawns. Implemented on `claude/rockfall` (PR #22), awaiting functional approval. (The rockfall it replaced is tombstoned in `docs/implemented/rockfall-proposal.md` — removed by functional-test verdict.)
 
 ### Implemented Features (highlights — full list in `docs/implemented/`)
 - `acid-arena-design-proposal.md` + `sump-layout-redesign-proposal.md` — "The Sump" acid arena, complete: parallelized PBF basin (PR #17), depth lethality + swim escape (PR #18), the looping phase machine + measured-density calibration + storm terminal (PR #19), then the C.2 four-band layout (diving boards / lows / inward mids / split tops), Phase D telegraphs (one tell channel → bubbles+pulse+rumble before every wave and rise), and the Phase E generated vessel tileset + textured destructibles (`tools/gen_arena_tileset.py`)

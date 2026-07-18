@@ -1,7 +1,13 @@
 # The Sump — Layout Redesign (Phase C.2 proposal)
 
-**Status: PROPOSED — awaiting review.** Follows the Phase C.1 calibration/pacing
-pass. Geometry only; no fluid, phase-machine, or combat changes.
+**Status: IMPLEMENTED (approved "do it all", 2026-07-02).** As-built spans
+refined slightly from the sketch below during implementation — the mids sit at
+x 352–480 / 800–928 (a 32 px committed gap-jump from the lows), the boards at
+x 448–544 / 736–832, the tops at x 416–576 / 704–864 (128 px center gap), and
+the mid log-drop anchors moved to the OUTER thirds of the old mid spans
+(376/904) so falling logs don't clip the new top tiers' edges. Everything else
+landed as proposed. Follows the Phase C.1 calibration/pacing pass. Geometry
+only; no fluid, phase-machine, or combat changes.
 
 ## Why (from the measured evaluation, 2026-07-01/02)
 

@@ -378,63 +378,13 @@ namespace GorelordsBrawler.Constants
 			// makes this dynamic (the flood deliberately raises it past the lip).
 			public const float BasinFillCeilingY = 560f;
 
-			// Drop-log size (spawn X anchors live in AcidConfig.LogSpawnX*;
-			// log LIFETIME is contact-erosion at AcidConfig.LogErosionPassesPerSec —
-			// the old timed-burn constants are gone with the burn machinery)
-			public const float PlatformWidth      = 0.10f;
-			public const float PlatformHeight     = 32f;   // world units (1 tile)
-
 			// Acid start — normalized Y just below map bottom
 			public const float AcidStartNormalizedY = 1.02f;
-
-			// Platform fall-from-sky physics
-			public const float PlatformFallGravity  = 800f;   // px/s²
-			public const float PlatformFallMaxSpeed = 500f;   // terminal velocity cap, px/s
-			public const float PlatformFallSpawnY   = -48f;   // spawn above the map top edge
-			public const float PlatformImpactFactor = 0.5f;   // fraction of fall velocity transferred on platform-on-platform landing
-
-			// Platform float (spring) physics — used ONLY for resting on solid
-			// ground (a log on a dry bank sits flat on top). Floating IN acid uses
-			// depth-based buoyancy below, not this spring.
-			// ζ = Damping / (2 * sqrt(SpringK)) ≈ 0.5 → underdamped, 1-2 bounces
-			public const float SpringK          = 25f;
-			public const float Damping          = 5f;
-
-			// Depth-based buoyancy (Archimedes) for a log floating IN the acid.
-			// The old code sprang the log's CENTER to surface-Height/2, pinning
-			// the whole hull ABOVE the waterline — "floating on top." Real
-			// buoyancy is a force proportional to SUBMERGED volume that balances
-			// gravity at a partial-submersion equilibrium (Kerner, "Water
-			// interaction model for boats in video games", Game Developer).
-			//   BuoyancyRestFraction — fraction of the hull underwater at rest
-			//     (0.6 → the log sits 60% sunk, waterline across its upper third).
-			//   BuoyancyGravity — downward accel (px/s²); with the rest fraction
-			//     it sets the restoring stiffness k = g/(restFrac·Height).
-			//   BuoyancyDamping — per-second vertical-velocity damping; ~ζ 0.6 so
-			//     it dips, bobs once, and settles instead of oscillating forever.
-			public const float BuoyancyRestFraction = 0.6f;
-			public const float BuoyancyGravity       = 600f;
-			public const float BuoyancyDamping       = 5f;
-
-			// Water-entry energy loss: the splash IS the energy sink. On entering
-			// the acid a log keeps only this fraction of its fall velocity — the
-			// rest "went into" the visible Disturb splash. Without it the full
-			// 500 px/s plunge feeds the underdamped spring and the log rockets
-			// back out ("bouncing way too high"). Standard floating-body water-
-			// entry treatment (Gamedeveloper boat-water model; VertexFragment
-			// "Buoyancy for Dummies": damping exists to kill entry oscillation).
-			public const float WaterEntryVelocityRetention = 0.2f;
-			public const float AngularSpringK   = 60f;
-			public const float AngularDamping   = 8f;
-			public const float LandingImpulse   = 120f;  // tilt kick when player lands on floating platform
-			public const float MaxTiltDegrees   = 15f;
 
 			// (The old normalized Platforms array is gone — it described the
 			// pre-Sump arena and was only consumed to derive acid inlet/trigger
 			// geometry. Phase C replaced every consumer with explicit world-space
-			// values in AcidConfig, which mirror the real TMX. The drop-in log
-			// platforms it never described are sized by the PlatformWidth/Height
-			// constants above.)
+			// values in AcidConfig, which mirror the real TMX.)
 		}
 
 		public static class Ledge

@@ -175,7 +175,30 @@ We already render 3D toy models to 2D sprites in Blender (`tools/sprite_sheet_ba
 
 ---
 
-## Files touched (summary)
+#### Phases C.2 / D / E addendum — as implemented (2026-07-02, approved "do the rest of the phases at once")
+
+- **C.2** landed per `docs/sump-layout-redesign-proposal.md` (see its as-built
+  status note): 8 tiers in four bands — diving boards over the pit (the first
+  destruction beat, drowned by loop 1), lows contested→consumed as before,
+  mids pulled inward behind a committed gap-jump, tops narrowed with a 128 px
+  center gap.
+- **D** shipped as ONE telegraph channel (`AcidSurface.BeginTell/TellProgress`)
+  driving three synchronized cues — bubbles boil harder, the meniscus pulse
+  quickens/brightens (prime-ratio frequency vs the idle breath), the camera
+  builds a trauma rumble — armed before every surge, storm crest, AND rise
+  (the valves open only after the rumble, Brinstar-style). Deterministic E2E
+  asserts the tell precedes the wave via the `acidTellActive` oracle.
+  **Audio cues are deliberately deferred**: the codebase has no audio system
+  at all yet; per the working agreement that's a dependency for its own
+  proposal, not something to half-wire here.
+- **E** shipped as a GENERATED art pass (`tools/gen_arena_tileset.py`,
+  Pillow, deterministic seed): 8-tile corroded-steel vessel tileset (machined
+  top plates, riveted walls, acid-stained basin variants, low-contrast
+  background) + textured destructibles (bolted-steel tier slab, rough-timber
+  log) that the erosion carves through as stable images. Regenerable and
+  parameterized like the map itself. The painterly BACKDROP stays hand-painted
+  per the GDD and is out of scope; the final look is the user's call from the
+  smoke recording / manual pass.
 
 | File | Phase | Change |
 |---|---|---|

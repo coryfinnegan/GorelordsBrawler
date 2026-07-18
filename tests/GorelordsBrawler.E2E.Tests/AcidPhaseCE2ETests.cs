@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using GorelordsBrawler.E2E.Tests.Pages;
@@ -165,76 +166,122 @@ public class AcidPhaseCE2ETests
 		return sum / xs.Count;
 	}
 
-	// ── Contest-then-consume, mid-loop respawn safety, and the storm ─────────
+	// ── The footing cycle, mid-loop respawn safety, and the storm ────────────
 
 	[SkippableFact]
-	public async Task TiersAreContestedThenConsumed_RespawnsStayDry_AndTheStormBreaksTheRefuges()
+	public async Task FootingCycle_GhostsLeadSpawns_RespawnsStayDry_AndTheStormChasesUp()
 	{
 		Skip.IfNot(ArenaPage.IsEnabled, $"Set {ArenaPage.EnableEnvVar}=1 to run E2E tests.");
 
-		// ARRANGE — park BOTH players on the top-tier refuge for the duration.
-		// The escalating rises drown the banks early, so idle bank-standers can
-		// burn all three stocks before the storm — an ELIMINATED player never
-		// respawns, which reads as a respawn bug but is a stocks flake. The top
-		// tiers stay dry until the terminal storm's crests.
+		// ARRANGE — the test's subject is the PLATFORM CYCLE, so the players
+		// are HOVER-PARKED: re-teleported to mid-air over the pit every batch
+		// (teleport zeroes velocity), touching nothing and taking no damage.
+		// Any staging that leaves them standing in the arena burns stocks —
+		// two contested phases of chip is a whole stock, and an ELIMINATED
+		// player never respawns, which poisons the ACT-3 respawn beat.
 		await using var arena = await ArenaPage.LaunchAsync();
 		await arena.EnterSteppedModeAsync();
-		await arena.TeleportAsync(player: 0, 512f, 134f);
-		await arena.TeleportAsync(player: 1, 768f, 134f);
-		await arena.StepAsync(10);   // settle onto the tier
-		int tiersAtStart = (await arena.StateAsync()).TiersRemaining;
-		tiersAtStart.ShouldBe(8, "the C.2 Sump starts with eight dissolvable tiers (2 boards + 2 lows + 2 mids + 2 tops)");
 
-		// ACT 1 — loop 1's rise DROWNS the diving boards outright (the first
-		// destruction beat) and then LAPS the LOW tier bodies. Contact erosion
-		// self-limits at the waterline, so the lows survive the whole contest
-		// loop as fighting ground: at loop 1's drain, exactly the two boards
-		// are gone and everything else stands.
-		var loop1Drain = await arena.StepUntilAsync(
-			s => s.AcidPhase == "Drain" && s.AcidLoop == 1, maxFrames: 6000, batch: 10);
-		loop1Drain.TiersRemaining.ShouldBe(6,
-			"loop 1 takes the diving boards (fully submerged) but only CONTESTS the lows — 6 of 8 must stand at its drain");
+		async Task HoverParkAsync()
+		{
+			await arena.TeleportAsync(player: 0, 608f, 120f);
+			await arena.TeleportAsync(player: 1, 672f, 120f);
+		}
+		async Task<GameStateSnapshot> HoverUntilAsync(
+			Func<GameStateSnapshot, bool> condition, int maxIters, string what)
+		{
+			for (int i = 0; i < maxIters; i++)
+			{
+				await HoverParkAsync();
+				await arena.StepAsync(10);
+				var s = await arena.StateAsync();
+				if (condition(s))
+				{
+					return s;
+				}
+			}
+			throw new TimeoutException($"{what} not reached within {maxIters * 10} hovered frames.");
+		}
 
-		// ACT 2 — CONSUME: loop 2's rise passes the LOW tier tops; the chewed
-		// remnants shell-erode and fall (functional-test decision: platforms
-		// exist to be consumed — now on a schedule that laps before it takes).
-		var lowsEaten = await arena.StepUntilAsync(
-			s => s.TiersRemaining <= 4, maxFrames: 4000, batch: 10);
+		await HoverParkAsync();
+		await arena.StepAsync(5);
+		var start = await arena.StateAsync();
+		start.PlatformsAlive.ShouldBe(2, "map v3 starts with exactly the platform pair");
 
-		// ACT 3 — mid-match respawn safety: kill P0 during the deepest regular
-		// climb. The flood-aware picker must land them on a still-dry candidate.
+		// ACT 1 — loop 1 CONTESTS the pair (ceiling 432 laps the 416 tops;
+		// waterline erosion self-limits) but must not consume it.
+		var loop1Drain = await HoverUntilAsync(
+			s => s.AcidPhase == "Drain" && s.AcidLoop == 1, 600, "loop-1 drain");
+		loop1Drain.PlatformsAlive.ShouldBe(2,
+			"loop 1 contests the starting pair but must not consume it");
+
+		// ACT 2 — loop 2 eats the pair. The FIRST death must raise a ghost
+		// telegraph immediately, and the eventual platform must materialize
+		// EXACTLY on its ghost, above the live surface.
+		await HoverUntilAsync(s => s.PlatformsAlive < 2, 600, "the pair's first death");
+		var ghost = await arena.StepUntilAsync(s => s.GhostActive, maxFrames: 30, batch: 1);
+		int ghostX = ghost.GhostX;
+		int ghostY = ghost.GhostY;
+		var spawned = await arena.StepUntilAsync(s => s.LastSpawnX > -1, maxFrames: 600, batch: 5);
+		spawned.LastSpawnX.ShouldBe(ghostX, "the platform must materialize on its ghost's column");
+		spawned.LastSpawnY.ShouldBe(ghostY, "the platform must materialize at its ghost's height");
+		spawned.LastSpawnY.ShouldBeLessThan(spawned.AcidSurfaceY,
+			"a fresh platform must spawn above the live surface, never inside it");
+		spawned.PlatformsAlive.ShouldBeLessThanOrEqualTo(2,
+			"population is conserved — one death, one replacement");
+
+		// CHASE: both players onto the new footing (lastSpawn is the slab
+		// CENTER; stand point is 40 px above it — half slab + half body).
+		await arena.TeleportAsync(player: 0, spawned.LastSpawnX - 32f, spawned.LastSpawnY - 40f);
+		await arena.TeleportAsync(player: 1, spawned.LastSpawnX + 32f, spawned.LastSpawnY - 40f);
+		await arena.StepAsync(10);
+
+		// ACT 3 — mid-match respawn safety: the picker's rungs above the banks
+		// are the LIVING platforms now. Kill P0 mid-climb; he must come back
+		// at full HP on dry footing, not inside the acid.
 		await arena.DamageAsync(player: 0, amount: 9999);
 		await arena.StepUntilAsync(s => s.Players[0].Dead, maxFrames: 10, batch: 1);
 		var respawned = await arena.StepUntilAsync(s => !s.Players[0].Dead, maxFrames: 300, batch: 2);
 		await arena.StepAsync(30);
 		var settled = await arena.StateAsync();
 		settled.Players[0].Submerged.ShouldBeFalse(
-			$"a mid-match respawn must land on dry refuge, not in the acid (y={settled.Players[0].Y})");
+			$"a mid-match respawn must land on dry footing, not in the acid (y={settled.Players[0].Y})");
+		respawned.Players[0].Hp.ShouldBe(respawned.Players[0].MaxHp);
 
-		// ACT 4 — the STORM: the time cap diverts the loop; the pour fills to
-		// the budget-honest ceiling (standing surface just under the MID tiers)
-		// and recurring crests break over the refuges. Modest step batches: the
-		// debug server's /step has a 10 s wall-clock ceiling (408 on overrun)
-		// and storm-scale Debug frames are expensive.
-		var storm = await StepUntilPhaseAsync(arena, "FinalFlood", maxFrames: 4000, batch: 10);
+		// Re-park P0 beside P1 on the newest platform before the storm.
+		var s2 = await arena.StateAsync();
+		if (s2.LastSpawnX > -1)
+		{
+			await arena.TeleportAsync(player: 0, s2.LastSpawnX - 32f, s2.LastSpawnY - 40f);
+		}
+
+		// ACT 4 — the STORM: the fill holds the terminal ceiling, and the
+		// cycle's replacements have climbed with the flood — by the time the
+		// sea stands at its ceiling, the surviving footing sits in the upper
+		// band, dry above the flood (the "last perches" endgame; whether the
+		// steady state arrives just before or during the storm is a seed
+		// detail — the invariant is footing above the terminal sea). Modest
+		// step batches: the debug server's /step has a 10 s wall-clock
+		// ceiling (408 on overrun) and storm-scale Debug frames are expensive.
+		var storm = await StepUntilPhaseAsync(arena, "FinalFlood", maxFrames: 6000, batch: 10);
+		// Wait for an IN-BAND reading, not merely "high enough": a storm crest
+		// transiting the probe lane can read far above the ceiling for a
+		// moment (208 on the new open map), and a <=288 predicate latches that
+		// transient as "filled". The standing level is what the closed loop
+		// holds; a reading inside the band is by definition the standing one.
 		var filled = await arena.StepUntilAsync(
-			s => s.AcidSurfaceY > 0 && s.AcidSurfaceY <= 288, maxFrames: 2500, batch: 10);
-
-		// The rising sea must SUBMERGE the mid tiers — the "wait it out"
-		// refuge dies by the same shell-erosion path as the lows.
-		var midsBroken = await arena.StepUntilAsync(
-			s => s.TiersRemaining <= 2, maxFrames: 4000, batch: 10);
+			s => s.AcidSurfaceY >= 248 && s.AcidSurfaceY <= 288, maxFrames: 4000, batch: 10);
 
 		// ASSERT
 		storm.AcidPhase.ShouldBe("FinalFlood");
-		lowsEaten.TiersRemaining.ShouldBeLessThanOrEqualTo(4, "loop 2's rise must dissolve the LOW tier pair");
-		respawned.Players[0].Hp.ShouldBe(respawned.Players[0].MaxHp);
 		filled.AcidFillCap.ShouldBeGreaterThan(12000,
-			"the storm's fill estimate should target the mid-submerging terminal ceiling (~13k)");
+			"the storm's fill estimate should target the terminal ceiling (~13k)");
 		filled.AcidSurfaceY.ShouldBeInRange(248, 288,
-			"the storm's closed-loop fill must HOLD the measured surface at the ceiling (272 ± bob) — " +
-			"above the mid tops, below the top tiers");
-		midsBroken.TiersRemaining.ShouldBeLessThanOrEqualTo(2,
-			"the storm sea must consume the MID tiers — otherwise two campers make the match unendable");
+			"the storm's closed-loop fill must HOLD the measured surface at the ceiling (272 ± bob)");
+		filled.PlatformsAlive.ShouldBe(2,
+			"population is conserved: the pair count survives into the storm");
+		filled.LastSpawnY.ShouldBeLessThanOrEqualTo(224,
+			"the cycle's replacements must have climbed into the upper band by the terminal flood");
 	}
+
 }

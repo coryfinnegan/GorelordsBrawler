@@ -162,6 +162,34 @@ namespace GorelordsBrawler.Components.Hazards.Fluid
 			return MapHeight;
 		}
 
+		/// <summary>
+		/// Like <see cref="GetSurfaceYAtBelow"/> but only counts cells holding
+		/// a BODY of liquid (≥ <paramref name="minCount"/> particles). This is
+		/// the query for PHYSICS that anchors to the surface (log buoyancy,
+		/// landing checks): the threshold-1 variant returns the first stray
+		/// droplet — a corner stream's column or crest spray — and anything
+		/// spring-coupled to that reading gets dragged into the air.
+		/// </summary>
+		public float GetDenseSurfaceYAtBelow(float worldX, float ceilingWorldY, int minCount)
+		{
+			int cx = (int)(worldX / CellSize);
+			if (cx < 0) cx = 0;
+			if (cx >= Cols) cx = Cols - 1;
+
+			int startRow = (int)(ceilingWorldY / CellSize);
+			if (startRow < 0)     startRow = 0;
+			if (startRow >= Rows) return MapHeight;
+
+			for (int r = startRow; r < Rows; r++)
+			{
+				if (_counts[r * Cols + cx] >= minCount)
+				{
+					return r * CellSize;
+				}
+			}
+			return MapHeight;
+		}
+
 		/// <summary>Minimum (highest on-screen) surface across the column range covering [leftX, rightX].</summary>
 		public float GetMinSurfaceYInRange(float leftX, float rightX)
 		{

@@ -97,12 +97,14 @@ namespace GorelordsBrawler.Components.Hazards
 			_solid = new bool[_cols * _rows];
 			_eaten = new bool[_cols * _rows];
 			_wetStreak = new byte[_cols * _rows];
+
 			for (int i = 0; i < _solid.Length; i++)
 			{
 				_solid[i] = true;
 			}
+
 			_totalCells = _solid.Length;
-			_solidCount = _totalCells;
+			_solidCount = _solid.Length;
 			SolidTopLocalY    = -height * 0.5f;
 			SolidBottomLocalY =  height * 0.5f;
 		}
@@ -393,9 +395,9 @@ namespace GorelordsBrawler.Components.Hazards
 
 		public override void Render(Batcher batcher, Camera camera)
 		{
+			var tex = _surface.SlabTexture;
 			var topLeft = Entity.Transform.Position + _surface.LocalTopLeft;
 			var rects = _surface.MergedRects;
-			var tex = _surface.SlabTexture;
 			for (int i = 0; i < rects.Count; i++)
 			{
 				var r = rects[i];

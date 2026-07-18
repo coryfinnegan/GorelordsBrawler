@@ -121,28 +121,9 @@ public class GameConstantsTests
 		Assert.True(GameConstants.Hazards.SwimBreachDepth < GameConstants.Hazards.AcidFullSubmergeDepth / 2f);
 	}
 
-	[Fact]
-	public void SpringDamping_IsPositive()
-	{
-		Assert.True(GameConstants.Hazards.Damping > 0f);
-	}
-
-	// (PlatformSpawnMinX/MaxX are gone — drop-logs now spawn at the dissolved
-	// tiers' former X anchors, side-alternating; see AcidConfigTests for the
-	// slot-placement coverage.)
-
-	// (The PlatformTable_* tests are gone with the normalized Platforms array —
-	// the pre-Sump geometry it described is retired. Its replacement, AcidConfig,
-	// is covered by AcidConfigTests: escalation curves, particle-budget invariant,
-	// inlet placement, and flood-safe respawn candidates.)
-
-	[Fact]
-	public void PlatformImpactFactor_IsInValidRange()
-	{
-		float f = GameConstants.Hazards.PlatformImpactFactor;
-		Assert.True(f > 0f,  "PlatformImpactFactor must be positive to transfer any energy.");
-		Assert.True(f <= 1f, "PlatformImpactFactor > 1 would violate energy conservation.");
-	}
+	// (The float-spring/buoyancy/impact constants went with the drop-logs, and
+	// the rockfall that briefly replaced them went too — functional testing
+	// chose telegraphed platform respawns over falling debris.)
 
 	// ── Arena bounds ──────────────────────────────────────────────────────────
 

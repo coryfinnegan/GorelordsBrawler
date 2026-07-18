@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Generate the Sump's Phase-E art: the vessel tileset (arena.png / arena.tsx)
-plus the destructible-platform textures (tier_metal.png, log_wood.png).
+plus the destructible-platform texture (tier_metal.png).
 
 Why a generator instead of hand-drawn art:
   Same philosophy as gen_sump_map.py — the art is a SPEC (palette, tile
@@ -45,10 +45,6 @@ WALL_FRAME  = (23, 26, 31)
 RIVET_HI    = (150, 160, 172)
 RIVET_LO    = (20, 23, 28)
 ACID_STAIN  = (63, 174, 63)
-WOOD_MID    = (139, 90, 43)
-WOOD_LO     = (104, 66, 30)
-WOOD_HI     = (172, 118, 62)
-WOOD_DARK   = (78, 49, 22)
 
 
 def lerp(a, b, t):
@@ -208,29 +204,6 @@ def build_tier_texture(out_path):
     img.save(out_path)
 
 
-def build_log_texture(out_path):
-    """128×32 rough-sawn timber, horizontal grain + end rings."""
-    rng = random.Random(SEED + 2)
-    img = Image.new("RGB", (128, 32), WOOD_MID)
-    px = img.load()
-    # horizontal grain: per-row waviness between wood shades
-    for y in range(32):
-        band = rng.choice([WOOD_LO, WOOD_MID, WOOD_MID, WOOD_HI])
-        for x in range(128):
-            wob = rng.random()
-            c = band if wob > 0.15 else WOOD_DARK
-            px[x, y] = lerp(px[x, y][:3], c, 0.6)
-    d = ImageDraw.Draw(img)
-    # end-grain rings
-    for cx in (6, 121):
-        for r in (3, 7, 11):
-            d.ellipse([cx - r, 16 - r, cx + r, 16 + r], outline=WOOD_DARK)
-    d.line([(0, 0), (127, 0)], fill=WOOD_HI)
-    d.line([(0, 31), (127, 31)], fill=WOOD_DARK)
-    img = edge_darken(img, depth=2, amount=0.35)
-    img.save(out_path)
-
-
 if __name__ == "__main__":
     here = os.path.dirname(os.path.abspath(__file__))
     tileset_dir = os.path.normpath(os.path.join(here, "..", "GorelordsBrawler", "Content", "tilesets"))
@@ -239,8 +212,12 @@ if __name__ == "__main__":
 
     png, tsx = build_tileset(tileset_dir)
     build_tier_texture(os.path.join(hazards_dir, "tier_metal.png"))
-    build_log_texture(os.path.join(hazards_dir, "log_wood.png"))
+    # One texture per AcidConfig.RockSizes variant — keep the two lists in sync.
+    ROCK_SIZES = [(64, 96), (96, 96), (96, 128), (128, 128)]
+    for i, (rw, rh) in enumerate(ROCK_SIZES):
+        name = f"rock_{rw}x{rh}.png"
+        build_rock_texture(os.path.join(hazards_dir, name), rw, rh, seed_offset=2 + i)
+        print(f"Wrote {os.path.join(hazards_dir, name)}")
     print(f"Wrote {png}")
     print(f"Wrote {tsx}")
     print(f"Wrote {os.path.join(hazards_dir, 'tier_metal.png')}")
-    print(f"Wrote {os.path.join(hazards_dir, 'log_wood.png')}")

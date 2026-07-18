@@ -26,7 +26,16 @@ public class GameStateSnapshot
 	[JsonPropertyName("acidTellActive")] public bool   AcidTellActive { get; set; }
 	[JsonPropertyName("acidDraining")]   public bool   AcidDraining   { get; set; }
 	[JsonPropertyName("acidFillCap")]    public int    AcidFillCap    { get; set; }
-	[JsonPropertyName("tiersRemaining")] public int    TiersRemaining { get; set; }
+	// Footing-cycle oracles (docs/platform-respawn-proposal.md): population,
+	// the active ghost telegraph and its position, and the last materialized
+	// spawn — the cycle tests assert the ghost LEADS the spawn and the spawn
+	// lands exactly on its ghost.
+	[JsonPropertyName("platformsAlive")] public int    PlatformsAlive { get; set; }
+	[JsonPropertyName("ghostActive")]    public bool   GhostActive    { get; set; }
+	[JsonPropertyName("ghostX")]         public int    GhostX         { get; set; } = -1;
+	[JsonPropertyName("ghostY")]         public int    GhostY         { get; set; } = -1;
+	[JsonPropertyName("lastSpawnX")]     public int    LastSpawnX     { get; set; } = -1;
+	[JsonPropertyName("lastSpawnY")]     public int    LastSpawnY     { get; set; } = -1;
 
 	// Phase B: the live damage-AABB of the acid (the ContactHazard broadphase).
 	// Lets tests prove a player was INSIDE the box while dry — the phantom-damage

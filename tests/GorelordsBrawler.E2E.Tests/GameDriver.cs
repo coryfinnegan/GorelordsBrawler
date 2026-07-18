@@ -24,7 +24,11 @@ public sealed class GameDriver : IDisposable, IAsyncDisposable
 {
 	public const string EnableEnvVar   = "E2E_TESTS";
 	public const string ServerUrl      = "http://localhost:7777";
-	public const int    StartupTimeout = 15_000;  // ms to wait for server to come up
+	// A COLD first launch (JIT + first content decode, on a machine busy with the test
+	// runner itself) can exceed 15s; 15s was enough to poison a whole run — the launcher
+	// gave up while its game was still booting. Healthy launches return the moment the
+	// game is ready, so the extra headroom costs nothing.
+	public const int    StartupTimeout = 30_000;  // ms to wait for server to come up
 
 	public static bool IsEnabled =>
 		string.Equals(Environment.GetEnvironmentVariable(EnableEnvVar), "1", StringComparison.Ordinal);
@@ -44,6 +48,12 @@ public sealed class GameDriver : IDisposable, IAsyncDisposable
 	/// <summary>Locate and launch the game with E2E appsettings then wait for the debug server.</summary>
 	public static async Task<GameDriver> StartAsync()
 	{
+		// The port must be OURS before we launch: a stale game left by a previous run
+		// (or a launch this sweep failed to prevent) serves /state with time >= 5s, and
+		// the freshness gate below then correctly rejects everything — a whole-suite
+		// cascade. Ask any squatter to quit rather than timing out test after test.
+		await EvictPortSquatterAsync();
+
 		var (fileName, arguments, workingDir) = FindGameLauncher();
 
 		var psi = new ProcessStartInfo(fileName)
@@ -73,8 +83,69 @@ public sealed class GameDriver : IDisposable, IAsyncDisposable
 		var proc = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start game process.");
 		var driver = new GameDriver(proc);
 
-		await driver.WaitForReadyAsync();
+		try
+		{
+			await driver.WaitForReadyAsync();
+		}
+		catch
+		{
+			// Never leak the spawned game on a failed launch. The one leak that slipped
+			// through here kept serving /state on :7777 and every later launch in the
+			// suite timed out against it (18 straight failures) — the process must die
+			// with the exception.
+			driver.Dispose();
+			throw;
+		}
 		return driver;
+	}
+
+	/// <summary>
+	/// If something already answers on the port, it is a leftover automation game (the
+	/// harness serializes classes, so no legitimate sibling exists) — POST /quit and wait
+	/// for the port to fall silent. Throws with a clear message if the squatter won't die,
+	/// e.g. a manually-started game with the debug server on: better one honest failure
+	/// than a suite of opaque timeouts.
+	/// </summary>
+	private static async Task EvictPortSquatterAsync()
+	{
+		using var http = new HttpClient
+		{
+			BaseAddress = new Uri(ServerUrl),
+			Timeout     = TimeSpan.FromSeconds(2),
+		};
+
+		try
+		{
+			await http.GetStringAsync("/state");
+		}
+		catch
+		{
+			return; // Nothing listening — the normal case.
+		}
+
+		try
+		{
+			using var empty = new StringContent("{}", Encoding.UTF8, "application/json");
+			using var r     = await http.PostAsync("/quit", empty);
+		}
+		catch { /* it may die mid-response; the poll below is the arbiter */ }
+
+		var deadline = DateTime.UtcNow.AddSeconds(5);
+		while (DateTime.UtcNow < deadline)
+		{
+			try
+			{
+				await http.GetStringAsync("/state");
+			}
+			catch
+			{
+				return; // Port is silent — evicted.
+			}
+			await Task.Delay(100);
+		}
+		throw new InvalidOperationException(
+			$"A game is already serving {ServerUrl} and did not honor POST /quit. " +
+			"Close the running GorelordsBrawler instance and re-run the E2E suite.");
 	}
 
 	/// <summary>
@@ -92,10 +163,23 @@ public sealed class GameDriver : IDisposable, IAsyncDisposable
 		var deadline = DateTime.UtcNow.AddMilliseconds(StartupTimeout);
 		while (DateTime.UtcNow < deadline)
 		{
+			if (_process.HasExited)
+			{
+				throw new InvalidOperationException(
+					$"Game process exited during startup (exit code {_process.ExitCode}) — " +
+					"a boot crash, not a slow start.");
+			}
 			try
 			{
 				var state = await GetStateAsync();
-				if (state.Players.Count >= 2 && state.Players.TrueForAll(p => p.Grounded))
+				// time < 5 s proves the /state answering on :7777 is OUR fresh
+				// boot: a LINGERING previous test's game also serves grounded
+				// players instantly, and a driver that accepts it steers a
+				// battle-worn match (players pre-damaged, phase mid-storm) —
+				// the "hp wasn't full at onset" suite-order flake.
+				if (state.Time < 5f
+					&& state.Players.Count >= 2
+					&& state.Players.TrueForAll(p => p.Grounded))
 				{
 					return;
 				}
@@ -104,7 +188,7 @@ public sealed class GameDriver : IDisposable, IAsyncDisposable
 			await Task.Delay(100);
 		}
 		throw new TimeoutException(
-			$"Game did not reach a live, grounded state within {StartupTimeout}ms.");
+			$"Game did not reach a live, grounded, FRESH state (time < 5s) within {StartupTimeout}ms.");
 	}
 
 	/// <summary>Query the current game state from /state.</summary>

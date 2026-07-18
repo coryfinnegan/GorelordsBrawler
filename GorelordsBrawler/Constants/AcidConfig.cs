@@ -202,28 +202,49 @@ namespace GorelordsBrawler.Constants
 		public const float SurgeBurstSeconds    = 0.6f;
 		public const float SurgeBurstFlowMult   = 1.5f;
 
-		// Scramble platforms: how many drop-in logs the spawner keeps alive —
-		// GROWING with the loop, so as static footing dissolves the arena
-		// transforms into a bobbing debris field instead of emptying out
-		// (subtraction → transformation; cf. Brinstar returning its platforms).
-		// Drops keep the SPORADIC stagger (functional-test decision: irregular,
-		// not metronomic), one per SIDE at the dissolved tiers' former X spots.
-		public const float PlatformDropStaggerMin = 2.5f;
-		public const float PlatformDropStaggerMax = 7f;
+		// ── Platform respawn cycle (docs/platform-respawn-proposal.md) ───────
+		// The footing loop: the acid eats a platform → a GHOST (pulsing outline,
+		// the Phase-D tell grammar) flashes at the next spawn location → it
+		// solidifies into a fresh erodible platform there. Population is
+		// conserved (one death schedules exactly one ghost), so footing is
+		// always being taken from where the acid is and re-offered somewhere
+		// else — the players chase the ghosts.
+		public const float PlatformW = 192f;   // same slab as the starting pair (6 tiles)
+		public const float PlatformH = 32f;
 
-		public static int ScramblePlatformTargetFor(int loop) =>
-			Math.Min(2 + loop, 4);
+		/// <summary>Ghost flash before a spawn (user: "2-5 seconds"; middle of the band).</summary>
+		public const float GhostSeconds = 3.0f;
 
 		/// <summary>
-		/// Drop-log X anchors: on the former LOW/MID tier spans, per side (C.2).
-		/// The mid anchors sit on the OUTER third of the old mid spans — the
-		/// centers (416/864) are directly under the new top tiers' edges, and a
-		/// falling log clips through anything in its column (DynamicPlatform
-		/// only lands on other logs and the acid).
+		/// Candidate lattice for spawn locations: platform-top Y rows × center
+		/// X columns, filtered per pick (see PlatformRespawner.PickSpawnSpot).
+		/// Columns keep the 192-wide slab off the walls, clear of the corner
+		/// inlet streams (x 72/1208), and OUT of the standing-surface probe
+		/// lane (x 544-736): a slab breaching the surface there would put
+		/// splash puddles under the probe columns and corrupt the closed-loop
+		/// fill — the exact failure the rockfall era hit with center cairns.
+		/// Rows step 64-96 px (jumpable), lowest row 128 px above the bank lip
+		/// (the bank→platform hop players already know from the old lows).
 		/// </summary>
-		public static readonly float[] LogSpawnXLeft  = { 224f, 376f };
-		public static readonly float[] LogSpawnXRight = { 904f, 1056f };
-		public const float LogSpawnXJitter = 12f;
+		public static readonly float[] PlatformSlotX    = { 224f, 448f, 832f, 1056f };
+		public static readonly float[] PlatformSlotTopY = { 160f, 256f, 352f, 416f };
+
+		/// <summary>
+		/// A candidate row is viable only if the platform TOP clears the
+		/// current loop's rise ceiling by this margin — a fresh platform must
+		/// never be eaten by the rise it was born into. In the storm
+		/// (ceiling 272) this confines spawns to the 160 row: the top band,
+		/// where the endgame chase lives (user call).
+		/// </summary>
+		public const float PlatformSpawnClearance = 64f;
+
+		/// <summary>
+		/// The replacement must MOVE the fight: candidates closer than this to
+		/// the dead platform's center are excluded (falls back to ignoring
+		/// this, then to a reduced clearance, if the filters empty the set —
+		/// there is always a spawn).
+		/// </summary>
+		public const float PlatformMinMoveDistance = 200f;
 
 		// Swiss-cheese erosion (ErodibleSurface): platforms are a grid of solid
 		// cells the acid eats by CONTACT — every pass, perimeter cells whose
@@ -245,42 +266,36 @@ namespace GorelordsBrawler.Constants
 
 		// PassesPerSec = how fast the eaten front advances. With the dwell
 		// filter each exposed shell needs DwellPasses before it falls, so the
-		// rates are scaled up from the pre-dwell values to keep macro timings.
-		// PER SURFACE, because the two platform kinds live in opposite regimes:
-		//   TIERS sit still — a LAPPED tier erodes to the waterline and stops
-		//   (self-limiting), a SUBMERGED one shell-erodes in
-		//   ~(rows/2)·dwell/rate s. 3.0 → a submerged 32 px tier dies in ~4 s,
-		//   the consume beat.
-		//   LOGS float — buoyancy holds fresh hull at the waterline forever, so
-		//   a log erodes CONTINUOUSLY while afloat (~8 rows bottom-up, dwell
-		//   per row). 1.2 → ~20 s of life, long enough to outlive the surge
-		//   volley it drops into (at tier-rate the late-game footing lived ~5 s).
-		public const float ErosionCellSize         = 4f;
-		public const float TierErosionPassesPerSec = 3.0f;
-		public const float LogErosionPassesPerSec  = 1.2f;
-
-		// The log spawner opens once the LOW tier pair is MOSTLY eaten (not
-		// fully — full consumption of the last crumbs can lag well behind the
-		// visible destruction, and the debris should start falling while the
-		// chewing is still on screen).
-		public const float TierMostlyEatenFraction = 0.5f;
+		// rate is scaled up from the pre-dwell value to keep macro timings.
+		// A LAPPED platform erodes to the waterline and stops (self-limiting);
+		// a SUBMERGED one shell-erodes in ~(rows/2)·dwell/rate s.
+		//
+		// 1.8 (was 3.0 in the eight-tier world): with only the starting PAIR
+		// on the map, the contest margin must be structural, not luck. The old
+		// diving boards sat right where the corner cascades pour over the pit
+		// lip and soaked up their impact spray; without them more froth pools
+		// on the pair's tops, and at 3.0 the extra top-face chew plus loop-1
+		// crest washes killed a platform seconds before the contest ended
+		// (2026-07-11 probe). At 1.8 the pair rides out the full contest loop
+		// with real freeboard, and the loop-2 consume beat stretches from ~4 s
+		// to a still-snappy ~7 s of visible dissolution.
+		public const float ErosionCellSize             = 4f;
+		public const float PlatformErosionPassesPerSec = 1.8f;
 
 		// ── Respawn safety (flood-aware) ──────────────────────────────────────
 		/// <summary>
-		/// Respawn candidates from lowest (banks — the normal case) to highest
-		/// (top tiers — the storm refuge). The safe-spawn picker takes the
-		/// LOWEST candidate whose column's acid surface clears the feet by
-		/// <see cref="RespawnClearancePx"/>; if nothing qualifies (deep storm)
-		/// it spawns ABOVE the live surface instead of into the acid.
+		/// STATIC respawn candidates: the banks, lowest-first (the normal
+		/// case). The higher rungs are no longer fixed geometry — the picker
+		/// (ArenaScene.PickSafeSpawn) appends the LIVING platforms' tops at
+		/// pick time, ordered low→high, because footing above the banks is
+		/// dynamic now (docs/platform-respawn-proposal.md). If nothing
+		/// qualifies (deep storm, everything wet) it spawns ABOVE the live
+		/// surface instead of into the acid.
 		/// </summary>
 		public static readonly Vector2[] RespawnPoints =
 		{
 			new Vector2(200f, 520f),    // left bank
 			new Vector2(1080f, 520f),   // right bank
-			new Vector2(416f, 260f),    // mid-left tier (C.2: pulled inward over the pit edge)
-			new Vector2(864f, 260f),    // mid-right tier
-			new Vector2(496f, 134f),    // top-left tier (last dry ground in the storm)
-			new Vector2(784f, 134f),    // top-right tier
 		};
 		public const float RespawnClearancePx = 48f;
 

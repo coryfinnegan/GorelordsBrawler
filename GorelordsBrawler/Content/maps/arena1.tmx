@@ -115,44 +115,14 @@
   </object>
  </objectgroup>
  <objectgroup id="5" name="tiers">
-  <object id="100" name="tier0" type="Tier" x="448" y="480" width="96" height="32">
+  <object id="100" name="tier0" type="Tier" x="128" y="416" width="192" height="32">
    <properties>
-    <property name="rank" value="shallow"/>
+    <property name="rank" value="start"/>
    </properties>
   </object>
-  <object id="101" name="tier1" type="Tier" x="736" y="480" width="96" height="32">
+  <object id="101" name="tier1" type="Tier" x="960" y="416" width="192" height="32">
    <properties>
-    <property name="rank" value="shallow"/>
-   </properties>
-  </object>
-  <object id="102" name="tier2" type="Tier" x="128" y="416" width="192" height="32">
-   <properties>
-    <property name="rank" value="low"/>
-   </properties>
-  </object>
-  <object id="103" name="tier3" type="Tier" x="960" y="416" width="192" height="32">
-   <properties>
-    <property name="rank" value="low"/>
-   </properties>
-  </object>
-  <object id="104" name="tier4" type="Tier" x="352" y="288" width="128" height="32">
-   <properties>
-    <property name="rank" value="mid"/>
-   </properties>
-  </object>
-  <object id="105" name="tier5" type="Tier" x="800" y="288" width="128" height="32">
-   <properties>
-    <property name="rank" value="mid"/>
-   </properties>
-  </object>
-  <object id="106" name="tier6" type="Tier" x="416" y="160" width="160" height="32">
-   <properties>
-    <property name="rank" value="top"/>
-   </properties>
-  </object>
-  <object id="107" name="tier7" type="Tier" x="704" y="160" width="160" height="32">
-   <properties>
-    <property name="rank" value="top"/>
+    <property name="rank" value="start"/>
    </properties>
   </object>
  </objectgroup>
