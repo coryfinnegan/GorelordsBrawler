@@ -281,6 +281,8 @@ namespace GorelordsBrawler.Scenes
 				// exactly on its ghost.
 				exporter.RegisterProvider("platformsAlive", () => platformCycle.PlatformsAlive);
 				exporter.RegisterProvider("ghostActive",    () => platformCycle.GhostActive);
+				exporter.RegisterProvider("ghostCount",     () => platformCycle.GhostCount);
+				exporter.RegisterProvider("platformTarget", () => platformCycle.TargetAlive);
 				exporter.RegisterProvider("ghostX",         () => (int)platformCycle.GhostPos.X);
 				exporter.RegisterProvider("ghostY",         () => (int)platformCycle.GhostPos.Y);
 				exporter.RegisterProvider("lastSpawnX",     () => (int)platformCycle.LastSpawnPos.X);

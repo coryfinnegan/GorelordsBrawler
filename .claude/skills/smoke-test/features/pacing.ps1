@@ -34,6 +34,24 @@ return @{
     Invoke = {
         param([SmokeCtx] $Ctx)
 
+        # ── 0. The opening volley: footing exists within seconds of frame one ──
+        # The 2026-07-24 pacing rework: the footing director telegraphs the
+        # match's first platforms at t=0 and holds a target population, instead
+        # of waiting for the acid's first consume beat (60+ s of bare arena).
+        $Ctx.Check('opening volley reaches the footing target within seconds', {
+            param($c)
+            # The debug server answers before the scene exists, and PowerShell's
+            # $null -ge $null is TRUE — demand a concrete positive target so an
+            # early empty state can't pass this vacuously.
+            $s = $c.WaitFor({ param($x)
+                [int]$x.platformTarget -gt 0 -and [int]$x.platformsAlive -ge [int]$x.platformTarget
+            }, 15000, 'platformsAlive >= platformTarget (> 0)')
+            if ([float]$s.time -le 0 -or [float]$s.time -gt 10) {
+                throw "full footing arrived at game-time t=$($s.time)s - the opening volley regressed (target is ~1 s debug-fast / ~3 s real)"
+            }
+            "platformsAlive=$($s.platformsAlive) / target=$($s.platformTarget) at t=$($s.time)s"
+        })
+
         # ── 1. Calibration: the loop-0 rise must STAND where its ceiling says ──
         # Median of 3 reads (surface sloshes +/-16-32 px in 16 px probe quanta);
         # +/-40 px band — the gate exists to catch calibration-class breaks

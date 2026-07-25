@@ -32,6 +32,8 @@ public class GameStateSnapshot
 	// lands exactly on its ghost.
 	[JsonPropertyName("platformsAlive")] public int    PlatformsAlive { get; set; }
 	[JsonPropertyName("ghostActive")]    public bool   GhostActive    { get; set; }
+	[JsonPropertyName("ghostCount")]     public int    GhostCount     { get; set; }
+	[JsonPropertyName("platformTarget")] public int    PlatformTarget { get; set; }
 	[JsonPropertyName("ghostX")]         public int    GhostX         { get; set; } = -1;
 	[JsonPropertyName("ghostY")]         public int    GhostY         { get; set; } = -1;
 	[JsonPropertyName("lastSpawnX")]     public int    LastSpawnX     { get; set; } = -1;

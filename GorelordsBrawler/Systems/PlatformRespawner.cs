@@ -8,23 +8,30 @@ using GorelordsBrawler.Constants;
 namespace GorelordsBrawler.Systems
 {
 	/// <summary>
-	/// The footing cycle (docs/platform-respawn-proposal.md — replaced the
-	/// rockfall): when the acid eats a platform, a GHOST — a pulsing outline
-	/// the exact size of a platform — flashes at the next spawn location for
-	/// <see cref="AcidConfig.GhostSeconds"/>, then solidifies into a fresh
-	/// erodible platform there. Population is conserved: one death schedules
-	/// exactly one ghost, so footing is always being taken from where the
-	/// acid is and re-offered somewhere else. Players chase the ghosts.
+	/// The footing DIRECTOR (docs/platform-respawn-proposal.md, pacing rework
+	/// 2026-07-24): maintains a TARGET platform population from the first
+	/// frame — an opening volley of ghosts flashes at t=0 (full footing ~3 s
+	/// in) and any later shortfall is topped up on a staggered cadence —
+	/// instead of only replacing platforms after the acid eats one. Every
+	/// spawn is still led by a GHOST — a pulsing outline the exact size of a
+	/// platform — for <see cref="AcidConfig.GhostSeconds"/> before it
+	/// solidifies into a fresh erodible platform. A death raises its
+	/// replacement ghost immediately while the population is short of target,
+	/// so footing is still being taken from where the acid is and re-offered
+	/// somewhere else. Players chase the ghosts.
 	///
-	/// Placement is a seeded-random pick from the AcidConfig lattice, filtered
-	/// by the CURRENT loop's rise ceiling (a fresh platform must outlive the
-	/// rise it was born into), overlap with living platforms/ghosts, and a
-	/// keep-away radius from the dead platform (the replacement must move the
-	/// fight). In the storm only the top row passes the ceiling filter, so
-	/// the endgame is a cramped chase over the last spawns (user call).
+	/// Placement is a random pick from the AcidConfig lattice, filtered by
+	/// the CURRENT loop's rise ceiling (a fresh platform must outlive the
+	/// rise it was born into), the sliding spawn band (footing hugs the
+	/// danger zone and climbs with the flood), overlap/stacking with living
+	/// platforms and ghosts, and a keep-away radius from a dead platform
+	/// (the replacement must move the fight). In the storm only the top row
+	/// passes the ceiling filter and the target shrinks, so the endgame is a
+	/// cramped chase over the last spawns (user call).
 	///
-	/// Deterministic under test: the rng is SEEDED, so stepped-mode E2E sees
-	/// the same ghosts every run.
+	/// Deterministic under test: under DebugAutomation the rng is SEEDED, so
+	/// stepped-mode E2E sees the same ghosts every run; a real match seeds
+	/// from the clock so no two matches replay the same footing script.
 	/// </summary>
 	public class PlatformRespawner : SceneComponent
 	{
@@ -37,6 +44,10 @@ namespace GorelordsBrawler.Systems
 		// ── Automation oracles ────────────────────────────────────────────────
 		public int PlatformsAlive => _alive.Count;
 		public bool GhostActive => _ghosts.Count > 0;
+		public int GhostCount => _ghosts.Count;
+
+		/// <summary>The director's current population target (storm-aware).</summary>
+		public int TargetAlive => CurrentTarget();
 
 		/// <summary>First active ghost's center, (-1,-1) when none.</summary>
 		public Vector2 GhostPos =>
@@ -62,7 +73,14 @@ namespace GorelordsBrawler.Systems
 
 		private AcidSurface _acid;
 		private readonly List<DissolvingPlatform> _alive = new();
-		private readonly System.Random _rng = new System.Random(0x6057);
+		private bool _openingDone;
+		private float _nextTopUpIn;
+
+		// Seeded ONLY under automation (stepped-mode E2E must see the same
+		// ghosts every run); a real match varies so the footing script never
+		// replays.
+		private readonly System.Random _rng = new System.Random(
+			AppSettings.DebugAutomation ? 0x6057 : Environment.TickCount);
 
 		private sealed class Ghost
 		{
@@ -97,16 +115,36 @@ namespace GorelordsBrawler.Systems
 					? platform.Entity.Transform.Position
 					: center;
 				_alive.Remove(platform);
-				BeginGhost(deadCenter);
+				// A death replaces itself immediately ONLY while the population
+				// is short of target — when the storm shrinks the target, the
+				// surplus deaths burn off without replacement and the count
+				// settles onto the new target on its own.
+				if (_alive.Count + _ghosts.Count < CurrentTarget())
+				{
+					BeginGhost(deadCenter);
+				}
 			};
 		}
 
 		public override void Update()
 		{
-			if (_ghosts.Count == 0)
+			// The OPENING VOLLEY: the match's first footing telegraphs on the
+			// very first frame — the symmetric inward-mid pair (fixed slots so
+			// neither player opens advantaged), with the director below topping
+			// the population up to target right behind it.
+			if (!_openingDone)
 			{
-				return;
+				_openingDone = true;
+				foreach (var slot in AcidConfig.PlatformOpeningCenters)
+				{
+					if (!OverlapsExisting(slot))
+					{
+						CreateGhost(slot);
+					}
+				}
+				_nextTopUpIn = AcidConfig.PlatformTopUpStaggerSeconds * AcidConfig.TimeScale();
 			}
+
 			float dt = Time.DeltaTime;
 			for (int i = _ghosts.Count - 1; i >= 0; i--)
 			{
@@ -119,12 +157,38 @@ namespace GorelordsBrawler.Systems
 					SpawnPlatform(ghost.Center);
 				}
 			}
+
+			// The DIRECTOR: top up any shortfall (ghosts count toward the
+			// population — a flashing telegraph is footing already promised).
+			// Successive top-ups cascade on the stagger so each telegraph
+			// reads on its own; the timer idles at zero while the population
+			// is full so the first top-up of a new shortfall fires promptly.
+			int deficit = CurrentTarget() - _alive.Count - _ghosts.Count;
+			if (deficit <= 0)
+			{
+				_nextTopUpIn = 0f;
+			}
+			else
+			{
+				_nextTopUpIn -= dt;
+				if (_nextTopUpIn <= 0f)
+				{
+					BeginGhost(null);
+					_nextTopUpIn = AcidConfig.PlatformTopUpStaggerSeconds * AcidConfig.TimeScale();
+				}
+			}
 		}
 
-		private void BeginGhost(Vector2 deadCenter)
-		{
-			var center = PickSpawnSpot(deadCenter);
+		private int CurrentTarget() =>
+			AcidConfig.PlatformTargetFor(IsStorm?.Invoke() ?? false);
 
+		private void BeginGhost(Vector2? deadCenter)
+		{
+			CreateGhost(PickSpawnSpot(deadCenter));
+		}
+
+		private void CreateGhost(Vector2 center)
+		{
 			// Debug-fast compresses the ghost with every other phase timer so
 			// the telegraph:action ratio survives the 4× lens.
 			float duration = AcidConfig.GhostSeconds * AcidConfig.TimeScale();
@@ -177,33 +241,36 @@ namespace GorelordsBrawler.Systems
 		/// <summary>
 		/// Pick the next spawn's center from the lattice. Filters, in order of
 		/// principle: the platform TOP must clear the current ceiling by the
-		/// clearance band (survive its own loop); no overlap with a living
-		/// platform or an active ghost; and keep away from the death site so
-		/// the fight moves. If the full filter set empties (cramped storm),
-		/// relax in stages — keep-away first, then clearance — so there is
-		/// ALWAYS a spawn; the cycle never stalls.
+		/// clearance band (survive its own loop) AND sit inside the sliding
+		/// spawn band above it (footing hugs the danger zone); no overlap or
+		/// same-column stacking with a living platform or an active ghost; and
+		/// keep away from the death site (when there is one — director top-ups
+		/// have none) so the fight moves. If the full filter set empties
+		/// (cramped storm), relax in stages — keep-away first, then the band,
+		/// then clearance — so there is ALWAYS a spawn; the cycle never stalls.
 		/// </summary>
-		private Vector2 PickSpawnSpot(Vector2 deadCenter)
+		private Vector2 PickSpawnSpot(Vector2? deadCenter)
 		{
 			bool storm     = IsStorm?.Invoke() ?? false;
 			int loop       = LoopProvider?.Invoke() ?? 0;
 			float ceilingY = storm ? AcidConfig.StormCeilingY : AcidConfig.RiseCeilingFor(loop);
 
 			var candidates = new List<Vector2>();
-			for (int stage = 0; stage < 3 && candidates.Count == 0; stage++)
+			for (int stage = 0; stage < 4 && candidates.Count == 0; stage++)
 			{
-				float clearance = stage < 2 ? AcidConfig.PlatformSpawnClearance : 16f;
-				bool keepAway   = stage < 1;
+				bool keepAway   = stage < 1 && deadCenter.HasValue;
+				bool bandCap    = stage < 2;
+				float clearance = stage < 3 ? AcidConfig.PlatformSpawnClearance : 16f;
 				foreach (float topY in AcidConfig.PlatformSlotTopY)
 				{
-					if (topY > ceilingY - clearance)
+					if (!AcidConfig.PlatformRowViable(topY, ceilingY, clearance, bandRelaxed: !bandCap))
 					{
-						continue; // this row would be eaten by the current rise
+						continue; // eaten by the current rise, or off the band
 					}
 					foreach (float x in AcidConfig.PlatformSlotX)
 					{
 						var center = new Vector2(x, topY + AcidConfig.PlatformH * 0.5f);
-						if (keepAway && Vector2.Distance(center, deadCenter) < AcidConfig.PlatformMinMoveDistance)
+						if (keepAway && Vector2.Distance(center, deadCenter.Value) < AcidConfig.PlatformMinMoveDistance)
 						{
 							continue;
 						}
@@ -246,10 +313,14 @@ namespace GorelordsBrawler.Systems
 
 		private static bool SlabsOverlap(Vector2 a, Vector2 b)
 		{
-			// A little breathing room beyond strict overlap so two slabs never
-			// spawn edge-kissing into one visual mega-platform.
+			// Horizontal: a little breathing room beyond strict overlap so two
+			// slabs never spawn edge-kissing into one visual mega-platform.
+			// Vertical: the stack clearance — same-column adjacent rows are 64
+			// px apart, a gap too short to stand in or jump through, so slabs
+			// sharing a column must keep a full clearance between them and the
+			// layout stays staggered staircases, never stacked shelves.
 			return MathF.Abs(a.X - b.X) < AcidConfig.PlatformW + 32f
-				&& MathF.Abs(a.Y - b.Y) < AcidConfig.PlatformH + 32f;
+				&& MathF.Abs(a.Y - b.Y) < AcidConfig.PlatformH + AcidConfig.PlatformStackClearance;
 		}
 	}
 
