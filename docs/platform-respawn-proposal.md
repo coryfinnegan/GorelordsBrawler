@@ -6,6 +6,33 @@ below; the two open calls resolved by the user: starting tier is a PAIR
 band. Ghost duration defaults to 3.0 s (middle of the requested 2-5 band),
 live-tunable.**
 
+> **REVISION — the footing DIRECTOR (2026-07-24, functional-test verdict).**
+> The death-triggered-only cycle shipped below left the arena bare but for
+> the starting pair until the acid's first consume beat, 60+ seconds in
+> ("we sort of wait around for the platforms to spawn and it really brings
+> down the gameplay"). Superseded by a population-target director
+> (`PlatformRespawner` + the `AcidConfig` "Platform respawn cycle" block):
+>
+> - **Target population from t=0** — 4 platforms in regular play (the pair +
+>   two spawns; with the banks that is Battlefield's proven surface count),
+>   3 in the storm (the cramped-chase call stands). An opening volley of
+>   ghosts flashes on frame one at the symmetric inward-mid slots (x 448/832,
+>   row 352 — over the pit, fair to both players), so full footing stands
+>   ~3 s into the match.
+> - **Deficit top-ups** — any shortfall beyond death-replacements is topped
+>   up on a staggered cadence (0.8 s between telegraphs). "Population is
+>   conserved: one death always schedules exactly one ghost" is superseded:
+>   a death replaces itself immediately only while the population is short
+>   of target, so the storm's smaller target burns off surplus on its own.
+> - **The sliding spawn band** — candidates must sit within 240 px above the
+>   current rise ceiling (as well as clearing it), so fresh footing hugs the
+>   danger zone: low rows early, climbing with the loops, top row in the
+>   storm. Same-column adjacent-row spawns are blocked (stack clearance) —
+>   staggered staircases, never shelves with unusable 64 px gaps.
+> - Prior art: Left 4 Dead's AI Director maintains intensity by spawning
+>   against a target rather than per-event; Battlefield's tri-plat layout is
+>   the density benchmark for a fair, frantic platform fight.
+
 ## The requirement (user, 2026-07-11)
 
 > As a platform is removed, we flash a "ghost" of where a platform is going

@@ -203,12 +203,17 @@ namespace GorelordsBrawler.Constants
 		public const float SurgeBurstFlowMult   = 1.5f;
 
 		// ── Platform respawn cycle (docs/platform-respawn-proposal.md) ───────
-		// The footing loop: the acid eats a platform → a GHOST (pulsing outline,
-		// the Phase-D tell grammar) flashes at the next spawn location → it
-		// solidifies into a fresh erodible platform there. Population is
-		// conserved (one death schedules exactly one ghost), so footing is
-		// always being taken from where the acid is and re-offered somewhere
-		// else — the players chase the ghosts.
+		// The footing DIRECTOR (pacing rework, 2026-07-24): the cycle maintains
+		// a TARGET population of platforms from the first frame of the match —
+		// an opening volley of ghosts flashes at t=0 and any later shortfall is
+		// topped up — instead of only ever replacing a platform after the acid
+		// finishes eating one (which left the arena with nothing but the
+		// starting pair for the first minute-plus of every match). Deaths still
+		// raise an immediate replacement ghost while the population is short,
+		// so the chase beat survives. Pattern: Left 4 Dead's AI Director keeps
+		// intensity up by spawning against a target, not per-event; the target
+		// itself (4 surfaces in regular play) is Battlefield's proven layout
+		// density for a fair, frantic platform fight.
 		public const float PlatformW = 192f;   // same slab as the starting pair (6 tiles)
 		public const float PlatformH = 32f;
 
@@ -245,6 +250,85 @@ namespace GorelordsBrawler.Constants
 		/// there is always a spawn).
 		/// </summary>
 		public const float PlatformMinMoveDistance = 200f;
+
+		/// <summary>
+		/// Target platform population the director maintains in regular play.
+		/// 4 = the pair + the opening volley: with the two banks that is
+		/// Battlefield's "base + floating platforms" surface count — dense
+		/// enough that the fight is always platform-to-platform, sparse enough
+		/// that footing stays worth knocking someone off of. This is THE knob
+		/// for "how much footing does a match have".
+		/// </summary>
+		public const int PlatformTargetAlive = 4;
+
+		/// <summary>
+		/// Target population during the terminal storm: below the top row's
+		/// capacity (4 columns) so the endgame stays a cramped scramble over
+		/// scarce perches (user call: "cramped chase"), above the old
+		/// conserved-pair count of 2 so it stays a chase rather than a stalemate
+		/// on two islands.
+		/// </summary>
+		public const int PlatformTargetStorm = 3;
+
+		public static int PlatformTargetFor(bool storm) =>
+			storm ? PlatformTargetStorm : PlatformTargetAlive;
+
+		/// <summary>
+		/// Gap between successive director top-up ghosts, so a multi-platform
+		/// shortfall cascades in (each telegraph readable on its own) instead of
+		/// popping in sync. Scaled by <see cref="TimeScale"/> like every other
+		/// phase timer.
+		/// </summary>
+		public const float PlatformTopUpStaggerSeconds = 0.8f;
+
+		/// <summary>
+		/// The sliding spawn band: a candidate row is viable only if its
+		/// platform TOP also sits within this many px ABOVE the current rise
+		/// ceiling. Fresh footing therefore hugs the danger zone — low rows
+		/// while the pool is low (the fight starts down where the acid
+		/// threatens it), climbing rows as the loops escalate. Without the cap,
+		/// loop-0 spawns could land on the 160 row, 368 px above the acid,
+		/// and the match would open with players camped far from the hazard.
+		/// Relaxed (band ignored) before the reduced-clearance fallback if the
+		/// filters empty the candidate set.
+		/// </summary>
+		public const float PlatformSpawnBandPx = 240f;
+
+		/// <summary>
+		/// Extra vertical clearance (beyond the slab height) two slabs must
+		/// keep in the same column: 96 px blocks same-column adjacent-row
+		/// spawns, whose 64 px gap is too short to stand in or jump through —
+		/// layouts stay staggered staircases, never stacked shelves.
+		/// </summary>
+		public const float PlatformStackClearance = 96f;
+
+		/// <summary>
+		/// A candidate row passes the spawn filter when its platform top clears
+		/// the ceiling by <paramref name="clearance"/> (never eaten by the rise
+		/// it was born into) AND — unless <paramref name="bandRelaxed"/> — sits
+		/// inside the sliding band above that ceiling (footing hugs the danger
+		/// zone). Pure so AcidConfigTests can pin the band per loop.
+		/// </summary>
+		public static bool PlatformRowViable(float topY, float ceilingY, float clearance, bool bandRelaxed) =>
+			topY <= ceilingY - clearance
+				&& (bandRelaxed || topY >= ceilingY - PlatformSpawnBandPx);
+
+		/// <summary>
+		/// The OPENING VOLLEY: ghost telegraphs that flash the moment the match
+		/// starts, so full footing exists ~<see cref="GhostSeconds"/> in (the
+		/// old death-triggered-only cycle left the arena bare but for the
+		/// starting pair until the acid's first consume beat, 60+ s of waiting;
+		/// functional-test verdict 2026-07-24). A deterministic SYMMETRIC pair
+		/// at the inward-mid slots — one hop up-and-inward from the starting
+		/// pair, directly over the pit — so neither player opens with a footing
+		/// advantage and the "platform in the middle right away" is there from
+		/// the first jump. Centers: lattice columns 448/832, row 352.
+		/// </summary>
+		public static readonly Vector2[] PlatformOpeningCenters =
+		{
+			new Vector2(448f, 352f + PlatformH * 0.5f),
+			new Vector2(832f, 352f + PlatformH * 0.5f),
+		};
 
 		// Swiss-cheese erosion (ErodibleSurface): platforms are a grid of solid
 		// cells the acid eats by CONTACT — every pass, perimeter cells whose

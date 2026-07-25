@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.Xna.Framework;
 using GorelordsBrawler.Components.Hazards.Fluid;
 using GorelordsBrawler.Constants;
 using Xunit;
@@ -278,6 +279,111 @@ public class AcidConfigTests
 	{
 		// User requirement: "flash for maybe 2-5 seconds".
 		Assert.InRange(AcidConfig.GhostSeconds, 2f, 5f);
+	}
+
+	// ── The footing director (pacing rework, 2026-07-24) ─────────────────────
+
+	[Fact]
+	public void SpawnBand_TracksTheCeiling_PerLoop()
+	{
+		// The sliding band is the pacing promise: footing spawns just above
+		// the acid — low rows while the pool is low, climbing with the loops,
+		// top row only in the storm. Pin the exact viable rows per phase so a
+		// retune of ceilings/band/lattice that breaks the climb fails here.
+		static float[] ViableRows(float ceiling) => AcidConfig.PlatformSlotTopY
+			.Where(y => AcidConfig.PlatformRowViable(
+				y, ceiling, AcidConfig.PlatformSpawnClearance, bandRelaxed: false))
+			.OrderBy(y => y)
+			.ToArray();
+
+		Assert.Equal(new[] { 352f, 416f }, ViableRows(AcidConfig.RiseCeilingFor(0)));
+		Assert.Equal(new[] { 256f, 352f }, ViableRows(AcidConfig.RiseCeilingFor(1)));
+		Assert.Equal(new[] { 160f, 256f }, ViableRows(AcidConfig.RiseCeilingFor(2)));
+		Assert.Equal(new[] { 160f },       ViableRows(AcidConfig.StormCeilingY));
+
+		// And the relaxed form must never orphan a phase (the cycle cannot
+		// stall even if the band empties a cramped set).
+		foreach (float ceiling in new[] {
+			AcidConfig.RiseCeilingFor(0), AcidConfig.RiseCeilingFor(1),
+			AcidConfig.RiseCeilingFor(2), AcidConfig.StormCeilingY })
+		{
+			Assert.Contains(AcidConfig.PlatformSlotTopY, y =>
+				AcidConfig.PlatformRowViable(y, ceiling, 16f, bandRelaxed: true));
+		}
+	}
+
+	[Fact]
+	public void OpeningVolley_IsSymmetric_OnLattice_InBand_OffTheProbeLane()
+	{
+		// The match's first footing must be FAIR (mirrored about the arena
+		// center, neither player advantaged), on the spawn lattice, inside the
+		// loop-0 band (it hugs the opening danger zone), clear of the probe
+		// lane, and clear of the starting pair by the stack rule.
+		float half = AcidConfig.PlatformW * 0.5f;
+		float arenaCenter = (GameConstants.Arena.InnerLeft + GameConstants.Arena.InnerRight) * 0.5f;
+
+		Assert.Equal(2, AcidConfig.PlatformOpeningCenters.Length);
+		var l = AcidConfig.PlatformOpeningCenters[0];
+		var r = AcidConfig.PlatformOpeningCenters[1];
+		Assert.Equal(arenaCenter - l.X, r.X - arenaCenter, precision: 3);
+		Assert.Equal(l.Y, r.Y, precision: 3);
+
+		foreach (var c in AcidConfig.PlatformOpeningCenters)
+		{
+			Assert.Contains(AcidConfig.PlatformSlotX, x => x == c.X);
+			float topY = c.Y - AcidConfig.PlatformH * 0.5f;
+			Assert.Contains(AcidConfig.PlatformSlotTopY, y => y == topY);
+			Assert.True(AcidConfig.PlatformRowViable(
+				topY, AcidConfig.RiseCeilingFor(0), AcidConfig.PlatformSpawnClearance, bandRelaxed: false),
+				$"opening slab at top y={topY} is outside the loop-0 spawn band");
+			Assert.False(c.X - half < 736f && c.X + half > 544f,
+				$"opening slab at x={c.X} intrudes on the standing-surface probe lane (544-736)");
+
+			// Stack rule vs the starting pair (map v3: centers 224/1056, y 432):
+			// same-column spawns must keep the full stack clearance.
+			foreach (var pair in new[] { new Vector2(224f, 432f), new Vector2(1056f, 432f) })
+			{
+				bool overlaps = Math.Abs(c.X - pair.X) < AcidConfig.PlatformW + 32f
+					&& Math.Abs(c.Y - pair.Y) < AcidConfig.PlatformH + AcidConfig.PlatformStackClearance;
+				Assert.False(overlaps,
+					$"opening slab at ({c.X},{c.Y}) stacks on the starting pair at ({pair.X},{pair.Y})");
+			}
+		}
+	}
+
+	[Fact]
+	public void FootingTargets_AreAchievable_AndTheStormShrinksThem()
+	{
+		// Regular target must be reachable the moment the match opens: the
+		// starting pair plus the opening volley IS the target — the director
+		// tops up only after deaths, so an unreachable target would leave it
+		// grinding the relaxation stages forever.
+		Assert.Equal(AcidConfig.PlatformTargetAlive,
+			2 + AcidConfig.PlatformOpeningCenters.Length);
+
+		// The storm's cramped-chase call: fewer than regular play, more than
+		// the old two-island stalemate, and never beyond the top row's
+		// physical capacity (its columns are the only storm-viable slots).
+		Assert.True(AcidConfig.PlatformTargetStorm < AcidConfig.PlatformTargetAlive);
+		Assert.InRange(AcidConfig.PlatformTargetStorm, 2, AcidConfig.PlatformSlotX.Length);
+
+		Assert.Equal(AcidConfig.PlatformTargetAlive, AcidConfig.PlatformTargetFor(storm: false));
+		Assert.Equal(AcidConfig.PlatformTargetStorm, AcidConfig.PlatformTargetFor(storm: true));
+	}
+
+	[Fact]
+	public void OpeningFooting_ArrivesWithinTheCalmPhase_Fast()
+	{
+		// The pacing complaint this rework answers: full footing must exist
+		// within seconds of the first frame, not after the acid's first
+		// consume beat. Opening ghosts flash at t=0 and any director top-up
+		// cascades on the stagger, so worst-case full footing lands at
+		// GhostSeconds + target·stagger — pin it under 10 s of the ~30 s calm.
+		Assert.InRange(AcidConfig.PlatformTopUpStaggerSeconds, 0.25f, 2f);
+		float worstCase = AcidConfig.GhostSeconds
+			+ AcidConfig.PlatformTargetAlive * AcidConfig.PlatformTopUpStaggerSeconds;
+		Assert.True(worstCase < 10f,
+			$"full opening footing takes ~{worstCase:F1} s — the match should open ready to fight");
 	}
 
 	[Fact]

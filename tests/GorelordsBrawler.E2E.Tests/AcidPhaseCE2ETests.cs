@@ -166,10 +166,10 @@ public class AcidPhaseCE2ETests
 		return sum / xs.Count;
 	}
 
-	// ── The footing cycle, mid-loop respawn safety, and the storm ────────────
+	// ── The footing director, mid-loop respawn safety, and the storm ─────────
 
 	[SkippableFact]
-	public async Task FootingCycle_GhostsLeadSpawns_RespawnsStayDry_AndTheStormChasesUp()
+	public async Task FootingDirector_OpensWithFooting_GhostsLeadSpawns_RespawnsStayDry_AndTheStormChasesUp()
 	{
 		Skip.IfNot(ArenaPage.IsEnabled, $"Set {ArenaPage.EnableEnvVar}=1 to run E2E tests.");
 
@@ -203,32 +203,57 @@ public class AcidPhaseCE2ETests
 			throw new TimeoutException($"{what} not reached within {maxIters * 10} hovered frames.");
 		}
 
+		// ACT 0 — the OPENING VOLLEY (pacing rework 2026-07-24): the director
+		// telegraphs the match's first footing on frame one — the symmetric
+		// inward-mid pair — and full target population stands within seconds.
+		// (Cold-boot free-run may have finished the volley before readiness;
+		// the invariant is the ARRIVAL, not catching the flash.)
 		await HoverParkAsync();
 		await arena.StepAsync(5);
 		var start = await arena.StateAsync();
-		start.PlatformsAlive.ShouldBe(2, "map v3 starts with exactly the platform pair");
+		start.PlatformTarget.ShouldBe(4, "regular play holds the Battlefield-density target");
+		var opened = await HoverUntilAsync(
+			s => s.PlatformsAlive >= s.PlatformTarget, 60, "the opening volley's full footing");
+		opened.LastSpawnY.ShouldBe(368,
+			"the opening volley materializes at the inward-mid row (top 352, center 368)");
+		(opened.LastSpawnX is 448 or 832).ShouldBeTrue(
+			$"the opening volley's slabs land on the symmetric mid columns (got x={opened.LastSpawnX})");
 
-		// ACT 1 — loop 1 CONTESTS the pair (ceiling 432 laps the 416 tops;
-		// waterline erosion self-limits) but must not consume it.
+		// ACT 1 — loop 1 CONTESTS the footing (ceiling 432 laps the pair's 416
+		// tops; waterline erosion self-limits) but must not consume any of it:
+		// the director holds the population at target with nothing to replace.
 		var loop1Drain = await HoverUntilAsync(
 			s => s.AcidPhase == "Drain" && s.AcidLoop == 1, 600, "loop-1 drain");
-		loop1Drain.PlatformsAlive.ShouldBe(2,
-			"loop 1 contests the starting pair but must not consume it");
+		loop1Drain.PlatformsAlive.ShouldBe(4,
+			"loop 1 contests the footing but must not consume it");
 
 		// ACT 2 — loop 2 eats the pair. The FIRST death must raise a ghost
-		// telegraph immediately, and the eventual platform must materialize
-		// EXACTLY on its ghost, above the live surface.
-		await HoverUntilAsync(s => s.PlatformsAlive < 2, 600, "the pair's first death");
-		var ghost = await arena.StepUntilAsync(s => s.GhostActive, maxFrames: 30, batch: 1);
+		// telegraph immediately (population drops below target), and the
+		// eventual platform must materialize EXACTLY on its ghost, above the
+		// live surface.
+		var ghost = await HoverUntilAsync(
+			s => s.GhostActive, 600, "the consume beat's first replacement ghost");
 		int ghostX = ghost.GhostX;
 		int ghostY = ghost.GhostY;
-		var spawned = await arena.StepUntilAsync(s => s.LastSpawnX > -1, maxFrames: 600, batch: 5);
-		spawned.LastSpawnX.ShouldBe(ghostX, "the platform must materialize on its ghost's column");
-		spawned.LastSpawnY.ShouldBe(ghostY, "the platform must materialize at its ghost's height");
+		GameStateSnapshot? spawned = null;
+		for (int i = 0; i < 300 && spawned == null; i++)
+		{
+			// Single-frame steps so a back-to-back second spawn can't overwrite
+			// lastSpawn inside one polling batch.
+			await HoverParkAsync();
+			await arena.StepAsync(1);
+			var s = await arena.StateAsync();
+			if (s.LastSpawnX == ghostX && s.LastSpawnY == ghostY)
+			{
+				spawned = s;
+			}
+		}
+		spawned.ShouldNotBeNull(
+			$"the ghost at ({ghostX},{ghostY}) never materialized its platform");
 		spawned.LastSpawnY.ShouldBeLessThan(spawned.AcidSurfaceY,
 			"a fresh platform must spawn above the live surface, never inside it");
-		spawned.PlatformsAlive.ShouldBeLessThanOrEqualTo(2,
-			"population is conserved — one death, one replacement");
+		spawned.PlatformsAlive.ShouldBeLessThanOrEqualTo(spawned.PlatformTarget,
+			"the director never overshoots its population target");
 
 		// CHASE: both players onto the new footing (lastSpawn is the slab
 		// CENTER; stand point is 40 px above it — half slab + half body).
@@ -278,10 +303,14 @@ public class AcidPhaseCE2ETests
 			"the storm's fill estimate should target the terminal ceiling (~13k)");
 		filled.AcidSurfaceY.ShouldBeInRange(248, 288,
 			"the storm's closed-loop fill must HOLD the measured surface at the ceiling (272 ± bob)");
-		filled.PlatformsAlive.ShouldBe(2,
-			"population is conserved: the pair count survives into the storm");
-		filled.LastSpawnY.ShouldBeLessThanOrEqualTo(224,
-			"the cycle's replacements must have climbed into the upper band by the terminal flood");
+		filled.PlatformTarget.ShouldBe(3,
+			"the storm shrinks the director's target to the cramped-chase count");
+		(filled.PlatformsAlive + filled.GhostCount).ShouldBeInRange(3, 4,
+			"the storm burns the population down onto its target (a not-yet-dissolved " +
+			"surplus slab may still be mid-shell-erosion) and never below it uncovered");
+		filled.LastSpawnY.ShouldBeLessThanOrEqualTo(288,
+			"the cycle's replacements must have climbed with the flood — the last " +
+			"materialized platform sits at or above the terminal waterline band");
 	}
 
 }
