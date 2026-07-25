@@ -343,20 +343,24 @@ namespace GorelordsBrawler.Constants
 			public const float AcidDeepDpsMult        = 6.5f;  // 9 * 6.5 ≈ 58 dps → ~1.7s KO @ 100 HP
 			public const float AcidFullSubmergeDepth  = 96f;   // px below surface = "fully submerged"
 
-			// Swim escape: each jump PRESS while submerged sets upward velocity to
-			// this (px/s, like a weaker jump). Mashing climbs you out. Capped so a
-			// held buffer can't accumulate — one stroke per press.
-			public const float SwimStrokeImpulse      = 230f;  // px/s up per stroke
-			public const float SwimMaxRiseSpeed       = 260f;  // clamp on upward velocity while submerged
-
-			// Breach: a jump press at depth <= this performs a FULL jump out of the
-			// water (character JumpSpeed, JumpHeld semantics) instead of a stroke.
-			// Without it the exit is luck-gated: a body cresting the surface bobs in
-			// a ~2-frame dry window (short-hop gravity slams it straight back in),
-			// so presses land on wet frames and become feeble strokes — found by the
-			// DeepKnockIn E2E frame trace. Standard water-exit pattern (Mario/
-			// Terraria: surface jump = real jump). ~half a body height.
-			public const float SwimBreachDepth        = 24f;
+			// Acid escape (Smash Bros water model — ssbwiki.com/Swimming): while
+			// submerged, gravity is REPLACED by buoyancy (upward acceleration,
+			// capped at a max rise speed) so a body floats to the surface with no
+			// input, and a jump press is a real full-strength jump at any depth.
+			// Deadliness comes from the depth-scaled DPS, not from trapping.
+			// This replaced the mash-to-stroke design: strokes never set JumpHeld,
+			// so the 3.5× short-hop gravity ate them (~9 px of rise per press),
+			// and the breach gate (depth ≤ 24) was starved by threshold-1 spray
+			// readings — mathematically inescapable, per functional testing.
+			//
+			// Buoyancy accel is a hair under FutureAxe's 1800 gravity so a plunge
+			// decelerates believably; the rise cap keeps the passive float slower
+			// than any jump (a press is always the better escape). Smash's
+			// repeated-jump decay (0.91×/dip) is deliberately NOT ported: at its
+			// 0.686× floor our 800 jump could no longer clear the basin's 96 px
+			// lip (a soft-lock), and the acid DPS already prices stalling.
+			public const float AcidBuoyancyAccel       = 1600f; // px/s² upward while submerged
+			public const float AcidBuoyantMaxRiseSpeed = 280f;  // cap on the passive float (jumps exceed it freely)
 
 			// ── Basin geometry ("The Sump", Phase A) ──────────────────────────
 			// World-space bounds of the central acid basin carved into arena1.tmx.

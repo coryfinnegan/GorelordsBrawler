@@ -1,26 +1,31 @@
 using System;
 using Nez;
 using GorelordsBrawler.Components.Hazards;
+using GorelordsBrawler.Constants;
 
 namespace GorelordsBrawler.Components
 {
 	/// <summary>
-	/// Phase 3 of the acid-deadly-polish-plan: per-player fluid-medium feel.
-	/// Attaches to each player entity in <c>ArenaScene</c> after the
-	/// <see cref="AcidSurface"/> exists. Each frame:
+	/// Per-player fluid-medium state + feel. Attaches to each player entity in
+	/// <c>ArenaScene</c> after the <see cref="AcidSurface"/> exists. Each frame:
 	///
-	///   1. Asks AcidSurface for the LOCAL surface Y at the player's column
-	///      (the helper added in PR #6 for sizzle puff placement — scans
-	///      down from the head row, ignores splashes on higher platforms).
-	///   2. If the player's collider bottom is below that surface (body is
-	///      in acid), writes the submerged values onto the sibling
-	///      <see cref="PhysicsBody"/>: reduced GravityScale (~0.45) and
-	///      non-zero LinearDrag (~0.5). Result: slower fall + momentum
-	///      bleeds, "syrupy" syrup-like in-water feel without any swim or
-	///      float behaviour (no upward force, no animation hooks).
-	///   3. Otherwise restores the dry-land defaults (1.0 / 0.0). Single-
-	///      writer assumption — nothing else mutates these fields in the
-	///      current design.
+	///   1. Asks AcidSurface for the local BODY surface Y at the player's
+	///      column (<see cref="AcidSurface.GetBodySurfaceLevelAtX"/> — the
+	///      dense-occupancy waterline). The threshold-1 droplet query used
+	///      pre-escape-fix let stray spray at head height fake a full-body
+	///      depth reading — the same failure class that ratcheted the drop-
+	///      logs into the air, and the reason the old breach jump almost
+	///      never fired.
+	///   2. While submerged, writes the fluid medium onto the sibling
+	///      <see cref="PhysicsBody"/>: buoyancy replaces gravity (Smash-style
+	///      float-to-surface — see GameConstants.Hazards.AcidBuoyancyAccel)
+	///      plus LinearDrag momentum bleed. It also BANKS the aerial action
+	///      (water refreshes your air jump, like landing) and clears fast-
+	///      fall — so a jump press in the brief dry bob-window at the surface
+	///      still produces a full-strength double jump instead of nothing.
+	///   3. Otherwise restores the dry-land defaults. Single-writer
+	///      assumption — nothing else mutates these fields in the current
+	///      design.
 	///
 	/// <see cref="IsSubmerged"/> is exposed for other systems that want
 	/// to read the same state (HUD, future visibility tweaks etc.). It's
@@ -33,8 +38,11 @@ namespace GorelordsBrawler.Components
 	public class SubmersionFeel : Component, IUpdatable
 	{
 		// ── Live-tunable feel knobs ──────────────────────────────────────────
-		[Inspectable, Range(0f, 1f)]
-		public float SubmergedGravityScale = 0.45f;
+		[Inspectable, Range(0f, 3000f)]
+		public float BuoyancyAccel        = GameConstants.Hazards.AcidBuoyancyAccel;
+
+		[Inspectable, Range(0f, 600f)]
+		public float BuoyantMaxRiseSpeed  = GameConstants.Hazards.AcidBuoyantMaxRiseSpeed;
 
 		[Inspectable, Range(0f, 4f)]
 		public float SubmergedDrag         = 0.5f;
@@ -81,11 +89,11 @@ namespace GorelordsBrawler.Components
 			float headY  = _collider.Bounds.Top;
 			float feetY  = _collider.Bounds.Bottom;
 
-			// Local-surface query (PR #6 helper): topmost wet cell at this
-			// column at or below the head row. Avoids the bug where a splash
-			// on a higher platform sharing this column would be returned as
-			// "the surface."
-			float localSurface = _acid.GetLocalSurfaceLevelAtX(x, headY);
+			// Body-surface query: topmost DENSELY wet cell at this column at or
+			// below the head row. Ignores splashes on higher platforms sharing
+			// the column AND stray spray droplets (the threshold-1 query read
+			// those as "the surface" and corrupted every depth-gated system).
+			float localSurface = _acid.GetBodySurfaceLevelAtX(x, headY);
 			IsSubmerged = localSurface < feetY;
 			// Depth = how far feet are below the surface (>=0). When dry, feetY <=
 			// localSurface so this clamps to 0.
@@ -93,13 +101,22 @@ namespace GorelordsBrawler.Components
 
 			if (IsSubmerged)
 			{
-				_body.GravityScale = SubmergedGravityScale;
-				_body.LinearDrag   = SubmergedDrag;
+				_body.BuoyancyAccel        = BuoyancyAccel;
+				_body.BuoyancyMaxRiseSpeed = BuoyantMaxRiseSpeed;
+				_body.LinearDrag           = SubmergedDrag;
+				// Water banks the aerial action and cancels fast-fall, exactly
+				// like landing — this is what makes the surface bob safe: a
+				// press in a momentarily-dry frame is a full double jump via
+				// JumpAbility instead of a dead input (the old 2-frame luck
+				// window found by the DeepKnockIn E2E trace).
+				_body.HasAerialAction = true;
+				_body.FastFalling     = false;
 			}
 			else
 			{
-				_body.GravityScale = 1f;
-				_body.LinearDrag   = 0f;
+				_body.BuoyancyAccel        = 0f;
+				_body.BuoyancyMaxRiseSpeed = 0f;
+				_body.LinearDrag           = 0f;
 			}
 		}
 	}

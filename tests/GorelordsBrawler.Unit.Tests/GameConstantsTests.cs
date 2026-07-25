@@ -103,22 +103,16 @@ public class GameConstantsTests
 	}
 
 	[Fact]
-	public void SwimStroke_ClampIsAtLeastTheImpulse()
+	public void AcidBuoyancy_ConstantsAreSane()
 	{
-		// If the rise-speed clamp were below the per-stroke impulse, every stroke
-		// would be immediately truncated and mashing would feel dead.
-		Assert.True(GameConstants.Hazards.SwimStrokeImpulse > 0f);
-		Assert.True(GameConstants.Hazards.SwimMaxRiseSpeed >= GameConstants.Hazards.SwimStrokeImpulse);
-	}
-
-	[Fact]
-	public void SwimBreachDepth_IsANearSurfaceBand()
-	{
-		// The breach band must exist but stay NEAR the surface: if it reached
-		// full-submerge depth, every deep press would be a free full jump and the
-		// stroke/mash regime (and the deep-launch kill window) would vanish.
-		Assert.True(GameConstants.Hazards.SwimBreachDepth > 0f);
-		Assert.True(GameConstants.Hazards.SwimBreachDepth < GameConstants.Hazards.AcidFullSubmergeDepth / 2f);
+		// The Smash-style escape rests on two facts: buoyancy exists (a body
+		// left alone must FLOAT, so the acid can never trap), and the passive
+		// rise cap is a real speed that still stays below a jump's launch —
+		// pressing jump must always be the strictly better escape.
+		Assert.True(GameConstants.Hazards.AcidBuoyancyAccel > 0f);
+		Assert.True(GameConstants.Hazards.AcidBuoyantMaxRiseSpeed > 0f);
+		Assert.True(GameConstants.Hazards.AcidBuoyantMaxRiseSpeed < 800f /* FutureAxe JumpSpeed */,
+			"the passive float should never outrun a deliberate jump escape");
 	}
 
 	// (The float-spring/buoyancy/impact constants went with the drop-logs, and

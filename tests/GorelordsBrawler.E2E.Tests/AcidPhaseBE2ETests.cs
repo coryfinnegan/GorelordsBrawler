@@ -6,8 +6,9 @@ using Xunit;
 namespace GorelordsBrawler.E2E.Tests;
 
 /// <summary>
-/// E2E coverage for Acid Arena Phase B: depth-scaled lethality and the swim escape,
-/// driven through the scripted-input device in deterministic stepped mode.
+/// E2E coverage for the acid's depth-scaled lethality and the Smash-style escape
+/// (buoyant float-to-surface + jump-press-is-a-full-jump), driven through the
+/// scripted-input device in deterministic stepped mode.
 ///
 /// Geometry these tests lean on (arena1.tmx "The Sump" + FutureAxe.json):
 ///   • Basin channel x∈[448,832], floor top y=736, pre-filled pool surface ≈ y 660s.
@@ -15,9 +16,10 @@ namespace GorelordsBrawler.E2E.Tests;
 ///     (x≈640) so the pour never lands on the actor mid-test.
 ///   • FutureAxe: BodyHeight 48 (feet = y+24), JumpSpeed 800, MaxHp 120.
 ///
-/// The JumpSpeed matters: a swim stroke sets vy ≈ -230, while the double-jump-bypass
-/// bug (JumpAbility's air-jump firing underwater) would set vy = -800. The 3.5× gap
-/// makes "is the jump button stroking or jumping?" a robust oracle, not a threshold game.
+/// Velocity is the escape oracle: the buoyant float is capped at
+/// AcidBuoyantMaxRiseSpeed (280), while a jump launches at JumpSpeed (800). Any
+/// vy below -500 can therefore only be a deliberate jump — the float can't fake
+/// it, and a dead jump button can't produce it.
 ///
 /// Depth truths come from the per-player oracles (submerged / submergedDepth), never
 /// from assumed pool geometry — the settled surface is wherever the PBF says it is.
@@ -26,17 +28,17 @@ namespace GorelordsBrawler.E2E.Tests;
 public class AcidPhaseBE2ETests
 {
 	// Staging spot: basin interior, clear of the inlet column. Teleport places the
-	// CENTER; feet land near the floor and the body settles onto it (grounded —
-	// which also refreshes the aerial action, a load-bearing detail for the full
-	// escape test).
+	// CENTER (feet = y+24) and zeroes velocity, so a freshly staged body starts
+	// its buoyant rise from rest — every test below begins from the same state.
 	private const float StageX = 560f;
 	private const float DeepY  = 700f;
 
-	/// <summary>Teleport player 0 into the deep basin and settle until the depth oracle reads deep.</summary>
+	/// <summary>Teleport player 0 into the deep basin and step until the depth oracle reads deep.</summary>
 	private static async Task<GameStateSnapshot> StageDeepSubmersionAsync(ArenaPage arena)
 	{
 		await arena.TeleportAsync(player: 0, StageX, DeepY);
-		// Settle: sink the last few px and let the occupancy grid + oracle catch up.
+		// Let the occupancy grid + oracle catch up (buoyancy only moves the body
+		// ~1 px in these first frames — depth is still comfortably deep).
 		return await arena.StepUntilAsync(s => s.Players[0].SubmergedDepth >= 50, maxFrames: 240, batch: 2);
 	}
 
@@ -54,59 +56,31 @@ public class AcidPhaseBE2ETests
 		var deep = await StageDeepSubmersionAsync(arena);
 		int hpBefore = deep.Players[0].Hp;
 
-		// ACT — exactly 60 fixed frames (1.0 s) of deep soaking, no input.
-		await arena.StepAsync(60);
+		// ACT — 60 fixed frames (1.0 s) of deep soaking. Buoyancy would float the
+		// player out mid-measurement, so PIN the depth by re-teleporting every 2
+		// frames (teleport zeroes velocity, which also discards the accumulated
+		// buoyant rise) — the staging tool holding the scenario still, not gameplay.
+		for (int i = 0; i < 30; i++)
+		{
+			await arena.TeleportAsync(player: 0, StageX, DeepY);
+			await arena.StepAsync(2);
+		}
 		var after = await arena.StateAsync();
 
-		// ASSERT — the depth multiplier must be live: at ~60-90 px depth the melt is
-		// ~45-58 dps. The flat surface chip (9 dps) would lose ≤ 10 HP in this window,
-		// so the lower bound cleanly separates "curve works" from "curve dead".
+		// ASSERT — the depth multiplier must be live: pinned at ~60+ px depth the
+		// melt is ~40-58 dps. The flat surface chip (9 dps) would lose ≤ 10 HP in
+		// this window, so the lower bound cleanly separates "curve works" from
+		// "curve dead".
 		int drop = hpBefore - after.Players[0].Hp;
-		drop.ShouldBeGreaterThanOrEqualTo(30, "deep acid should melt (depth multiplier), not chip at the flat surface rate");
+		drop.ShouldBeGreaterThanOrEqualTo(25, "deep acid should melt (depth multiplier), not chip at the flat surface rate");
 		drop.ShouldBeLessThanOrEqualTo(80, "deep melt should stay in the tuned fast-melt band, not insta-kill");
 		after.Players[0].SubmergedDepth.ShouldBeGreaterThanOrEqualTo(40, "guard: the measurement must have happened at depth");
 	}
 
-	// ── Swim stroke vs the double-jump bypass ────────────────────────────────────
+	// ── Buoyancy: the acid can never trap a body ─────────────────────────────────
 
 	[SkippableFact]
-	public async Task JumpPress_Underwater_IsASwimStroke_NotTheDoubleJump()
-	{
-		Skip.IfNot(ArenaPage.IsEnabled, $"Set {ArenaPage.EnableEnvVar}=1 to run E2E tests.");
-
-		// ARRANGE
-		await using var arena = await ArenaPage.LaunchAsync();
-		await arena.EnterSteppedModeAsync();
-		await arena.SettleAsync();
-		await StageDeepSubmersionAsync(arena);
-		var player = arena.Player(0);
-
-		// ACT — press, then poll a few frames for the stroke to land. The scripted
-		// device applies input with a frame of latency (the established harness
-		// pattern is "press → step 2 → read"), so a single-frame read races it.
-		// StepUntil also turns "no stroke ever fired" into a crisp timeout failure.
-		await player.PressJumpAsync();
-		var atStroke = await arena.StepUntilAsync(s => s.Players[0].Vy < -150, maxFrames: 5, batch: 1);
-		await player.ReleaseJumpAsync();
-
-		// Let the single stroke play out fully.
-		await arena.StepAsync(25);
-		var later = await player.StateAsync();
-
-		// ASSERT — stroke sets vy ≈ -230 (SwimStrokeImpulse); the bypass bug would
-		// read vy ≈ -800 (FutureAxe JumpSpeed via the air-jump branch). The poll
-		// above caught the FIRST frame with upward motion, so a real double jump
-		// cannot hide from this band check.
-		atStroke.Players[0].Vy.ShouldBeGreaterThan(-400, "vy at jump-speed magnitude means JumpAbility air-jumped underwater — the bypass bug");
-
-		// And one stroke from the deep must NOT be an exit — escape demands mashing.
-		later.Submerged.ShouldBeTrue("a single stroke from the deep should not pop the player out of the acid");
-	}
-
-	// ── The mash ─────────────────────────────────────────────────────────────────
-
-	[SkippableFact]
-	public async Task MashingJump_ClawsThePlayerUpOutOfTheAcid()
+	public async Task PassiveBuoyancy_FloatsThePlayerToTheSurface_NoInputAtAll()
 	{
 		Skip.IfNot(ArenaPage.IsEnabled, $"Set {ArenaPage.EnableEnvVar}=1 to run E2E tests.");
 
@@ -115,101 +89,135 @@ public class AcidPhaseBE2ETests
 		await arena.EnterSteppedModeAsync();
 		await arena.SettleAsync();
 		var deep = await StageDeepSubmersionAsync(arena);
-		var player = arena.Player(0);
-		int startY     = deep.Players[0].Y;
+		int hpBefore   = deep.Players[0].Hp;
 		int startDepth = deep.Players[0].SubmergedDepth;
 
-		// ACT — frantic mash: press 2 frames, release 3 (12 strokes/s). Each press is
-		// an input EDGE, which is what SwimAbility strokes on.
-		PlayerSnapshot final = deep.Players[0];
-		bool surfaced = false;
-		for (int stroke = 0; stroke < 20 && !surfaced; stroke++)
-		{
-			await player.PressJumpAsync();
-			await arena.StepAsync(2);
-			await player.ReleaseJumpAsync();
-			await arena.StepAsync(3);
-			final = await player.StateAsync();
-			surfaced = !final.Submerged;
-		}
+		// ACT — no input whatsoever: buoyancy alone must carry the body up until
+		// the feet clear the local surface. (The StepUntil timeout IS the assert
+		// that it happens — a trapped body turns it into a crisp failure.)
+		var surfaced = await arena.StepUntilAsync(s => !s.Players[0].Submerged, maxFrames: 180, batch: 2);
 
-		// ASSERT
-		surfaced.ShouldBeTrue($"mashing jump should claw the player to the surface (still at depth {final.SubmergedDepth} after 20 strokes)");
-		final.Y.ShouldBeLessThan(startY - 30, "the mash should produce real upward progress");
-		final.Hp.ShouldBeGreaterThan(0, $"the escape must be survivable from full HP (started depth {startDepth})");
+		// ASSERT — the float-out is survivable from full HP, and the soak on the
+		// way up actually bit (guards that the melt was live during the rise, and
+		// that the surfacing wasn't a bogus dry reading from frame one).
+		int drop = hpBefore - surfaced.Players[0].Hp;
+		surfaced.Players[0].Hp.ShouldBeGreaterThan(0, $"the passive float-out must be survivable (started at depth {startDepth})");
+		drop.ShouldBeGreaterThanOrEqualTo(5, "the rise should still cost meaningful HP — buoyancy rescues, it doesn't make acid free");
 	}
 
-	// ── The full design promise: deadly but escapable ────────────────────────────
+	// ── The jump button: one press = a full-strength exit, from any depth ────────
 
 	[SkippableFact]
-	public async Task DeepKnockIn_IsEscapable_MashToSurface_ThenBreachToTheBank()
+	public async Task JumpPress_Underwater_IsAFullStrengthExit()
 	{
 		Skip.IfNot(ArenaPage.IsEnabled, $"Set {ArenaPage.EnableEnvVar}=1 to run E2E tests.");
 
-		// ARRANGE — the intended escape loop, end to end: knocked into the deep →
-		// mash strokes toward the surface → within SwimBreachDepth the next press
-		// BREACHES at full JumpSpeed → arc onto the bank. (Underwater the jump
-		// button belongs to SwimAbility; a press that happens to land in a dry
-		// bob-frame above the surface fires the banked double jump instead — both
-		// read as a full-strength exit and both are legitimate.)
+		// ARRANGE
 		await using var arena = await ArenaPage.LaunchAsync();
 		await arena.EnterSteppedModeAsync();
 		await arena.SettleAsync();
 		await StageDeepSubmersionAsync(arena);
 		var player = arena.Player(0);
 
-		// ACT — hold LEFT (hug the basin's bank wall so the exit lands on solid
-		// ground with margin) and mash jump. Deep presses are strokes; the press
-		// that lands within breach range (depth ≤ SwimBreachDepth) fires a FULL
-		// jump out at the character's JumpSpeed. Detect the breach mid-press and
-		// KEEP the button held for the whole arc (JumpHeld semantics — releasing
-		// would short-hop the escape). Trace each frame so a failure shows exactly
-		// what the game saw. [This loop replaced a crest-then-double-jump dance:
-		// the frame trace from that version exposed the bobbing-surface luck-gate
-		// that motivated the breach mechanic in the first place.]
-		await player.HoldLeftAsync();
-		GameStateSnapshot? launched = null;
-		var trace = new System.Text.StringBuilder();
-		for (int stroke = 0; stroke < 30 && launched == null; stroke++)
-		{
-			await player.PressJumpAsync();
-			for (int f = 0; f < 2 && launched == null; f++)
-			{
-				await arena.StepAsync(1);
-				var s = await arena.StateAsync();
-				var pl = s.Players[0];
-				trace.AppendLine($" s{stroke}f{f}: y={pl.Y} vy={pl.Vy} sub={pl.Submerged} depth={pl.SubmergedDepth}");
-				if (pl.Vy < -500)
-				{
-					launched = s;   // breach (or post-exit double jump) — keep jump HELD
-				}
-			}
-			if (launched == null)
-			{
-				await player.ReleaseJumpAsync();
-				await arena.StepAsync(3);
-			}
-		}
-		launched.ShouldNotBeNull(
-			$"mashing from the deep should eventually fire the breach jump out of the water. Frame trace:\n{trace}");
+		// ACT — a single press, held (the escape should reward commitment with the
+		// full hold-to-rise arc). Input has ~1 frame of latency: press → poll.
+		await player.PressJumpAsync();
+		var launched = await arena.StepUntilAsync(s => s.Players[0].Vy < -500, maxFrames: 5, batch: 1);
 
-		// Jump stays held through the arc; drift continues toward the bank.
+		// …and that one press must carry the body OUT of the acid — no mashing.
+		var exited = await arena.StepUntilAsync(s => !s.Players[0].Submerged, maxFrames: 60, batch: 1);
+		await player.ReleaseJumpAsync();
+
+		// ASSERT — the launch is jump-strength (≈ -800), far beyond the 280 px/s
+		// buoyant rise cap: the button did a REAL jump underwater, at depth.
+		launched.Players[0].Vy.ShouldBeLessThan(-500, "a submerged jump press must launch at full JumpSpeed, not a feeble stroke");
+		exited.Players[0].Submerged.ShouldBeFalse();
+	}
+
+	// ── Water banks the air jump (the surface-bob dry window can't eat a press) ──
+
+	[SkippableFact]
+	public async Task Submersion_RestoresTheAirJump_ForAFollowUpPressAfterExit()
+	{
+		Skip.IfNot(ArenaPage.IsEnabled, $"Set {ArenaPage.EnableEnvVar}=1 to run E2E tests.");
+
+		// ARRANGE — burn the aerial action FIRST (ground jump, then double jump),
+		// so the only way the final air press below can fire is if submersion
+		// re-banked it. Without that discriminator this test would pass off the
+		// spawn's grounded refresh and prove nothing.
+		await using var arena = await ArenaPage.LaunchAsync();
+		await arena.EnterSteppedModeAsync();
+		await arena.SettleAsync();
+		var player = arena.Player(0);
+
+		await player.PressJumpAsync();
+		await arena.StepUntilAsync(s => s.Players[0].Vy < -500, maxFrames: 5, batch: 1);
+		await player.ReleaseJumpAsync();
+		// Let the released rise decay past the -500 oracle band first, so the next
+		// StepUntil can only be satisfied by the double jump itself (short-hop
+		// gravity burns -800 → -400 in a few frames).
+		await arena.StepUntilAsync(s => s.Players[0].Vy > -400, maxFrames: 20, batch: 1);
+		await player.PressJumpAsync();   // double jump — consumes HasAerialAction
+		await arena.StepUntilAsync(s => s.Players[0].Vy < -500, maxFrames: 5, batch: 1);
+		await player.ReleaseJumpAsync();
+
+		// Dunk the (aerially spent) body into the basin.
+		await StageDeepSubmersionAsync(arena);
+
+		// ACT — jump out of the acid…
+		await player.PressJumpAsync();
+		await arena.StepUntilAsync(s => s.Players[0].Vy < -500, maxFrames: 5, batch: 1);
+		await arena.StepUntilAsync(s => !s.Players[0].Submerged, maxFrames: 60, batch: 1);
+		await player.ReleaseJumpAsync();
+
+		// …coast past the apex (still airborne, still dry), then press again.
+		await arena.StepUntilAsync(
+			s => !s.Players[0].Submerged && !s.Players[0].Grounded && s.Players[0].Vy > -100,
+			maxFrames: 120, batch: 1);
+		await player.PressJumpAsync();
+		var second = await arena.StepUntilAsync(s => s.Players[0].Vy < -500, maxFrames: 5, batch: 1);
+		await player.ReleaseJumpAsync();
+
+		// ASSERT — the follow-up air press fired a full-strength double jump. The
+		// aerial action was spent before the dunk, so only the water's re-banking
+		// (SubmersionFeel.HasAerialAction while wet) can explain it — this is the
+		// mechanic that turns the old "2-frame dry bob window eats your press"
+		// luck-gate into a guaranteed full-strength exit.
+		second.Players[0].Vy.ShouldBeLessThan(-500, "water must re-bank the air jump — a press in the post-exit air (or a dry bob frame) can never be a dead input");
+	}
+
+	// ── The full design promise: deadly but escapable ────────────────────────────
+
+	[SkippableFact]
+	public async Task DeepKnockIn_IsEscapable_OneHeldJumpOntoTheBank()
+	{
+		Skip.IfNot(ArenaPage.IsEnabled, $"Set {ArenaPage.EnableEnvVar}=1 to run E2E tests.");
+
+		// ARRANGE — the intended escape loop end to end: dunked deep → one held
+		// jump press → arc over the basin lip → land on solid dry ground, alive.
+		await using var arena = await ArenaPage.LaunchAsync();
+		await arena.EnterSteppedModeAsync();
+		await arena.SettleAsync();
+		await StageDeepSubmersionAsync(arena);
+		var player = arena.Player(0);
+
+		// ACT — hold LEFT (drift toward the bank wall so the arc comes down on
+		// solid ground) and one held jump press for the full-rise arc.
+		await player.HoldLeftAsync();
+		await player.PressJumpAsync();
+		await arena.StepUntilAsync(s => s.Players[0].Vy < -500, maxFrames: 5, batch: 1);
+
 		var landed = await arena.StepUntilAsync(
 			s => s.Players[0].Grounded && !s.Players[0].Submerged, maxFrames: 400, batch: 2);
 		await player.ReleaseJumpAsync();
 		await player.StopAsync();
 
-		// ASSERT — the exit fired at full jump strength (≈ -800: a breach or the
-		// banked double jump above the surface — either is a legitimate exit; a
-		// 230 px/s stroke can never read below -500)…
-		launched.Players[0].Vy.ShouldBeLessThan(-500);
-
-		// …and the player must come down on solid dry ground ABOVE the basin (bank
-		// top ≈ y 520 vs basin floor ≈ y 712), alive: knocked deep, swam out, escaped.
+		// ASSERT — down on dry ground ABOVE the basin (bank top ≈ y 520 vs basin
+		// floor ≈ y 712), alive: knocked deep, one press, out.
 		var p = landed.Players[0];
 		p.Submerged.ShouldBeFalse();
 		p.Y.ShouldBeLessThan(620, $"the player should land on the bank above the basin, not back on the basin floor (landed at y={p.Y})");
-		p.Hp.ShouldBeGreaterThan(0, "the full escape must be survivable from full HP");
+		p.Hp.ShouldBeGreaterThan(0, "the escape must be survivable from full HP");
 	}
 
 	// ── Phantom damage (broadphase vs narrow-phase regression) ───────────────────

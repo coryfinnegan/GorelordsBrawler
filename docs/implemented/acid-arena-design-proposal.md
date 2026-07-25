@@ -1,5 +1,17 @@
 # Acid Arena Design Proposal — "The Sump"
 
+> **Post-ship revision (functional-test verdict, July 2026):** Phase B's
+> mash-to-stroke swim escape described below shipped in PR #18 and was later
+> found **inescapable in practice** — strokes never set `JumpHeld` so the 3.5×
+> short-hop gravity reduced each press to ~9 px of rise, and the near-surface
+> breach jump depended on a depth reading the threshold-1 spray query kept
+> corrupting. It was replaced with the **Smash Bros. water model**
+> (ssbwiki.com/Swimming): buoyancy floats a submerged body to the surface with
+> no input, and a jump press is a full-strength jump at any depth. The
+> "deadly" half is unchanged — depth-scaled DPS does the killing; the acid
+> just can no longer trap. See `SwimAbility` / `SubmersionFeel` /
+> `GameConstants.Hazards.AcidBuoyancyAccel` for the current mechanics.
+
 ## Why this proposal exists
 
 The acid hazard's **visual** layer is done (`docs/acid-deadly-polish-plan.md`, PRs #4–#10): a real Position-Based-Fluids metaball sim, bubbles, sizzle, heat-haze, submersion shader, damage-feedback post-processors. That sim is the single largest piece of bespoke tech in the project.

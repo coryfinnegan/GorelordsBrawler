@@ -52,10 +52,12 @@ namespace GorelordsBrawler.Components.Abilities
 			}
 
 			// Suppress ALL jumping while submerged — the jump button belongs to
-			// SwimAbility underwater. Without this, the double-jump branch below
-			// (which fires when airborne, and a submerged body is not Grounded)
-			// would let a player air-jump straight out of the acid, bypassing the
-			// swim-to-escape mechanic entirely.
+			// SwimAbility underwater (which performs the same full-strength jump,
+			// but without consuming the aerial action and with the hitstun gate
+			// the water demands). SubmersionFeel banks HasAerialAction every wet
+			// frame, so a press in a momentarily-dry surface-bob frame falls
+			// through to the double-jump branch below — a full-strength exit
+			// either way, never a dead input.
 			if (_submersion != null && _submersion.IsSubmerged)
 			{
 				return;
